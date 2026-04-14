@@ -1,0 +1,366 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { api, RevenueStats, BookingStats, MemberStats } from '@/lib/api';
+
+type ReportTab = 'revenue' | 'bookings' | 'members';
+type Period = '7d' | '30d' | '90d' | '1y';
+
+export default function AdminReportsPage() {
+  const [activeTab, setActiveTab] = useState<ReportTab>('revenue');
+  const [period, setPeriod] = useState<Period>('30d');
+
+  const tabs: { key: ReportTab; label: string }[] = [
+    { key: 'revenue', label: 'Revenue' },
+    { key: 'bookings', label: 'Bookings' },
+    { key: 'members', label: 'Members' },
+  ];
+
+  const periods: { key: Period; label: string }[] = [
+    { key: '7d', label: '7 Days' },
+    { key: '30d', label: '30 Days' },
+    { key: '90d', label: '90 Days' },
+    { key: '1y', label: '1 Year' },
+  ];
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Reports</h1>
+          <p className="text-sm text-muted mt-0.5">Business analytics and insights</p>
+        </div>
+        {/* Period Selector */}
+        <div className="flex gap-1 bg-surface rounded-lg p-1">
+          {periods.map((p) => (
+            <button
+              key={p.key}
+              onClick={() => setPeriod(p.key)}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                period === p.key
+                  ? 'bg-ppl-dark-green/20 text-ppl-light-green'
+                  : 'text-muted hover:text-foreground'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6 bg-surface rounded-lg p-1 w-fit">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              activeTab === tab.key
+                ? 'bg-ppl-dark-green/20 text-ppl-light-green'
+                : 'text-muted hover:text-foreground'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'revenue' && <RevenueReport period={period} />}
+      {activeTab === 'bookings' && <BookingsReport period={period} />}
+      {activeTab === 'members' && <MembersReport />}
+    </div>
+  );
+}
+
+/* ─── Stat Card Component ─── */
+function StatCard({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
+  return (
+    <div className="ppl-card">
+      <p className="text-xs text-muted font-medium">{label}</p>
+      <p className={`text-2xl font-bold mt-1 ${accent ? 'text-ppl-light-green' : 'text-foreground'}`}>
+        {value}
+      </p>
+      {sub && <p className="text-xs text-muted mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
+/* ─── Bar Chart (Simple CSS) ─── */
+function BarChart({ data, labelKey, valueKey, maxHeight = 120 }: {
+  data: Record<string, any>[];
+  labelKey: string;
+  valueKey: string;
+  maxHeight?: number;
+}) {
+  const maxVal = Math.max(...data.map((d) => d[valueKey]), 1);
+  return (
+    <div className="flex items-end gap-1.5" style={{ height: maxHeight }}>
+      {data.map((item, i) => {
+        const height = (item[valueKey] / maxVal) * maxHeight;
+        return (
+          <div key={i} className="flex-1 flex flex-col items-center gap-1">
+            <span className="text-xs text-muted">{item[valueKey]}</span>
+            <div
+              className="w-full rounded-t-md bg-ppl-dark-green/60 hover:bg-ppl-light-green/60 transition min-h-[2px]"
+              style={{ height: Math.max(height, 2) }}
+            />
+            <span className="text-xs text-muted truncate w-full text-center">{item[labelKey]}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ─── Revenue Report ─── */
+function RevenueReport({ period }: { period: Period }) {
+  const [stats, setStats] = useState<RevenueStats | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await api.getRevenueStats({ period });
+      if (res.data) setStats(res.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [period]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (isLoading || !stats) {
+    return <div className="grid grid-cols-4 gap-4">{[1,2,3,4].map(n => <div key={n} className="ppl-card animate-pulse h-24" />)}</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-4 gap-4">
+        <StatCard label="Total Revenue (All Time)" value={`$${stats.totalRevenue.toLocaleString()}`} accent />
+        <StatCard label={`Revenue (${period})`} value={`$${stats.periodRevenue.toLocaleString()}`} />
+        <StatCard label="Avg per Member" value={`$${stats.averagePerMember.toFixed(0)}`} sub="per period" />
+        <StatCard label="Past Due Amount" value={`$${stats.pastDueAmount.toLocaleString()}`} sub="at risk" />
+      </div>
+
+      <div className="grid grid-cols-2 gap-6">
+        {/* Revenue by Plan */}
+        <div className="ppl-card">
+          <h3 className="text-sm font-bold text-foreground mb-4">Revenue by Plan</h3>
+          {stats.revenueByPlan.length > 0 ? (
+            <div className="space-y-3">
+              {stats.revenueByPlan.map((item) => (
+                <div key={item.plan} className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{item.plan}</p>
+                    <p className="text-xs text-muted">{item.members} member{item.members !== 1 ? 's' : ''}</p>
+                  </div>
+                  <p className="text-sm font-bold text-ppl-light-green">${item.revenue.toLocaleString()}/wk</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted text-center py-4">No data yet</p>
+          )}
+        </div>
+
+        {/* Revenue by Month */}
+        <div className="ppl-card">
+          <h3 className="text-sm font-bold text-foreground mb-4">Monthly Revenue Trend</h3>
+          {stats.revenueByMonth.length > 0 ? (
+            <BarChart
+              data={stats.revenueByMonth.map((m) => ({
+                label: new Date(m.month + '-01').toLocaleDateString('en-US', { month: 'short' }),
+                value: m.revenue,
+              }))}
+              labelKey="label"
+              valueKey="value"
+            />
+          ) : (
+            <p className="text-sm text-muted text-center py-4">No data yet</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Bookings Report ─── */
+function BookingsReport({ period }: { period: Period }) {
+  const [stats, setStats] = useState<BookingStats | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await api.getBookingStats({ period });
+      if (res.data) setStats(res.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [period]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (isLoading || !stats) {
+    return <div className="grid grid-cols-4 gap-4">{[1,2,3,4].map(n => <div key={n} className="ppl-card animate-pulse h-24" />)}</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-4 gap-4">
+        <StatCard label="Total Bookings" value={stats.totalBookings.toLocaleString()} accent />
+        <StatCard label={`Bookings (${period})`} value={stats.periodBookings.toLocaleString()} />
+        <StatCard label="Avg per Session" value={stats.averagePerSession.toFixed(1)} sub="athletes" />
+        <StatCard label="Utilization Rate" value={`${stats.utilizationRate}%`} sub="capacity filled" />
+      </div>
+
+      <div className="grid grid-cols-2 gap-6">
+        {/* By Day of Week */}
+        <div className="ppl-card">
+          <h3 className="text-sm font-bold text-foreground mb-4">Bookings by Day</h3>
+          <BarChart data={stats.bookingsByDay} labelKey="day" valueKey="count" />
+        </div>
+
+        {/* By Session Type */}
+        <div className="ppl-card">
+          <h3 className="text-sm font-bold text-foreground mb-4">By Session Type</h3>
+          {stats.bookingsByType.length > 0 ? (
+            <div className="space-y-3">
+              {stats.bookingsByType.map((item) => {
+                const total = stats.bookingsByType.reduce((sum, t) => sum + t.count, 0);
+                const pct = total > 0 ? (item.count / total) * 100 : 0;
+                return (
+                  <div key={item.type}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm text-foreground capitalize">{item.type.replace(/_/g, ' ')}</span>
+                      <span className="text-sm font-medium text-foreground">{item.count}</span>
+                    </div>
+                    <div className="h-2 bg-surface rounded-full overflow-hidden">
+                      <div className="h-full bg-ppl-dark-green rounded-full" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-muted text-center py-4">No data yet</p>
+          )}
+        </div>
+      </div>
+
+      {/* Popular Times */}
+      {stats.popularTimes.length > 0 && (
+        <div className="ppl-card">
+          <h3 className="text-sm font-bold text-foreground mb-4">Popular Training Times</h3>
+          <BarChart
+            data={stats.popularTimes.map((t) => ({
+              label: `${t.hour % 12 || 12}${t.hour < 12 ? 'a' : 'p'}`,
+              value: t.count,
+            }))}
+            labelKey="label"
+            valueKey="value"
+            maxHeight={80}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Members Report ─── */
+function MembersReport() {
+  const [stats, setStats] = useState<MemberStats | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await api.getMemberStats();
+        if (res.data) setStats(res.data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  if (isLoading || !stats) {
+    return <div className="grid grid-cols-4 gap-4">{[1,2,3,4].map(n => <div key={n} className="ppl-card animate-pulse h-24" />)}</div>;
+  }
+
+  const AGE_LABELS: Record<string, string> = {
+    college: 'College',
+    ms_hs: '13+ (MS/HS)',
+    youth: 'Youth',
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-4 gap-4">
+        <StatCard label="Active Members" value={stats.totalActive.toString()} accent />
+        <StatCard label="Inactive" value={stats.totalInactive.toString()} />
+        <StatCard label="New This Month" value={stats.newThisMonth.toString()} />
+        <StatCard label="Churn Rate (30d)" value={`${stats.churnRate}%`} sub="monthly" />
+      </div>
+
+      <div className="grid grid-cols-3 gap-6">
+        {/* By Age Group */}
+        <div className="ppl-card">
+          <h3 className="text-sm font-bold text-foreground mb-4">By Age Group</h3>
+          {stats.byAgeGroup.length > 0 ? (
+            <div className="space-y-3">
+              {stats.byAgeGroup.map((g) => (
+                <div key={g.ageGroup} className="flex items-center justify-between">
+                  <span className="text-sm text-foreground">{AGE_LABELS[g.ageGroup] || g.ageGroup}</span>
+                  <span className="text-sm font-bold text-foreground">{g.count}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted text-center py-4">No data</p>
+          )}
+        </div>
+
+        {/* By Plan */}
+        <div className="ppl-card">
+          <h3 className="text-sm font-bold text-foreground mb-4">By Plan</h3>
+          {stats.byPlan.length > 0 ? (
+            <div className="space-y-3">
+              {stats.byPlan.map((p) => (
+                <div key={p.plan} className="flex items-center justify-between">
+                  <span className="text-sm text-foreground">{p.plan}</span>
+                  <span className="text-sm font-bold text-foreground">{p.count}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted text-center py-4">No data</p>
+          )}
+        </div>
+
+        {/* By Location */}
+        <div className="ppl-card">
+          <h3 className="text-sm font-bold text-foreground mb-4">By Location</h3>
+          {stats.byLocation.length > 0 ? (
+            <div className="space-y-3">
+              {stats.byLocation.map((l) => (
+                <div key={l.location} className="flex items-center justify-between">
+                  <span className="text-sm text-foreground">{l.location}</span>
+                  <span className="text-sm font-bold text-foreground">{l.count}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted text-center py-4">No data</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,478 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum Role {
+  ADMIN
+  STAFF
+  CLIENT
+}
+
+enum SessionType {
+  COLLEGE_PITCHING
+  MS_HS_PITCHING
+  YOUTH_PITCHING
+  PRIVATE_LESSON
+  CAGE_RENTAL
+}
+
+enum BookingStatus {
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum MembershipStatus {
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+  CANCELLED
+}
+
+enum BillingDay {
+  MONDAY
+  THURSDAY
+}
+
+enum PaymentStatus {
+  SUCCEEDED
+  FAILED
+  RETRYING
+  REFUNDED
+}
+
+enum CardChangeRequestStatus {
+  PENDING
+  LINK_SENT
+  COMPLETED
+  DENIED
+}
+
+enum NotificationType {
+  BOOKING_CONFIRMED
+  BOOKING_CANCELLED
+  BOOKING_REMINDER
+  PAYMENT_SUCCEEDED
+  PAYMENT_FAILED
+  CREDITS_REVOKED
+  CREDITS_RESTORED
+  NEW_MESSAGE
+  SCHEDULE_CHANGED
+  MEMBERSHIP_STATUS_CHANGE
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  PUSH
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+// ============================================================
+// LOCATIONS
+// ============================================================
+
+model Location {
+  id             String   @id @default(uuid())
+  name           String
+  address        String?
+  phone          String?
+  timezone       String   @default("America/Chicago")
+  operatingHours Json?    // { monday: { open: "06:00", close: "21:00" }, ... }
+  closedDay      String?  // e.g., "sunday"
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  users              User[]
+  staffLocations     StaffLocation[]
+  rooms              Room[]
+  sessions           Session[]
+  clientMemberships  ClientMembership[]
+  conversations      Conversation[]
+  auditLogs          AuditLog[]
+
+  @@map("locations")
+}
+
+// ============================================================
+// USERS & AUTH
+// ============================================================
+
+model User {
+  id               String   @id @default(uuid())
+  email            String   @unique
+  passwordHash     String
+  fullName         String
+  phone            String?
+  role             Role     @default(CLIENT)
+  homeLocationId   String?
+  isActive         Boolean  @default(true)
+  stripeCustomerId String?  @unique
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  homeLocation       Location?          @relation(fields: [homeLocationId], references: [id])
+  clientProfile      ClientProfile?
+  staffLocations     StaffLocation[]
+  coachedSessions    Session[]          @relation("SessionCoach")
+  bookings           Booking[]
+  clientMemberships  ClientMembership[]
+  weeklyCredits      WeeklyCredit[]
+  payments           Payment[]
+  cardChangeRequests CardChangeRequest[] @relation("ClientCardRequests")
+  adminCardRequests  CardChangeRequest[] @relation("AdminCardRequests")
+  sentMessages       Message[]
+  notifications      Notification[]
+  auditLogs          AuditLog[]
+
+  @@index([homeLocationId])
+  @@index([role])
+  @@index([email])
+  @@map("users")
+}
+
+model ClientProfile {
+  id                    String   @id @default(uuid())
+  userId                String   @unique
+  ageGroup              String?  // "youth", "ms_hs", "college"
+  dateOfBirth           DateTime?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  trainingGoals         String?
+  notes                 String?
+  waiverSignedAt        DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("client_profiles")
+}
+
+model StaffLocation {
+  id         String   @id @default(uuid())
+  staffId    String
+  locationId String
+  createdAt  DateTime @default(now())
+
+  // Relations
+  staff    User     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, locationId])
+  @@map("staff_locations")
+}
+
+// ============================================================
+// ROOMS & SCHEDULING
+// ============================================================
+
+model Room {
+  id         String   @id @default(uuid())
+  locationId String
+  name       String
+  sortOrder  Int      @default(0)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  location Location  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  sessions Session[]
+
+  @@index([locationId])
+  @@map("rooms")
+}
+
+model Session {
+  id                      String      @id @default(uuid())
+  locationId              String
+  roomId                  String?
+  coachId                 String?
+  title                   String
+  sessionType             SessionType
+  startTime               DateTime
+  endTime                 DateTime
+  maxCapacity             Int         @default(8)
+  currentEnrolled         Int         @default(0)
+  recurringRule           String?     // iCal RRULE format
+  recurringGroupId        String?     // links recurring instances
+  registrationCutoffHours Int         @default(2)
+  cancellationCutoffHours Int         @default(1)
+  isActive                Boolean     @default(true)
+  createdAt               DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
+
+  // Relations
+  location Location  @relation(fields: [locationId], references: [id])
+  room     Room?     @relation(fields: [roomId], references: [id])
+  coach    User?     @relation("SessionCoach", fields: [coachId], references: [id])
+  bookings Booking[]
+
+  @@index([locationId, startTime])
+  @@index([coachId])
+  @@index([sessionType])
+  @@index([recurringGroupId])
+  @@map("sessions")
+}
+
+model Booking {
+  id                 String        @id @default(uuid())
+  clientId           String
+  sessionId          String
+  status             BookingStatus @default(CONFIRMED)
+  creditsUsed        Int           @default(1)
+  cancelledAt        DateTime?
+  cancellationReason String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  // Relations
+  client             User               @relation(fields: [clientId], references: [id])
+  session            Session            @relation(fields: [sessionId], references: [id])
+  creditTransactions CreditTransaction[]
+
+  @@unique([clientId, sessionId])
+  @@index([clientId, status])
+  @@index([sessionId])
+  @@map("bookings")
+}
+
+// ============================================================
+// MEMBERSHIPS & BILLING
+// ============================================================
+
+model MembershipPlan {
+  id              String   @id @default(uuid())
+  name            String   // "Unlimited College Pitching", "Youth 1x/Week", etc.
+  slug            String   @unique
+  ageGroup        String   // "college", "ms_hs", "youth"
+  sessionsPerWeek Int?     // null = unlimited
+  priceCents      Int      // e.g., 8500 = $85.00
+  billingCycle    String   @default("weekly")
+  description     String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  clientMemberships ClientMembership[]
+
+  @@map("membership_plans")
+}
+
+model ClientMembership {
+  id                   String           @id @default(uuid())
+  clientId             String
+  planId               String
+  locationId           String
+  status               MembershipStatus @default(ACTIVE)
+  stripeSubscriptionId String?          @unique
+  stripePriceId        String?
+  billingDay           BillingDay
+  billingAnchorDate    DateTime
+  startedAt            DateTime         @default(now())
+  cancelledAt          DateTime?
+  cancelRequestedAt    DateTime?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  // Relations
+  client        User             @relation(fields: [clientId], references: [id])
+  plan          MembershipPlan   @relation(fields: [planId], references: [id])
+  location      Location         @relation(fields: [locationId], references: [id])
+  weeklyCredits WeeklyCredit[]
+  payments      Payment[]
+
+  @@index([clientId, status])
+  @@index([status])
+  @@index([billingDay])
+  @@map("client_memberships")
+}
+
+model WeeklyCredit {
+  id           String   @id @default(uuid())
+  clientId     String
+  membershipId String
+  creditsTotal Int
+  creditsUsed  Int      @default(0)
+  weekStartDate DateTime
+  weekEndDate  DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  client     User             @relation(fields: [clientId], references: [id])
+  membership ClientMembership @relation(fields: [membershipId], references: [id])
+
+  @@unique([clientId, membershipId, weekStartDate])
+  @@index([clientId, weekStartDate])
+  @@map("weekly_credits")
+}
+
+model CreditTransaction {
+  id              String   @id @default(uuid())
+  clientId        String
+  transactionType String   // "usage", "refund", "revoke", "restore"
+  amount          Int      // positive = added, negative = used/revoked
+  bookingId       String?
+  paymentId       String?
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  // Relations
+  booking Booking? @relation(fields: [bookingId], references: [id])
+
+  @@index([clientId, createdAt])
+  @@map("credit_transactions")
+}
+
+// ============================================================
+// PAYMENTS
+// ============================================================
+
+model Payment {
+  id                    String        @id @default(uuid())
+  clientId              String
+  membershipId          String?
+  stripePaymentIntentId String?       @unique
+  stripeInvoiceId       String?       @unique
+  amountCents           Int
+  status                PaymentStatus
+  failureReason         String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  // Relations
+  client     User              @relation(fields: [clientId], references: [id])
+  membership ClientMembership? @relation(fields: [membershipId], references: [id])
+
+  @@index([clientId, createdAt])
+  @@index([status])
+  @@map("payments")
+}
+
+model CardChangeRequest {
+  id               String                  @id @default(uuid())
+  clientId         String
+  adminId          String?
+  status           CardChangeRequestStatus @default(PENDING)
+  secureLinkToken  String?                 @unique
+  secureLinkExpiry DateTime?
+  newCardVerified  Boolean                 @default(false)
+  notes            String?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  // Relations
+  client User  @relation("ClientCardRequests", fields: [clientId], references: [id])
+  admin  User? @relation("AdminCardRequests", fields: [adminId], references: [id])
+
+  @@index([clientId])
+  @@index([status])
+  @@map("card_change_requests")
+}
+
+// ============================================================
+// MESSAGING
+// ============================================================
+
+model Conversation {
+  id           String   @id @default(uuid())
+  locationId   String?
+  participants Json     // array of user IDs
+  type         String   // "client_coach", "client_admin"
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  location Location? @relation(fields: [locationId], references: [id])
+  messages Message[]
+
+  @@map("conversations")
+}
+
+model Message {
+  id             String   @id @default(uuid())
+  conversationId String
+  senderId       String
+  content        String
+  readBy         Json     @default("[]") // array of user IDs who have read
+  createdAt      DateTime @default(now())
+
+  // Relations
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+
+model Notification {
+  id        String             @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  channel   NotificationChannel
+  status    NotificationStatus @default(PENDING)
+  metadata  Json?              // extra data (booking ID, payment amount, etc.)
+  sentAt    DateTime?
+  createdAt DateTime           @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@map("notifications")
+}
+
+// ============================================================
+// AUDIT
+// ============================================================
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  userId       String?
+  locationId   String?
+  action       String   // "session.created", "session.updated", "booking.cancelled", etc.
+  resourceType String   // "session", "booking", "membership", etc.
+  resourceId   String?
+  changes      Json?    // { before: {...}, after: {...} }
+  ipAddress    String?
+  createdAt    DateTime @default(now())
+
+  // Relations
+  user     User?     @relation(fields: [userId], references: [id])
+  location Location? @relation(fields: [locationId], references: [id])
+
+  @@index([userId])
+  @@index([resourceType, resourceId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

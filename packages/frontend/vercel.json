@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "installCommand": "npm ci",
+  "env": {
+    "NEXT_PUBLIC_API_URL": "@ppl_api_url",
+    "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": "@ppl_stripe_publishable_key"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "ppl-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pitching Performance Lab — Scheduling, Payments & Management Platform",
+  "scripts": {
+    "dev": "concurrently -n backend,frontend -c blue,green \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd packages/backend && npm run dev",
+    "dev:frontend": "cd packages/frontend && npm run dev",
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "cd packages/backend && npm run build",
+    "build:frontend": "cd packages/frontend && npm run build",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:setup": "cd packages/backend && npx prisma generate && npx prisma db push && npm run db:seed",
+    "db:seed": "cd packages/backend && npm run db:seed",
+    "db:studio": "cd packages/backend && npx prisma studio",
+    "db:reset": "cd packages/backend && npx prisma db push --force-reset && npm run db:seed",
+    "typecheck": "cd packages/backend && npm run typecheck && cd ../frontend && npx tsc --noEmit",
+    "setup": "npm install && cd packages/backend && npm install && cd ../frontend && npm install && npm run db:up && sleep 3 && npm run db:setup"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}
