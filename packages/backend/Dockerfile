@@ -10,7 +10,9 @@ COPY prisma ./prisma/
 # Install all dependencies (including dev for build)
 RUN npm ci
 
-# Generate Prisma client
+# Generate Prisma client (dummy URLs for schema validation during build)
+ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
+ENV DIRECT_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 RUN npx prisma generate
 
 # Copy source
@@ -27,13 +29,19 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Copy package files and install production deps only
+# Copy package files and install ALL deps (prisma client needs @prisma/client)
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma/
-RUN npm ci --omit=dev
+RUN npm ci
 
 # Generate Prisma client in production image
+ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
+ENV DIRECT_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 RUN npx prisma generate
+
+# Remove dummy env vars (real ones come from Render env config at runtime)
+ENV DATABASE_URL=""
+ENV DIRECT_URL=""
 
 # Copy built output from builder
 COPY --from=builder /app/dist ./dist/
