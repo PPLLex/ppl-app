@@ -30,6 +30,17 @@ export const config = {
     pass: process.env.SMTP_PASS || '',
     from: process.env.SMTP_FROM || '"Pitching Performance Lab" <noreply@pitchingperformancelab.com>',
   },
+
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID || '',
+  },
+
+  apple: {
+    clientId: process.env.APPLE_CLIENT_ID || '', // Service ID (e.g., "com.ppl.app.signin")
+    teamId: process.env.APPLE_TEAM_ID || '',
+    keyId: process.env.APPLE_KEY_ID || '',
+    privateKey: (process.env.APPLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+  },
 };
 
 /**
@@ -52,7 +63,7 @@ export function validateProductionConfig() {
 
   if (missing.length > 0) {
     console.error('❌ Missing required production environment variables:');
-    missing.forEach((key) => console.error(`   - ${key}`));
+    missing.forEach((key) => console.error('   - ' + key));
     console.error('\nSee .env.production.example for reference.');
     process.exit(1);
   }
