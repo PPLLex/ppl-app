@@ -39,7 +39,7 @@ class ApiClient {
     const data = await response.json();
 
     if (!response.ok) {
-      // Token expired or invalid â clear it and redirect to login
+      // Token expired or invalid — clear it and redirect to login
       if (response.status === 401 && typeof window !== 'undefined') {
         localStorage.removeItem('ppl_token');
         window.location.href = '/login?expired=true';
@@ -291,79 +291,6 @@ class ApiClient {
     return this.request(`/members/${id}/notes`, {
       method: 'PUT',
       body: JSON.stringify(data),
-    });
-  }
-
-  async deactivateClient(id: string) {
-    return this.request(`/members/${id}/deactivate`, { method: 'PUT' });
-  }
-
-  // Staff management
-  async getStaffList() {
-    return this.request<StaffMember[]>('/staff');
-  }
-
-  async inviteStaff(data: { fullName: string; email: string; password: string; role: string; phone?: string }) {
-    return this.request<StaffMember>('/staff/invite', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  // Membership plan management (admin)
-  async createMembershipPlan(data: Partial<MembershipPlan> & { priceCents: number }) {
-    return this.request<MembershipPlan>('/memberships/plans', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async updateMembershipPlan(id: string, data: Partial<MembershipPlan>) {
-    return this.request<MembershipPlan>(`/memberships/plans/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-  }
-
-  // Reassign client to location
-  async reassignClient(locationId: string, clientId: string) {
-    return this.request(`/locations/${locationId}/clients/${clientId}`, {
-      method: 'PUT',
-    });
-  }
-
-  // Conversations / Messaging
-  async getConversations() {
-    return this.request<ConversationSummary[]>('/conversations');
-  }
-
-  async getContacts() {
-    return this.request<Contact[]>('/conversations/contacts');
-  }
-
-  async startConversation(data: { recipientId: string; message: string; type?: string }) {
-    return this.request<{ conversationId: string; message: MessageData }>('/conversations', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async getMessages(conversationId: string, page = 1) {
-    return this.request<MessageData[]>(`/conversations/${conversationId}/messages?page=${page}&limit=50`);
-  }
-
-  async sendMessage(conversationId: string, content: string) {
-    return this.request<MessageData>(`/conversations/${conversationId}/messages`, {
-      method: 'POST',
-      body: JSON.stringify({ content }),
-    });
-  }
-
-  // Reports / Analytics
-  async getRevenueStats(params?: { period?: string; locationId?: string }) {
-    const query = new URLSearchParams();
-    if (params?.period) query.set('period', params.period);
-    ifody: JSON.stringify(data),
     });
   }
 
