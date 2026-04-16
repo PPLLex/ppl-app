@@ -155,6 +155,22 @@ model User {
   notifications      Notification[]
   auditLogs          AuditLog[]
 
+  // Coach Notes relations
+  athleteNotes       CoachNote[]       @relation("AthleteNotes")
+  coachNotes         CoachNote[]       @relation("CoachNotes")
+  athleteDigests     NoteDigest[]      @relation("AthleteDigests")
+  digestRecipients   DigestRecipient[] @relation("DigestRecipients")
+
+  // Goals & Forms relations
+  athleteGoals       Goal[]            @relation("AthleteGoals")
+  coachGoals         Goal[]            @relation("CoachGoals")
+  createdForms       FormTemplate[]    @relation("CreatedForms")
+  formResponses      FormResponse[]    @relation("FormResponses")
+
+  // Programming relations
+  coachPrograms      Program[]         @relation("CoachPrograms")
+  athletePrograms    Program[]         @relation("AthletePrograms")
+
   @@index([homeLocationId])
   @@index([role])
   @@index([email])
@@ -262,6 +278,7 @@ model Booking {
   client             User               @relation(fields: [clientId], references: [id])
   session            Session            @relation(fields: [sessionId], references: [id])
   creditTransactions CreditTransaction[]
+  coachNotes         CoachNote[]
 
   @@unique([clientId, sessionId])
   @@index([clientId, status])
@@ -461,6 +478,270 @@ model Notification {
   @@index([userId, createdAt])
   @@index([status])
   @@map("notifications")
+}
+
+// ============================================================
+// COACH SESSION NOTES
+// ============================================================
+
+enum TrainingCategory {
+  PITCHING_MECHANICS
+  VELOCITY_TRAINING
+  ARM_CARE
+  BULLPEN_SESSION
+  LIVE_AT_BATS
+  VIDEO_REVIEW
+  STRENGTH_CONDITIONING
+  MENTAL_PERFORMANCE
+  GENERAL
+  OTHER
+}
+
+model CoachNote {
+  id               String           @id @default(uuid())
+  athleteId        String
+  coachId          String
+  trainingCategory TrainingCategory
+  rawContent       String           // original note from coach
+  cleanedContent   String?          // AI-cleaned version (grammar, profanity filtered)
+  sessionDate      DateTime         @default(now())
+  bookingId        String?          // optional link to a specific booking
+  isVisible        Boolean          @default(true) // can be hidden if needed
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  // Relations
+  athlete User    @relation("AthleteNotes", fields: [athleteId], references: [id])
+  coach   User    @relation("CoachNotes", fields: [coachId], references: [id])
+  booking Booking? @relation(fields: [bookingId], references: [id])
+
+  @@index([athleteId, createdAt])
+  @@index([coachId, createdAt])
+  @@index([athleteId, trainingCategory])
+  @@map("coach_notes")
+}
+
+// Weekly email digest tracking
+model NoteDigest {
+  id          String   @id @default(uuid())
+  athleteId   String
+  weekStart   DateTime
+  weekEnd     DateTime
+  emailSentAt DateTime?
+  recipients  Json     // array of email addresses that received this digest
+  noteIds     Json     // array of CoachNote IDs included
+  htmlContent String?  // rendered email content for audit
+  createdAt   DateTime @default(now())
+
+  // Relations
+  athlete User @relation("AthleteDigests", fields: [athleteId], references: [id])
+
+  @@unique([athleteId, weekStart])
+  @@index([weekStart])
+  @@map("note_digests")
+}
+
+// Additional email recipients per athlete (parent emails, on-field coaches, etc.)
+model DigestRecipient {
+  id        String   @id @default(uuid())
+  athleteId String
+  email     String
+  name      String?
+  relation  String?  // "parent", "coach", "guardian", etc.
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  athlete User @relation("DigestRecipients", fields: [athleteId], references: [id])
+
+  @@unique([athleteId, email])
+  @@map("digest_recipients")
+}
+
+// ============================================================
+// GOALS & GAMIFICATION
+// ============================================================
+
+enum GoalType {
+  SHORT_TERM  // weeks
+  LONG_TERM   // months/season
+}
+
+enum GoalStatus {
+  ACTIVE
+  COMPLETED
+  ABANDONED
+}
+
+model Goal {
+  id          String     @id @default(uuid())
+  athleteId   String
+  coachId     String?    // coach who set it, or null if self-set
+  type        GoalType
+  title       String
+  description String?
+  targetDate  DateTime?
+  status      GoalStatus @default(ACTIVE)
+  progress    Int        @default(0) // 0-100 percentage
+  completedAt DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relations
+  athlete User  @relation("AthleteGoals", fields: [athleteId], references: [id])
+  coach   User? @relation("CoachGoals", fields: [coachId], references: [id])
+
+  @@index([athleteId, status])
+  @@index([athleteId, type])
+  @@map("goals")
+}
+
+// ============================================================
+// CUSTOM FORMS (onboarding, questionnaires, intake, etc.)
+// ============================================================
+
+model FormTemplate {
+  id          String   @id @default(uuid())
+  createdById String
+  title       String
+  description String?
+  fields      Json     // array of field definitions: [{name, type, label, required, options}]
+  isOnboarding Boolean @default(false) // if true, new athletes must fill it out
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  createdBy User           @relation("CreatedForms", fields: [createdById], references: [id])
+  responses FormResponse[]
+
+  @@map("form_templates")
+}
+
+model FormResponse {
+  id         String   @id @default(uuid())
+  formId     String
+  athleteId  String
+  answers    Json     // { fieldName: answer, ... }
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  form    FormTemplate @relation(fields: [formId], references: [id])
+  athlete User         @relation("FormResponses", fields: [athleteId], references: [id])
+
+  @@unique([formId, athleteId]) // one response per athlete per form (can update)
+  @@index([athleteId])
+  @@map("form_responses")
+}
+
+// ============================================================
+// PROGRAMMING / WORKOUT BUILDER
+// ============================================================
+
+enum ProgramStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+model Program {
+  id          String        @id @default(uuid())
+  coachId     String
+  athleteId   String
+  title       String
+  description String?
+  status      ProgramStatus @default(DRAFT)
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Relations
+  coach    User          @relation("CoachPrograms", fields: [coachId], references: [id])
+  athlete  User          @relation("AthletePrograms", fields: [athleteId], references: [id])
+  weeks    ProgramWeek[]
+
+  @@index([coachId])
+  @@index([athleteId, status])
+  @@map("programs")
+}
+
+model ProgramWeek {
+  id        String   @id @default(uuid())
+  programId String
+  weekNum   Int
+  title     String?  // "Week 1 â Foundation", etc.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  program  Program      @relation(fields: [programId], references: [id], onDelete: Cascade)
+  days     ProgramDay[]
+
+  @@unique([programId, weekNum])
+  @@map("program_weeks")
+}
+
+model ProgramDay {
+  id        String   @id @default(uuid())
+  weekId    String
+  dayNum    Int      // 1-7
+  title     String?  // "Monday â Throwing Day"
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  week      ProgramWeek       @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  exercises ProgramExercise[]
+
+  @@unique([weekId, dayNum])
+  @@map("program_days")
+}
+
+model ProgramExercise {
+  id           String   @id @default(uuid())
+  dayId        String
+  sortOrder    Int      @default(0)
+  exerciseId   String?  // link to exercise library, or null for custom
+  customName   String?  // if not from library
+  sets         Int?
+  reps         String?  // "10" or "8-12" or "AMRAP"
+  intensity    String?  // "65%" or "RPE 7" or "Max Effort"
+  restSeconds  Int?
+  tempo        String?  // "3-1-1-0"
+  notes        String?  // coach instructions
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  day      ProgramDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  exercise Exercise?  @relation(fields: [exerciseId], references: [id])
+
+  @@index([dayId, sortOrder])
+  @@map("program_exercises")
+}
+
+// Exercise library â reusable exercise definitions
+model Exercise {
+  id          String   @id @default(uuid())
+  name        String
+  category    String   // "throwing", "arm_care", "strength", "mobility", "conditioning"
+  equipment   String?  // "plyo_ball", "band", "dumbbell", etc.
+  description String?
+  videoUrl    String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  programExercises ProgramExercise[]
+
+  @@index([category])
+  @@map("exercises")
 }
 
 // ============================================================
