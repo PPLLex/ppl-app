@@ -20,6 +20,7 @@ import accountRoutes from './routes/account';
 import passwordResetRoutes from './routes/passwordReset';
 import auditLogRoutes from './routes/auditLogs';
 import webhookRoutes from './routes/webhooks';
+import oauthRoutes from './routes/oauth';
 
 const app = express();
 
@@ -79,6 +80,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/account', accountRoutes);
 app.use('/api/auth', passwordResetRoutes);
+app.use('/api/auth', oauthRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/webhooks', webhookRoutes);
 
