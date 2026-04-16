@@ -119,13 +119,24 @@ model Location {
 model User {
   id               String   @id @default(uuid())
   email            String   @unique
-  passwordHash     String
+  passwordHash     String?  // Optional â null for OAuth-only accounts
   fullName         String
   phone            String?
   role             Role     @default(CLIENT)
   homeLocationId   String?
   isActive         Boolean  @default(true)
   stripeCustomerId String?  @unique
+
+  // OAuth fields
+  authProvider      String?  // "email", "google", "apple" â primary auth method
+  googleId          String?  @unique
+  appleId           String?  @unique
+  avatarUrl         String?
+
+  // Magic link fields
+  magicLinkToken    String?  @unique
+  magicLinkExpiry   DateTime?
+
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
