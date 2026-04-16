@@ -21,6 +21,11 @@ import passwordResetRoutes from './routes/passwordReset';
 import auditLogRoutes from './routes/auditLogs';
 import webhookRoutes from './routes/webhooks';
 import oauthRoutes from './routes/oauth';
+import coachNoteRoutes from './routes/coachNotes';
+import goalRoutes from './routes/goals';
+import formRoutes from './routes/forms';
+import programRoutes from './routes/programs';
+import { membershipGuard } from './middleware/membershipGuard';
 
 const app = express();
 
@@ -54,6 +59,11 @@ app.use(express.json());
 app.use('/api/auth', authLimiter);
 app.use('/api', apiLimiter);
 
+// Membership guard â enforces "dummy mode" for clients without active membership
+// Checks JWT (if present) and blocks non-payment routes for suspended/past-due/cancelled members
+// Allowlisted paths (account, memberships, auth, webhooks, locations, notifications) are always accessible
+app.use('/api', membershipGuard);
+
 // ============================================================
 // ROUTES
 // ============================================================
@@ -83,6 +93,13 @@ app.use('/api/auth', passwordResetRoutes);
 app.use('/api/auth', oauthRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/webhooks', webhookRoutes);
+
+// New feature routes â protected by membership guard for client users
+// The guard checks internally if the path is allowlisted
+app.use('/api/coach-notes', coachNoteRoutes);
+app.use('/api/goals', goalRoutes);
+app.use('/api/forms', formRoutes);
+app.use('/api/programs', programRoutes);
 
 // ============================================================
 // ERROR HANDLING
