@@ -42,6 +42,7 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
         fullName,
         phone,
         role: Role.CLIENT,
+        authProvider: 'email',
         homeLocationId: locationId,
         clientProfile: {
           create: {
@@ -113,7 +114,12 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
       throw ApiError.unauthorized('Account is deactivated. Please contact PPL.');
     }
 
-    // Verify password
+    // Verify password â OAuth-only accounts don't have a passwordHash
+    if (!user.passwordHash) {
+      throw ApiError.unauthorized(
+        'This account uses Google or Apple sign-in. Please use that method to log in.'
+      );
+    }
     const isValidPassword = await bcrypt.compare(password, user.passwordHash);
     if (!isValidPassword) {
       throw ApiError.unauthorized('Invalid email or password');
