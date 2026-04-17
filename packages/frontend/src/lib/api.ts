@@ -39,7 +39,7 @@ class ApiClient {
     const data = await response.json();
 
     if (!response.ok) {
-      // Token expired or invalid — clear it and redirect to login
+      // Token expired or invalid â clear it and redirect to login
       if (response.status === 401 && typeof window !== 'undefined') {
         localStorage.removeItem('ppl_token');
         window.location.href = '/login?expired=true';
@@ -443,6 +443,208 @@ class ApiClient {
     if (params?.resourceType) query.set('resourceType', params.resourceType);
     return this.request<AuditLogEntry[]>(`/audit-logs?${query}`);
   }
+
+  // ============================================================
+  // COACH NOTES
+  // ============================================================
+
+  async createCoachNote(data: { athleteId: string; trainingCategory: string; content: string; sessionDate?: string; bookingId?: string }) {
+    return this.request<CoachNote>('/coach-notes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getAthleteNotes(athleteId: string, params?: { category?: string; limit?: number; offset?: number }) {
+    const query = new URLSearchParams();
+    if (params?.category) query.set('category', params.category);
+    if (params?.limit) query.set('limit', params.limit.toString());
+    if (params?.offset) query.set('offset', params.offset.toString());
+    return this.request<CoachNote[]>(`/coach-notes/athlete/${athleteId}?${query}`);
+  }
+
+  async getMyCoachNotes(params?: { limit?: number; offset?: number }) {
+    const query = new URLSearchParams();
+    if (params?.limit) query.set('limit', params.limit.toString());
+    if (params?.offset) query.set('offset', params.offset.toString());
+    return this.request<CoachNote[]>(`/coach-notes/my-notes?${query}`);
+  }
+
+  async updateCoachNote(noteId: string, data: { content?: string; trainingCategory?: string }) {
+    return this.request<CoachNote>(`/coach-notes/${noteId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteCoachNote(noteId: string) {
+    return this.request(`/coach-notes/${noteId}`, { method: 'DELETE' });
+  }
+
+  async getTrainingCategories() {
+    return this.request<TrainingCategoryOption[]>('/coach-notes/categories');
+  }
+
+  // Digest Recipients
+  async getDigestRecipients(athleteId: string) {
+    return this.request<DigestRecipient[]>(`/coach-notes/recipients/${athleteId}`);
+  }
+
+  async addDigestRecipient(athleteId: string, data: { email: string; name?: string; relation?: string }) {
+    return this.request<DigestRecipient>(`/coach-notes/recipients/${athleteId}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async removeDigestRecipient(recipientId: string) {
+    return this.request(`/coach-notes/recipients/remove/${recipientId}`, { method: 'DELETE' });
+  }
+
+  // ============================================================
+  // GOALS
+  // ============================================================
+
+  async createGoal(data: { athleteId?: string; type: string; title: string; description?: string; targetDate?: string }) {
+    return this.request<Goal>('/goals', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getAthleteGoals(athleteId: string, params?: { status?: string; type?: string }) {
+    const query = new URLSearchParams();
+    if (params?.status) query.set('status', params.status);
+    if (params?.type) query.set('type', params.type);
+    return this.request<Goal[]>(`/goals/athlete/${athleteId}?${query}`);
+  }
+
+  async updateGoal(goalId: string, data: { title?: string; description?: string; targetDate?: string; progress?: number; status?: string }) {
+    return this.request<Goal>(`/goals/${goalId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteGoal(goalId: string) {
+    return this.request(`/goals/${goalId}`, { method: 'DELETE' });
+  }
+
+  // ============================================================
+  // FORMS
+  // ============================================================
+
+  async createForm(data: { title: string; description?: string; fields: FormField[]; isOnboarding?: boolean }) {
+    return this.request<FormTemplate>('/forms', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getForms(params?: { onboarding?: boolean }) {
+    const query = new URLSearchParams();
+    if (params?.onboarding !== undefined) query.set('onboarding', params.onboarding.toString());
+    return this.request<FormTemplate[]>(`/forms?${query}`);
+  }
+
+  async getForm(formId: string) {
+    return this.request<FormTemplate>(`/forms/${formId}`);
+  }
+
+  async updateForm(formId: string, data: { title?: string; description?: string; fields?: FormField[]; isOnboarding?: boolean; isActive?: boolean }) {
+    return this.request<FormTemplate>(`/forms/${formId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async submitFormResponse(formId: string, answers: Record<string, unknown>, athleteId?: string) {
+    return this.request<FormResponse>(`/forms/${formId}/respond`, {
+      method: 'POST',
+      body: JSON.stringify({ answers, athleteId }),
+    });
+  }
+
+  async getFormResponses(formId: string) {
+    return this.request<FormResponse[]>(`/forms/${formId}/responses`);
+  }
+
+  async getMyFormResponse(formId: string) {
+    return this.request<FormResponse | null>(`/forms/${formId}/my-response`);
+  }
+
+  // ============================================================
+  // PROGRAMS / WORKOUT BUILDER
+  // ============================================================
+
+  async createProgram(data: { athleteId: string; title: string; description?: string; startDate?: string; endDate?: string }) {
+    return this.request<Program>('/programs', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getAthletePrograms(athleteId: string, params?: { status?: string }) {
+    const query = new URLSearchParams();
+    if (params?.status) query.set('status', params.status);
+    return this.request<Program[]>(`/programs/athlete/${athleteId}?${query}`);
+  }
+
+  async getProgram(programId: string) {
+    return this.request<Program>(`/programs/${programId}`);
+  }
+
+  async updateProgram(programId: string, data: { title?: string; description?: string; status?: string; startDate?: string; endDate?: string }) {
+    return this.request<Program>(`/programs/${programId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async addProgramWeek(programId: string, data?: { weekNum?: number; title?: string }) {
+    return this.request<ProgramWeek>(`/programs/${programId}/weeks`, {
+      method: 'POST',
+      body: JSON.stringify(data || {}),
+    });
+  }
+
+  async addProgramDay(weekId: string, data: { dayNum: number; title?: string; notes?: string }) {
+    return this.request<ProgramDay>(`/programs/weeks/${weekId}/days`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async addProgramExercise(dayId: string, data: { exerciseId?: string; customName?: string; sets?: number; reps?: string; intensity?: string; restSeconds?: number; tempo?: string; notes?: string }) {
+    return this.request<ProgramExercise>(`/programs/days/${dayId}/exercises`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateProgramExercise(exerciseId: string, data: { sets?: number; reps?: string; intensity?: string; restSeconds?: number; tempo?: string; notes?: string; sortOrder?: number }) {
+    return this.request<ProgramExercise>(`/programs/exercises/${exerciseId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteProgramExercise(exerciseId: string) {
+    return this.request(`/programs/exercises/${exerciseId}`, { method: 'DELETE' });
+  }
+
+  async getExerciseLibrary(category?: string) {
+    const query = new URLSearchParams();
+    if (category) query.set('category', category);
+    return this.request<ExerciseLibraryItem[]>(`/programs/exercises/library?${query}`);
+  }
+
+  async addExerciseToLibrary(data: { name: string; category: string; equipment?: string; description?: string; videoUrl?: string }) {
+    return this.request<ExerciseLibraryItem>('/programs/exercises/library', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
 }
 
 // Types
@@ -830,6 +1032,160 @@ export interface StaffMember {
   phone: string | null;
   role: 'ADMIN' | 'STAFF';
   locations: { id: string; name: string }[];
+}
+
+// Coach Notes types
+export interface CoachNote {
+  id: string;
+  athleteId: string;
+  coachId: string;
+  trainingCategory: string;
+  rawContent: string;
+  cleanedContent: string | null;
+  content: string; // computed: cleaned || raw
+  sessionDate: string;
+  bookingId: string | null;
+  isVisible: boolean;
+  createdAt: string;
+  updatedAt: string;
+  coach: { id: string; fullName: string };
+  athlete?: { id: string; fullName: string };
+  booking?: {
+    id: string;
+    session: {
+      id: string;
+      title: string;
+      sessionType: string;
+      startTime: string;
+    };
+  } | null;
+}
+
+export interface TrainingCategoryOption {
+  value: string;
+  label: string;
+}
+
+export interface DigestRecipient {
+  id: string;
+  athleteId: string;
+  email: string;
+  name: string | null;
+  relation: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+// Goals types
+export interface Goal {
+  id: string;
+  athleteId: string;
+  coachId: string | null;
+  type: 'SHORT_TERM' | 'LONG_TERM';
+  title: string;
+  description: string | null;
+  targetDate: string | null;
+  status: 'ACTIVE' | 'COMPLETED' | 'ABANDONED';
+  progress: number;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  athlete?: { id: string; fullName: string };
+  coach?: { id: string; fullName: string } | null;
+}
+
+// Forms types
+export interface FormField {
+  name: string;
+  type: 'text' | 'number' | 'select' | 'checkbox' | 'textarea' | 'date' | 'email' | 'phone' | 'multiselect';
+  label: string;
+  required?: boolean;
+  options?: string[];
+  placeholder?: string;
+}
+
+export interface FormTemplate {
+  id: string;
+  createdById: string;
+  title: string;
+  description: string | null;
+  fields: FormField[];
+  isOnboarding: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: { id: string; fullName: string };
+  _count?: { responses: number };
+  isCompleted?: boolean; // for client view
+}
+
+export interface FormResponse {
+  id: string;
+  formId: string;
+  athleteId: string;
+  answers: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+  athlete?: { id: string; fullName: string; email: string };
+}
+
+// Program / Workout Builder types
+export interface Program {
+  id: string;
+  coachId: string;
+  athleteId: string;
+  title: string;
+  description: string | null;
+  status: 'DRAFT' | 'ACTIVE' | 'COMPLETED' | 'ARCHIVED';
+  startDate: string | null;
+  endDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+  coach: { id: string; fullName: string };
+  athlete?: { id: string; fullName: string };
+  weeks?: ProgramWeek[];
+}
+
+export interface ProgramWeek {
+  id: string;
+  programId: string;
+  weekNum: number;
+  title: string | null;
+  days?: ProgramDay[];
+}
+
+export interface ProgramDay {
+  id: string;
+  weekId: string;
+  dayNum: number;
+  title: string | null;
+  notes: string | null;
+  exercises?: ProgramExercise[];
+}
+
+export interface ProgramExercise {
+  id: string;
+  dayId: string;
+  sortOrder: number;
+  exerciseId: string | null;
+  customName: string | null;
+  sets: number | null;
+  reps: string | null;
+  intensity: string | null;
+  restSeconds: number | null;
+  tempo: string | null;
+  notes: string | null;
+  exercise?: ExerciseLibraryItem | null;
+}
+
+export interface ExerciseLibraryItem {
+  id: string;
+  name: string;
+  category: string;
+  equipment: string | null;
+  description: string | null;
+  videoUrl: string | null;
+  isActive: boolean;
 }
 
 export class ApiError extends Error {
