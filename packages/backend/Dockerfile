@@ -29,14 +29,13 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Copy package files and install deps
+# Copy package files and install production deps (includes prisma CLI now)
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN npm ci --omit=dev
 
-# Copy Prisma schema + generated client + CLI from builder
+# Copy Prisma schema + generated client from builder
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/prisma ./prisma
 
 # Copy built output from builder
@@ -50,4 +49,4 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
   CMD wget -qO- http://localhost:4000/api/health || exit 1
 
 # Sync database schema on startup, then start the server
-CMD node ./node_modules/prisma/build/index.js db push --skip-generate && node dist/server.js
+CMD npx prisma db push --skip-generate && node dist/server.js
