@@ -64,6 +64,21 @@ const Icons = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
     </svg>
   ),
+  Pencil: () => (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+    </svg>
+  ),
+  Target: () => (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18zm0-4.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zm0-3a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" />
+    </svg>
+  ),
+  Dumbbell: () => (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5h1.5m13.5 0h1.5m-15 0v-3m13.5 3v-3m-10.5 0h7.5m-7.5 0v3m7.5-3v3M6.75 7.5h-1.5v9h1.5v-9zm12 0h-1.5v9h1.5v-9z" />
+    </svg>
+  ),
 };
 
 const adminNav: NavItem[] = [
@@ -82,6 +97,8 @@ const staffNav: NavItem[] = [
   { label: 'Dashboard', href: '/staff', icon: <Icons.Home /> },
   { label: 'Schedule', href: '/staff/schedule', icon: <Icons.Calendar /> },
   { label: 'Athletes', href: '/staff/athletes', icon: <Icons.Users /> },
+  { label: 'Session Notes', href: '/staff/notes', icon: <Icons.Pencil /> },
+  { label: 'Programs', href: '/staff/programs', icon: <Icons.Dumbbell /> },
   { label: 'Messages', href: '/staff/messages', icon: <Icons.Chat /> },
 ];
 
@@ -89,6 +106,9 @@ const clientNav: NavItem[] = [
   { label: 'Dashboard', href: '/client', icon: <Icons.Home /> },
   { label: 'Book Session', href: '/client/book', icon: <Icons.Calendar /> },
   { label: 'My Bookings', href: '/client/history', icon: <Icons.Chart /> },
+  { label: 'Training Notes', href: '/client/notes', icon: <Icons.Pencil /> },
+  { label: 'My Goals', href: '/client/goals', icon: <Icons.Target /> },
+  { label: 'My Programs', href: '/client/programs', icon: <Icons.Dumbbell /> },
   { label: 'Membership', href: '/client/membership', icon: <Icons.CreditCard /> },
   { label: 'Messages', href: '/client/messages', icon: <Icons.Chat /> },
   { label: 'My Account', href: '/client/account', icon: <Icons.Settings /> },
