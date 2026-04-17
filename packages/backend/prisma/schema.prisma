@@ -45,6 +45,12 @@ enum BillingDay {
   THURSDAY
 }
 
+enum LocationRole {
+  OWNER        // Full revenue, settings, manage staff at this location
+  COORDINATOR  // See revenue, member data, payment statuses — no settings changes
+  COACH        // See schedule and their own assigned clients only
+}
+
 enum PaymentStatus {
   SUCCEEDED
   FAILED
@@ -119,7 +125,7 @@ model Location {
 model User {
   id               String   @id @default(uuid())
   email            String   @unique
-  passwordHash     String?  // Optional â null for OAuth-only accounts
+  passwordHash     String?  // Optional — null for OAuth-only accounts
   fullName         String
   phone            String?
   role             Role     @default(CLIENT)
@@ -128,7 +134,7 @@ model User {
   stripeCustomerId String?  @unique
 
   // OAuth fields
-  authProvider      String?  // "email", "google", "apple" â primary auth method
+  authProvider      String?  // "email", "google", "apple" — primary auth method
   googleId          String?  @unique
   appleId           String?  @unique
   avatarUrl         String?
@@ -197,16 +203,19 @@ model ClientProfile {
 }
 
 model StaffLocation {
-  id         String   @id @default(uuid())
-  staffId    String
-  locationId String
-  createdAt  DateTime @default(now())
+  id           String       @id @default(uuid())
+  staffId      String
+  locationId   String
+  locationRole LocationRole @default(COACH)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   // Relations
   staff    User     @relation(fields: [staffId], references: [id], onDelete: Cascade)
   location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
 
   @@unique([staffId, locationId])
+  @@index([locationId, locationRole])
   @@map("staff_locations")
 }
 
@@ -673,7 +682,7 @@ model ProgramWeek {
   id        String   @id @default(uuid())
   programId String
   weekNum   Int
-  title     String?  // "Week 1 â Foundation", etc.
+  title     String?  // "Week 1 — Foundation", etc.
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -689,7 +698,7 @@ model ProgramDay {
   id        String   @id @default(uuid())
   weekId    String
   dayNum    Int      // 1-7
-  title     String?  // "Monday â Throwing Day"
+  title     String?  // "Monday — Throwing Day"
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -725,7 +734,7 @@ model ProgramExercise {
   @@map("program_exercises")
 }
 
-// Exercise library â reusable exercise definitions
+// Exercise library — reusable exercise definitions
 model Exercise {
   id          String   @id @default(uuid())
   name        String
