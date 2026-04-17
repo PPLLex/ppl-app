@@ -27,14 +27,14 @@ export const membershipGuard = async (req: Request, _res: Response, next: NextFu
     // Try to peek at the JWT to get user info
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
-      return next(); // No token â let the route's own authenticate middleware handle it
+      return next(); // No token — let the route's own authenticate middleware handle it
     }
 
     let decoded: JwtPayload;
     try {
       decoded = jwt.verify(authHeader.split(' ')[1], config.jwt.secret) as JwtPayload;
     } catch {
-      return next(); // Invalid token â let authenticate middleware handle the error
+      return next(); // Invalid token — let authenticate middleware handle the error
     }
 
     // Only applies to CLIENT users
@@ -42,7 +42,7 @@ export const membershipGuard = async (req: Request, _res: Response, next: NextFu
       return next();
     }
 
-    // Allowlisted paths â always accessible even without active membership
+    // Allowlisted paths — always accessible even without active membership
     // Use originalUrl since this middleware may be mounted at a sub-path
     const path = req.originalUrl.toLowerCase();
     const allowedPaths = [
@@ -52,6 +52,7 @@ export const membershipGuard = async (req: Request, _res: Response, next: NextFu
       '/api/webhooks',
       '/api/locations',       // need to see locations for payment setup
       '/api/notifications',   // need to receive payment notifications
+      '/api/onboarding',      // need to complete onboarding before having a membership
     ];
 
     const isAllowed = allowedPaths.some((allowed) => path.startsWith(allowed));
@@ -99,7 +100,7 @@ export const membershipGuard = async (req: Request, _res: Response, next: NextFu
 
 /**
  * Check membership status for a specific athlete.
- * Used by coaches when submitting notes â returns the status
+ * Used by coaches when submitting notes — returns the status
  * rather than blocking the request outright.
  */
 export const checkAthleteMembershipStatus = async (athleteId: string): Promise<{
