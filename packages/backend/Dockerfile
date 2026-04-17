@@ -49,4 +49,4 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
   CMD wget -qO- http://localhost:4000/api/health || exit 1
 
 # Sync database schema on startup, then start the server
-CMD npx prisma db push --skip-generate && node dist/server.js
+CMD npx prisma db push --skip-generate --accept-data-loss && node dist/server.js
