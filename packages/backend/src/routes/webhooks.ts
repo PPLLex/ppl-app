@@ -50,6 +50,10 @@ router.post('/stripe', async (req: Request, res: Response, next: NextFunction) =
         await handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
         break;
 
+      case 'checkout.session.completed':
+        await handleCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session);
+        break;
+
       default:
         console.log(`Unhandled Stripe event: ${event.type}`);
     }
@@ -384,6 +388,40 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
       data: { status: newStatus },
     });
   }
+}
+
+/**
+ * Checkout session completed — handle one-time onboarding fee payments.
+ * Belt-and-suspenders: the frontend also calls /onboarding/confirm-payment,
+ * but this webhook ensures we never miss a payment confirmation.
+ */
+async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
+  const metadata = session.metadata || {};
+
+  // Only handle onboarding fee payments
+  if (metadata.type !== 'onboarding_fee') return;
+
+  const { onboardingRecordId } = metadata;
+  if (!onboardingRecordId) return;
+
+  if (session.payment_status !== 'paid') return;
+
+  const record = await prisma.onboardingRecord.findUnique({
+    where: { id: onboardingRecordId },
+  });
+
+  if (!record || record.feeStatus === 'PAID') return;
+
+  await prisma.onboardingRecord.update({
+    where: { id: record.id },
+    data: {
+      feeStatus: 'PAID',
+      stripePaymentId: session.payment_intent as string,
+      completedAt: new Date(),
+    },
+  });
+
+  console.log(`Onboarding fee PAID via webhook for record ${onboardingRecordId}`);
 }
 
 // ============================================================
