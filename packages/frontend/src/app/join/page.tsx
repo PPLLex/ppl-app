@@ -26,7 +26,7 @@ const STEPS = ['Account', 'Details', 'Plan', 'Payment'];
 /* ------------------------------------------------------------------ */
 const AGE_GROUPS = [
   { value: 'youth', label: 'Youth', desc: '12 and under' },
-  { value: 'ms_hs', label: 'Middle School / High School', desc: 'Ages 13–18' },
+  { value: 'ms_hs', label: 'Middle School / High School', desc: 'Ages 13-18' },
   { value: 'college', label: 'College', desc: 'College athletes' },
 ];
 
@@ -49,23 +49,24 @@ function JoinFlow() {
   const [isLoading, setIsLoading] = useState(false);
   const [googleLoaded, setGoogleLoaded] = useState(false);
 
-  // Step 1 – account fields
+  // Step 1 - account fields
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  // Step 2 – details
+  // Step 2 - details
   const [locationId, setLocationId] = useState('');
   const [ageGroup, setAgeGroup] = useState('');
 
-  // Step 3 – plan
+  // Step 3 - plan
   const [selectedPlan, setSelectedPlan] = useState<MembershipPlan | null>(null);
 
-  // Step 4 – Stripe
+  // Step 4 - Stripe
   const [clientSecret, setClientSecret] = useState('');
   const [billingDay, setBillingDay] = useState('');
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [subscriptionId, setSubscriptionId] = useState('');
 
   // Success screen
@@ -93,7 +94,7 @@ function JoinFlow() {
         if (result.isNewUser) {
           setStep(2);
         } else {
-          // existing user — skip to plan selection
+          // existing user - skip to plan selection
           setStep(3);
         }
       } catch (err: unknown) {
@@ -111,9 +112,9 @@ function JoinFlow() {
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
     if (!clientId) return;
 
-    // @ts-expect-error – Google Identity Services global
+    // @ts-expect-error - Google Identity Services global
     if (window.google?.accounts?.id) {
-      // @ts-expect-error – Google Identity Services
+      // @ts-expect-error - Google Identity Services
       window.google.accounts.id.initialize({
         client_id: clientId,
         callback: handleGoogleResponse,
@@ -121,7 +122,7 @@ function JoinFlow() {
       });
       const container = document.getElementById('google-join-btn');
       if (container) {
-        // @ts-expect-error – Google Identity Services
+        // @ts-expect-error - Google Identity Services
         window.google.accounts.id.renderButton(container, {
           theme: 'filled_black',
           size: 'large',
@@ -166,10 +167,8 @@ function JoinFlow() {
     if (isOAuthOnboarding && user) {
       setIsLoading(true);
       try {
-        await api.updateProfile({
-          homeLocationId: locationId,
-          clientProfile: { ageGroup },
-        } as unknown as Parameters<typeof api.updateProfile>[0]);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await api.updateProfile({ homeLocationId: locationId, clientProfile: { ageGroup } } as any);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Failed to save details';
         setError(message);
@@ -323,7 +322,7 @@ function JoinFlow() {
             </div>
           )}
 
-          {/* ============ STEP 1 — Account ============ */}
+          {/* ============ STEP 1 - Account ============ */}
           {step === 1 && (
             <>
               {/* Social sign-up */}
@@ -433,7 +432,7 @@ function JoinFlow() {
             </>
           )}
 
-          {/* ============ STEP 2 — Details ============ */}
+          {/* ============ STEP 2 - Details ============ */}
           {step === 2 && (
             <form onSubmit={handleStep2} className="space-y-5">
               <div>
@@ -508,7 +507,7 @@ function JoinFlow() {
             </form>
           )}
 
-          {/* ============ STEP 3 — Membership Plan ============ */}
+          {/* ============ STEP 3 - Membership Plan ============ */}
           {step === 3 && (
             <div className="space-y-5">
               <h2 className="text-lg font-semibold text-foreground">Choose Your Plan</h2>
@@ -585,13 +584,13 @@ function JoinFlow() {
                 </button>
               </div>
 
-              {/* Skip option — just create account without paying */}
+              {/* Skip option - just create account without paying */}
               <button
                 type="button"
                 onClick={handleSkipPayment}
                 className="w-full text-center text-sm text-muted hover:text-foreground transition-colors mt-2"
               >
-                Skip for now — I&apos;ll choose a plan later
+                Skip for now &mdash; I&apos;ll choose a plan later
               </button>
             </div>
           )}
