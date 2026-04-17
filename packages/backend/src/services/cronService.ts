@@ -1,4 +1,6 @@
 import { sendSessionReminders, sendDailyStaffSchedule } from './reminderService';
+import { processUncleanedNotes } from './noteCleanupService';
+import { sendWeeklyDigests } from './digestService';
 
 interface CronJob {
   name: string;
@@ -25,6 +27,27 @@ const jobs: CronJob[] = [
         return sendDailyStaffSchedule();
       }
       return { skipped: true, reason: 'Not morning hours' };
+    },
+    enabled: true,
+  },
+  {
+    name: 'Note Cleanup',
+    intervalMs: 60 * 60 * 1000, // Every hour
+    handler: processUncleanedNotes,
+    enabled: true,
+  },
+  {
+    name: 'Weekly Parent Digest',
+    intervalMs: 60 * 60 * 1000, // Check every hour (runs Friday 5 PM)
+    handler: async () => {
+      const now = new Date();
+      const day = now.getDay(); // 0=Sun, 5=Fri
+      const hour = now.getHours();
+      // Only run on Friday between 5-6 PM
+      if (day === 5 && hour === 17) {
+        return sendWeeklyDigests();
+      }
+      return { skipped: true, reason: 'Not Friday 5 PM' };
     },
     enabled: true,
   },
