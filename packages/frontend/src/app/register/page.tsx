@@ -15,16 +15,27 @@ export default function RegisterPage() {
   );
 }
 
+// Total steps: 1=Account, 2=New/Returning, 3=Payment (if new), 4=Location+AgeGroup
+type AthleteSelection = 'new' | 'returning' | 'youth_graduate' | 'free_assessment';
+
 function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { loginWithGoogle, routeByRole, user } = useAuth();
 
-  // Check if arriving from OAuth (needs onboarding step 2)
+  // Check URL params
   const oauthProvider = searchParams.get('oauth');
-  const startStep = searchParams.get('step') === '2' && oauthProvider ? 2 : 1;
+  const stepParam = searchParams.get('step');
+  const paymentStatus = searchParams.get('payment');
 
-  const [step, setStep] = useState(startStep);
+  // Determine starting step
+  const getInitialStep = () => {
+    if (stepParam === 'location' && paymentStatus === 'success') return 4; // returning from Stripe success
+    if (stepParam === '2' && oauthProvider) return 2; // OAuth user needs onboarding
+    return 1;
+  };
+
+  const [step, setStep] = useState(getInitialStep);
   const [locations, setLocations] = useState<Location[]>([]);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -38,8 +49,15 @@ function RegisterForm() {
   const [confirmPassword, setConfirmPassword] = useState('');
 
   // Step 2 fields
+  const [athleteSelection, setAthleteSelection] = useState<AthleteSelection | ''>('');
+
+  // Step 4 fields
   const [locationId, setLocationId] = useState('');
   const [ageGroup, setAgeGroup] = useState('');
+
+  // Payment state
+  const [requiresPayment, setRequiresPayment] = useState(false);
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
 
   useEffect(() => {
     api.getLocations().then((res) => {
@@ -47,9 +65,26 @@ function RegisterForm() {
     });
   }, []);
 
-  // If user arrived from OAuth and is on step 2, they already have an account
-  // If they complete step 2, update their profile and route them
-  const isOAuthOnboarding = startStep === 2 && oauthProvider;
+  // If returning from Stripe payment success, confirm the payment
+  useEffect(() => {
+    if (paymentStatus === 'success' && step === 4) {
+      api.confirmOnboardingPayment().then((res) => {
+        if (res.data?.paid) {
+          setPaymentConfirmed(true);
+        }
+      });
+    }
+  }, [paymentStatus, step]);
+
+  // If payment was cancelled, go back to step 2
+  useEffect(() => {
+    if (stepParam === 'payment' && paymentStatus === 'cancelled') {
+      setStep(2);
+      setError('Payment was cancelled. You can try again or select a different option.');
+    }
+  }, [stepParam, paymentStatus]);
+
+  const isOAuthOnboarding = getInitialStep() === 2 && oauthProvider;
 
   // Google Sign-In callback for registration
   const handleGoogleResponse = useCallback(async (response: { credential: string }) => {
@@ -58,10 +93,8 @@ function RegisterForm() {
     try {
       const result = await loginWithGoogle(response.credential);
       if (result.isNewUser) {
-        // New user — move to step 2 for location/age selection
         setStep(2);
       }
-      // Existing user — AuthContext already routed them
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Google sign-up failed';
       setError(message);
@@ -116,7 +149,98 @@ function RegisterForm() {
     setStep(2);
   };
 
-  const handleStep2Submit = async (e: React.FormEvent) => {
+  // Step 2: Submit athlete status selection
+  const handleStep2Submit = async () => {
+    if (!athleteSelection) {
+      setError('Please select your athlete status');
+      return;
+    }
+
+    setError('');
+    setIsLoading(true);
+
+    try {
+      // For OAuth users or if we have a token already, call the API
+      // For email registration, we'll set this after account creation
+      const token = localStorage.getItem('ppl_token');
+      if (token || isOAuthOnboarding) {
+        const res = await api.setOnboardingStatus(athleteSelection);
+        if (res.data) {
+          setRequiresPayment(res.data.requiresPayment);
+
+          if (res.data.requiresPayment) {
+            // New athlete — redirect to Stripe
+            setStep(3);
+          } else {
+            // Returning athlete — skip payment, go to location
+            setStep(4);
+          }
+        }
+      } else {
+        // Email registration: we don't have an account yet.
+        // Determine payment requirement locally and proceed.
+        const needsPayment = athleteSelection !== 'returning';
+        setRequiresPayment(needsPayment);
+        if (needsPayment) {
+          setStep(3);
+        } else {
+          setStep(4);
+        }
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save status';
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Step 3: Initiate Stripe checkout
+  const handlePaymentCheckout = async () => {
+    setError('');
+    setIsLoading(true);
+
+    try {
+      const token = localStorage.getItem('ppl_token');
+
+      if (!token && !isOAuthOnboarding) {
+        // Need to create the account first, then redirect to Stripe
+        const regRes = await api.register({
+          fullName,
+          email,
+          phone,
+          password,
+          locationId: '', // Will be set after payment
+          ageGroup: '',
+        });
+
+        if (regRes.data) {
+          localStorage.setItem('ppl_token', regRes.data.token);
+
+          // Now set onboarding status
+          await api.setOnboardingStatus(athleteSelection as AthleteSelection);
+        }
+      }
+
+      // Create checkout session and redirect
+      const res = await api.createOnboardingCheckout();
+      if (res.data && 'checkoutUrl' in res.data && res.data.checkoutUrl) {
+        window.location.href = res.data.checkoutUrl;
+        return;
+      } else if (res.data && 'alreadyPaid' in res.data) {
+        setPaymentConfirmed(true);
+        setStep(4);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Payment setup failed. Please try again.';
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Step 4: Final submit — location + age group
+  const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -132,24 +256,38 @@ function RegisterForm() {
     setIsLoading(true);
     try {
       if (isOAuthOnboarding && user) {
-        // OAuth user completing onboarding — update their profile
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await api.updateProfile({ homeLocationId: locationId, clientProfile: { ageGroup } } as any);
         routeByRole(user.role);
       } else {
-        // Standard email/password registration
-        const res = await api.register({
-          fullName,
-          email,
-          phone,
-          password,
-          locationId,
-          ageGroup,
-        });
+        const token = localStorage.getItem('ppl_token');
 
-        if (res.data) {
-          localStorage.setItem('ppl_token', res.data.token);
+        if (token) {
+          // Account already created (payment flow or OAuth) — update profile
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await api.updateProfile({ homeLocationId: locationId, clientProfile: { ageGroup } } as any);
           router.push('/client');
+        } else {
+          // Standard email registration (returning athlete, no payment step)
+          const res = await api.register({
+            fullName,
+            email,
+            phone,
+            password,
+            locationId,
+            ageGroup,
+          });
+
+          if (res.data) {
+            localStorage.setItem('ppl_token', res.data.token);
+
+            // Set onboarding status after account creation
+            if (athleteSelection) {
+              await api.setOnboardingStatus(athleteSelection as AthleteSelection);
+            }
+
+            router.push('/client');
+          }
         }
       }
     } catch (err: unknown) {
@@ -158,6 +296,16 @@ function RegisterForm() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Total visual steps (payment step only shows for new athletes)
+  const totalSteps = requiresPayment ? 4 : 3;
+  const visualStep = () => {
+    if (step === 1) return 1;
+    if (step === 2) return 2;
+    if (step === 3) return 3; // payment
+    if (step === 4) return requiresPayment ? 4 : 3; // location
+    return step;
   };
 
   return (
@@ -178,14 +326,20 @@ function RegisterForm() {
           <p className="text-muted mt-1">
             {isOAuthOnboarding
               ? 'Just a couple more details to get you started'
-              : 'Create your account to start training'}
+              : step === 3
+                ? 'Complete your onboarding fee to get started'
+                : 'Create your account to start training'}
           </p>
         </div>
 
         {/* Progress indicator */}
         <div className="flex items-center gap-2 mb-6">
-          <div className={`h-1 flex-1 rounded-full ${step >= 1 ? 'ppl-gradient' : 'bg-border'}`} />
-          <div className={`h-1 flex-1 rounded-full ${step >= 2 ? 'ppl-gradient' : 'bg-border'}`} />
+          {Array.from({ length: totalSteps }).map((_, i) => (
+            <div
+              key={i}
+              className={`h-1 flex-1 rounded-full ${visualStep() > i ? 'ppl-gradient' : 'bg-border'}`}
+            />
+          ))}
         </div>
 
         <div className="ppl-card">
@@ -195,6 +349,9 @@ function RegisterForm() {
             </div>
           )}
 
+          {/* ============================================ */}
+          {/* STEP 1: Account Info                         */}
+          {/* ============================================ */}
           {step === 1 && (
             <>
               {/* Social Sign-Up Buttons */}
@@ -306,8 +463,208 @@ function RegisterForm() {
             </>
           )}
 
+          {/* ============================================ */}
+          {/* STEP 2: New vs Returning Athlete             */}
+          {/* ============================================ */}
           {step === 2 && (
-            <form onSubmit={handleStep2Submit} className="space-y-4">
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground mb-1">Have you trained at PPL before?</h2>
+                <p className="text-sm text-muted">
+                  This helps us set up the right experience for you. New athletes have a one-time $300 onboarding fee.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                {/* Returning Athlete Option */}
+                <button
+                  type="button"
+                  onClick={() => setAthleteSelection('returning')}
+                  className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                    athleteSelection === 'returning'
+                      ? 'border-ppl-dark-green bg-ppl-dark-green/10'
+                      : 'border-border hover:border-border-light'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                      athleteSelection === 'returning' ? 'border-ppl-dark-green' : 'border-muted'
+                    }`}>
+                      {athleteSelection === 'returning' && (
+                        <div className="w-2.5 h-2.5 rounded-full bg-ppl-dark-green" />
+                      )}
+                    </div>
+                    <span className="font-semibold text-foreground text-base">Returning Athlete</span>
+                  </div>
+                  <p className="text-sm text-muted ml-8">
+                    I have trained at PPL before, already paid the onboarding fee, or I pitch for a PPL Partner school.
+                  </p>
+                </button>
+
+                {/* New Athlete Option */}
+                <button
+                  type="button"
+                  onClick={() => setAthleteSelection('new')}
+                  className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                    athleteSelection === 'new'
+                      ? 'border-ppl-dark-green bg-ppl-dark-green/10'
+                      : 'border-border hover:border-border-light'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                      athleteSelection === 'new' ? 'border-ppl-dark-green' : 'border-muted'
+                    }`}>
+                      {athleteSelection === 'new' && (
+                        <div className="w-2.5 h-2.5 rounded-full bg-ppl-dark-green" />
+                      )}
+                    </div>
+                    <span className="font-semibold text-foreground text-base">New Athlete</span>
+                  </div>
+                  <p className="text-sm text-muted ml-8">
+                    I am brand new to PPL and have never trained here before.
+                  </p>
+                </button>
+
+                {/* Youth Graduate Option */}
+                <button
+                  type="button"
+                  onClick={() => setAthleteSelection('youth_graduate')}
+                  className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                    athleteSelection === 'youth_graduate'
+                      ? 'border-ppl-dark-green bg-ppl-dark-green/10'
+                      : 'border-border hover:border-border-light'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                      athleteSelection === 'youth_graduate' ? 'border-ppl-dark-green' : 'border-muted'
+                    }`}>
+                      {athleteSelection === 'youth_graduate' && (
+                        <div className="w-2.5 h-2.5 rounded-full bg-ppl-dark-green" />
+                      )}
+                    </div>
+                    <span className="font-semibold text-foreground text-base">PPL Youth Graduate</span>
+                  </div>
+                  <p className="text-sm text-muted ml-8">
+                    I trained in the PPL Youth program and am moving up to the 13+ age groups.
+                  </p>
+                </button>
+
+                {/* Free Assessment Option */}
+                <button
+                  type="button"
+                  onClick={() => setAthleteSelection('free_assessment')}
+                  className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                    athleteSelection === 'free_assessment'
+                      ? 'border-ppl-dark-green bg-ppl-dark-green/10'
+                      : 'border-border hover:border-border-light'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                      athleteSelection === 'free_assessment' ? 'border-ppl-dark-green' : 'border-muted'
+                    }`}>
+                      {athleteSelection === 'free_assessment' && (
+                        <div className="w-2.5 h-2.5 rounded-full bg-ppl-dark-green" />
+                      )}
+                    </div>
+                    <span className="font-semibold text-foreground text-base">Free Assessment Participant</span>
+                  </div>
+                  <p className="text-sm text-muted ml-8">
+                    I did a free assessment at PPL but haven&apos;t started training yet.
+                  </p>
+                </button>
+              </div>
+
+              {/* Fee notice for non-returning selections */}
+              {athleteSelection && athleteSelection !== 'returning' && (
+                <div className="p-3 rounded-lg bg-ppl-dark-green/5 border border-ppl-dark-green/20 text-sm text-foreground">
+                  <span className="font-medium">One-time onboarding fee:</span> $300 — covers your initial assessment, program setup, and personalized training plan.
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                {!isOAuthOnboarding && (
+                  <button
+                    type="button"
+                    onClick={() => setStep(1)}
+                    className="ppl-btn ppl-btn-secondary flex-1 py-3"
+                  >
+                    Back
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleStep2Submit}
+                  disabled={!athleteSelection || isLoading}
+                  className={`ppl-btn ppl-btn-primary py-3 text-base ${isOAuthOnboarding ? 'w-full' : 'flex-1'}`}
+                >
+                  {isLoading ? 'Saving...' : 'Continue'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ============================================ */}
+          {/* STEP 3: Payment (New athletes only)          */}
+          {/* ============================================ */}
+          {step === 3 && (
+            <div className="space-y-5">
+              <div className="text-center">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-ppl-dark-green/10 mb-4">
+                  <svg className="w-8 h-8 text-ppl-dark-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+                  </svg>
+                </div>
+                <h2 className="text-lg font-semibold text-foreground mb-1">Onboarding Fee</h2>
+                <p className="text-sm text-muted">
+                  One-time fee to get you started at PPL. This covers your initial assessment, personalized program setup, and training plan.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-lg bg-surface border border-border">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium text-foreground">PPL Onboarding Fee</span>
+                  <span className="text-2xl font-bold text-foreground">$300</span>
+                </div>
+                <p className="text-xs text-muted mt-1">One-time payment — secure checkout via Stripe</p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handlePaymentCheckout}
+                disabled={isLoading}
+                className="ppl-btn ppl-btn-primary w-full py-3 text-base"
+              >
+                {isLoading ? 'Setting up payment...' : 'Pay $300 & Continue'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setStep(2);
+                  setAthleteSelection('');
+                  setRequiresPayment(false);
+                }}
+                className="w-full text-center text-sm text-muted hover:text-foreground transition-colors"
+              >
+                Go back and change selection
+              </button>
+            </div>
+          )}
+
+          {/* ============================================ */}
+          {/* STEP 4: Location + Age Group                 */}
+          {/* ============================================ */}
+          {step === 4 && (
+            <form onSubmit={handleFinalSubmit} className="space-y-4">
+              {paymentConfirmed && (
+                <div className="p-3 rounded-lg bg-green-50 border border-green-200 text-green-800 text-sm mb-2">
+                  Payment confirmed! Just one more step — select your training location.
+                </div>
+              )}
+
               <h2 className="text-lg font-semibold text-foreground mb-2">Training Details</h2>
 
               <div>
@@ -363,10 +720,10 @@ function RegisterForm() {
               </div>
 
               <div className="flex gap-3">
-                {!isOAuthOnboarding && (
+                {!requiresPayment && !isOAuthOnboarding && (
                   <button
                     type="button"
-                    onClick={() => setStep(1)}
+                    onClick={() => setStep(2)}
                     className="ppl-btn ppl-btn-secondary flex-1 py-3"
                   >
                     Back
@@ -375,7 +732,9 @@ function RegisterForm() {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className={`ppl-btn ppl-btn-primary py-3 text-base ${isOAuthOnboarding ? 'w-full' : 'flex-1'}`}
+                  className={`ppl-btn ppl-btn-primary py-3 text-base ${
+                    (requiresPayment || isOAuthOnboarding) ? 'w-full' : 'flex-1'
+                  }`}
                 >
                   {isLoading ? 'Setting up...' : isOAuthOnboarding ? 'Complete Setup' : 'Create Account'}
                 </button>
