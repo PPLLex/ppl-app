@@ -26,6 +26,7 @@ import goalRoutes from './routes/goals';
 import formRoutes from './routes/forms';
 import programRoutes from './routes/programs';
 import locationRevenueRoutes from './routes/locationRevenue';
+import onboardingRoutes from './routes/onboarding';
 import { membershipGuard } from './middleware/membershipGuard';
 
 const app = express();
@@ -94,6 +95,7 @@ app.use('/api/auth', passwordResetRoutes);
 app.use('/api/auth', oauthRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/onboarding', onboardingRoutes);
 
 // New feature routes — protected by membership guard for client users
 // The guard checks internally if the path is allowlisted
