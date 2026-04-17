@@ -48,5 +48,5 @@ EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
   CMD wget -qO- http://localhost:4000/api/health || exit 1
 
-# Start
-CMD ["node", "dist/server.js"]
+# Sync database schema on startup, then start the server
+CMD npx prisma db push --skip-generate && node dist/server.js
