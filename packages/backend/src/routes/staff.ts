@@ -3,7 +3,7 @@ import { prisma } from '../utils/prisma';
 import { ApiError } from '../utils/apiError';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { createAuditLog } from '../services/auditService';
-import { Role } from '@prisma/client';
+import { Role, LocationRole } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const router = Router();
@@ -34,6 +34,7 @@ router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
         role: true,
         staffLocations: {
           select: {
+            locationRole: true,
             location: {
               select: { id: true, name: true },
             },
@@ -43,14 +44,17 @@ router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
       orderBy: [{ role: 'asc' }, { fullName: 'asc' }],
     });
 
-    // Flatten staffLocations to locations array
+    // Flatten staffLocations to locations array with roles
     const result = staff.map((s: any) => ({
       id: s.id,
       fullName: s.fullName,
       email: s.email,
       phone: s.phone,
       role: s.role,
-      locations: s.staffLocations.map((sl: any) => sl.location),
+      locations: s.staffLocations.map((sl: any) => ({
+        ...sl.location,
+        locationRole: sl.locationRole,
+      })),
     }));
 
     res.json({ success: true, data: result });
@@ -151,24 +155,55 @@ router.put('/:id/role', async (req: Request, res: Response, next: NextFunction) 
 
 /**
  * PUT /api/staff/:id/locations
- * Assign locations to a staff member.
+ * Assign locations to a staff member with per-location roles.
+ * Body: { assignments: [{ locationId, locationRole }] }
+ * Also supports legacy format: { locationIds: string[] } (defaults to COACH)
  */
 router.put('/:id/locations', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = param(req, 'id');
-    const { locationIds } = req.body as { locationIds: string[] };
+    const staffId = param(req, 'id');
+    const { assignments, locationIds } = req.body as {
+      assignments?: { locationId: string; locationRole: LocationRole }[];
+      locationIds?: string[];  // legacy support
+    };
 
-    if (!Array.isArray(locationIds)) {
-      throw ApiError.badRequest('locationIds must be an array');
+    // Support both new format (assignments) and legacy (locationIds)
+    let locationAssignments: { locationId: string; locationRole: LocationRole }[];
+
+    if (assignments && Array.isArray(assignments)) {
+      // Validate locationRole values
+      const validRoles = Object.values(LocationRole);
+      for (const a of assignments) {
+        if (!a.locationId) throw ApiError.badRequest('Each assignment must have a locationId');
+        if (a.locationRole && !validRoles.includes(a.locationRole)) {
+          throw ApiError.badRequest(`Invalid locationRole: ${a.locationRole}. Must be one of: ${validRoles.join(', ')}`);
+        }
+      }
+      locationAssignments = assignments.map((a) => ({
+        locationId: a.locationId,
+        locationRole: a.locationRole || LocationRole.COACH,
+      }));
+    } else if (locationIds && Array.isArray(locationIds)) {
+      // Legacy: default all to COACH
+      locationAssignments = locationIds.map((locationId) => ({
+        locationId,
+        locationRole: LocationRole.COACH,
+      }));
+    } else {
+      throw ApiError.badRequest('Provide either assignments (array of {locationId, locationRole}) or locationIds (array of strings)');
     }
 
     // Remove existing assignments
-    await prisma.staffLocation.deleteMany({ where: { userId } });
+    await prisma.staffLocation.deleteMany({ where: { staffId } });
 
     // Create new assignments
-    if (locationIds.length > 0) {
+    if (locationAssignments.length > 0) {
       await prisma.staffLocation.createMany({
-        data: locationIds.map((locationId) => ({ userId, locationId })),
+        data: locationAssignments.map((a) => ({
+          staffId,
+          locationId: a.locationId,
+          locationRole: a.locationRole,
+        })),
       });
     }
 
@@ -176,8 +211,8 @@ router.put('/:id/locations', async (req: Request, res: Response, next: NextFunct
       action: 'STAFF_LOCATIONS_UPDATED',
       userId: req.user!.userId,
       resourceType: 'User',
-      resourceId: userId,
-      changes: { locationIds },
+      resourceId: staffId,
+      changes: { assignments: locationAssignments },
     });
 
     res.json({ success: true, message: 'Location assignments updated' });
