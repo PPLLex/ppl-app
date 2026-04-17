@@ -47,7 +47,7 @@ enum BillingDay {
 
 enum LocationRole {
   OWNER        // Full revenue, settings, manage staff at this location
-  COORDINATOR  // See revenue, member data, payment statuses â no settings changes
+  COORDINATOR  // See revenue, member data, payment statuses — no settings changes
   COACH        // See schedule and their own assigned clients only
 }
 
@@ -56,7 +56,7 @@ enum LocationRole {
 enum AccountType {
   INDIVIDUAL      // Single athlete, self-managed
   FAMILY          // Parent managing 1+ athlete children
-  PARTNER_SCHOOL  // School team â lump-sum billing, no individual payments
+  PARTNER_SCHOOL  // School team — lump-sum billing, no individual payments
 }
 
 enum AthleteRelationType {
@@ -66,9 +66,17 @@ enum AthleteRelationType {
 }
 
 enum OnboardingStatus {
-  NEW             // First time at PPL â owes $300 onboarding fee
-  RETURNING       // Has trained before â no fee
-  PARTNER_SCHOOL  // School athlete â no fee
+  NEW             // First time at PPL — owes $300 onboarding fee
+  RETURNING       // Has trained before — no fee
+  PARTNER_SCHOOL  // School athlete — no fee
+}
+
+enum OnboardingFeeStatus {
+  REQUIRED        // Fee owed, not yet paid
+  PROCESSING      // Stripe checkout in progress
+  PAID            // Fee collected
+  WAIVED          // Manually waived by admin
+  NOT_APPLICABLE  // Returning athlete or partner school — no fee
 }
 
 enum TrainingDeliveryPreference {
@@ -161,7 +169,7 @@ model Location {
 model User {
   id               String   @id @default(uuid())
   email            String   @unique
-  passwordHash     String?  // Optional â null for OAuth-only accounts
+  passwordHash     String?  // Optional — null for OAuth-only accounts
   fullName         String
   phone            String?
   role             Role     @default(CLIENT)
@@ -175,7 +183,7 @@ model User {
   parentUserId     String?     // Self-ref: college athletes who opt out of adding a parent
 
   // OAuth fields
-  authProvider      String?  // "email", "google", "apple" â primary auth method
+  authProvider      String?  // "email", "google", "apple" — primary auth method
   googleId          String?  @unique
   appleId           String?  @unique
   avatarUrl         String?
@@ -368,7 +376,7 @@ model ClientMembership {
   clientId             String
   planId               String
   locationId           String
-  athleteId            String?          // Links to AthleteProfile â null for legacy memberships
+  athleteId            String?          // Links to AthleteProfile — null for legacy memberships
   status               MembershipStatus @default(ACTIVE)
   stripeSubscriptionId String?          @unique
   stripePriceId        String?
@@ -729,7 +737,7 @@ model ProgramWeek {
   id        String   @id @default(uuid())
   programId String
   weekNum   Int
-  title     String?  // "Week 1 â Foundation", etc.
+  title     String?  // "Week 1 — Foundation", etc.
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -745,7 +753,7 @@ model ProgramDay {
   id        String   @id @default(uuid())
   weekId    String
   dayNum    Int      // 1-7
-  title     String?  // "Monday â Throwing Day"
+  title     String?  // "Monday — Throwing Day"
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -781,7 +789,7 @@ model ProgramExercise {
   @@map("program_exercises")
 }
 
-// Exercise library â reusable exercise definitions
+// Exercise library — reusable exercise definitions
 model Exercise {
   id          String   @id @default(uuid())
   name        String
@@ -851,16 +859,20 @@ model AthleteProfile {
 }
 
 model OnboardingRecord {
-  id                  String           @id @default(uuid())
-  athleteId           String           @unique
-  onboardingStatus    OnboardingStatus @default(NEW)
-  onboardingFeePaid   Boolean          @default(false)
-  onboardingFeeCents  Int              @default(30000) // $300.00
-  stripePaymentId     String?          // Stripe PI for the onboarding fee
-  qualifyingAnswers   Json?            // { "trainedBefore": false, "lastTrainedDate": null, ... }
-  completedAt         DateTime?
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
+  id                    String              @id @default(uuid())
+  athleteId             String              @unique
+  onboardingStatus      OnboardingStatus    @default(NEW)
+  feeStatus             OnboardingFeeStatus @default(REQUIRED)
+  onboardingFeeCents    Int                 @default(30000) // $300.00
+  stripePaymentId       String?             // Stripe PI for the onboarding fee
+  stripeCheckoutId      String?             // Stripe Checkout Session ID
+  isYouthGraduate       Boolean             @default(false)  // Graduated from PPL Youth → still NEW but gets special messaging
+  hadFreeAssessment     Boolean             @default(false)  // Did a free assessment but never trained
+  qualifyingAnswers     Json?               // { "trainedBefore": false, "lastTrainedDate": null, ... }
+  selfReportedStatus    String?             // What the athlete selected: "new", "returning", "youth_graduate", "free_assessment"
+  completedAt           DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
 
   // Relations
   athlete AthleteProfile @relation(fields: [athleteId], references: [id], onDelete: Cascade)
@@ -875,14 +887,14 @@ model OnboardingRecord {
 model SchoolTeam {
   id                  String   @id @default(uuid())
   name                String                         // "Lexington Catholic Baseball"
-  slug                String   @unique               // "lexington-catholic" â used in signup URL
+  slug                String   @unique               // "lexington-catholic" — used in signup URL
   primaryLocationId   String?
   brandLogoUrl        String?                        // Uploaded school logo
   brandColors         Json?                          // { primary: "#1a3e72", secondary: "#c4a34d" }
   signupUrl           String?  @unique               // Generated: /join/team/lexington-catholic
   paymentContactName  String?
   paymentContactEmail String?
-  totalAnnualBudget   Int?                           // cents â total the school pays
+  totalAnnualBudget   Int?                           // cents — total the school pays
   isActive            Boolean  @default(true)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
