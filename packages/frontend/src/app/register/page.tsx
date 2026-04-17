@@ -58,10 +58,10 @@ function RegisterForm() {
     try {
       const result = await loginWithGoogle(response.credential);
       if (result.isNewUser) {
-        // New user â move to step 2 for location/age selection
+        // New user — move to step 2 for location/age selection
         setStep(2);
       }
-      // Existing user â AuthContext already routed them
+      // Existing user — AuthContext already routed them
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Google sign-up failed';
       setError(message);
@@ -132,11 +132,9 @@ function RegisterForm() {
     setIsLoading(true);
     try {
       if (isOAuthOnboarding && user) {
-        // OAuth user completing onboarding â update their profile
-        await api.updateProfile({
-          homeLocationId: locationId,
-          clientProfile: { ageGroup },
-        } as Parameters<typeof api.updateProfile>[0]);
+        // OAuth user completing onboarding — update their profile
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await api.updateProfile({ homeLocationId: locationId, clientProfile: { ageGroup } } as any);
         routeByRole(user.role);
       } else {
         // Standard email/password registration
