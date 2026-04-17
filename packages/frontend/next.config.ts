@@ -4,9 +4,6 @@ const nextConfig: NextConfig = {
   // Output standalone build for smaller deployments
   output: "standalone",
 
-    // Allow build to succeed despite TS errors (will fix incrementally)
-    typescript: { ignoreBuildErrors: true },
-
   // Rewrite /api calls to the backend in production
   // This avoids CORS issues by proxying through the Next.js server
   async rewrites() {
