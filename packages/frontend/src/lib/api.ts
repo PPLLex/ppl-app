@@ -39,7 +39,7 @@ class ApiClient {
     const data = await response.json();
 
     if (!response.ok) {
-      // Token expired or invalid â clear it and redirect to login
+      // Token expired or invalid — clear it and redirect to login
       if (response.status === 401 && typeof window !== 'undefined') {
         localStorage.removeItem('ppl_token');
         window.location.href = '/login?expired=true';
@@ -392,6 +392,35 @@ class ApiClient {
 
   async markAllNotificationsRead() {
     return this.request('/notifications/read-all', { method: 'PUT' });
+  }
+
+  // Onboarding
+  async setOnboardingStatus(selection: 'new' | 'returning' | 'youth_graduate' | 'free_assessment') {
+    return this.request<{ onboardingRecord: OnboardingRecord; requiresPayment: boolean }>('/onboarding/status', {
+      method: 'POST',
+      body: JSON.stringify({ selection }),
+    });
+  }
+
+  async createOnboardingCheckout() {
+    return this.request<{ checkoutUrl: string } | { alreadyPaid: boolean; feeStatus: string }>('/onboarding/checkout', {
+      method: 'POST',
+    });
+  }
+
+  async confirmOnboardingPayment() {
+    return this.request<{ paid: boolean; feeStatus?: string }>('/onboarding/confirm-payment', {
+      method: 'POST',
+    });
+  }
+
+  async getOnboardingStatus() {
+    return this.request<{
+      hasProfile: boolean;
+      onboardingRecord: OnboardingRecord | null;
+      requiresPayment: boolean;
+      isComplete: boolean;
+    }>('/onboarding/me');
   }
 
   // Account / Profile
@@ -1186,6 +1215,23 @@ export interface ExerciseLibraryItem {
   description: string | null;
   videoUrl: string | null;
   isActive: boolean;
+}
+
+export interface OnboardingRecord {
+  id: string;
+  athleteId: string;
+  onboardingStatus: 'NEW' | 'RETURNING';
+  feeStatus: 'REQUIRED' | 'PROCESSING' | 'PAID' | 'WAIVED' | 'NOT_APPLICABLE';
+  onboardingFeeCents: number;
+  stripePaymentId?: string;
+  stripeCheckoutId?: string;
+  isYouthGraduate: boolean;
+  hadFreeAssessment: boolean;
+  qualifyingAnswers?: Record<string, unknown>;
+  selfReportedStatus?: string;
+  completedAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export class ApiError extends Error {
