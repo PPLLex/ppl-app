@@ -107,12 +107,12 @@ export default function MemberDetailPage() {
       {/* Back + Header */}
       <div className="mb-6">
         <Link href="/admin/members" className="text-sm text-muted hover:text-ppl-light-green transition-colors">
-          ← Back to Members
+          â Back to Members
         </Link>
         <div className="flex items-start justify-between mt-2">
           <div>
             <h1 className="text-2xl font-bold text-foreground">{member.fullName}</h1>
-            <p className="text-sm text-muted">{member.email} {member.phone && `· ${member.phone}`}</p>
+            <p className="text-sm text-muted">{member.email} {member.phone && `Â· ${member.phone}`}</p>
           </div>
           <button
             onClick={handleDeactivate}
@@ -137,7 +137,7 @@ export default function MemberDetailPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Left Column — Profile + Notes */}
+        {/* Left Column â Profile + Notes */}
         <div className="lg:col-span-1 space-y-4">
           {/* Profile Info */}
           <div className="ppl-card">
@@ -151,12 +151,24 @@ export default function MemberDetailPage() {
                 <span className="text-muted">Age Group:</span>{' '}
                 <span className="text-foreground">{member.clientProfile?.ageGroup || 'Not set'}</span>
               </div>
+              <div>
+                <span className="text-muted">Training:</span>{' '}
+                <span className="text-foreground">
+                  {member.clientProfile?.trainingPreference
+                    ? member.clientProfile.trainingPreference === 'IN_PERSON'
+                      ? 'In-Person'
+                      : member.clientProfile.trainingPreference === 'REMOTE'
+                        ? 'Remote'
+                        : 'Hybrid'
+                    : 'Not set'}
+                </span>
+              </div>
               {member.clientProfile?.emergencyContactName && (
                 <div>
                   <span className="text-muted">Emergency:</span>{' '}
                   <span className="text-foreground">
                     {member.clientProfile.emergencyContactName}
-                    {member.clientProfile.emergencyContactPhone && ` · ${member.clientProfile.emergencyContactPhone}`}
+                    {member.clientProfile.emergencyContactPhone && ` Â· ${member.clientProfile.emergencyContactPhone}`}
                   </span>
                 </div>
               )}
@@ -213,7 +225,7 @@ export default function MemberDetailPage() {
           </div>
         </div>
 
-        {/* Right Column — Membership + Bookings + Payments */}
+        {/* Right Column â Membership + Bookings + Payments */}
         <div className="lg:col-span-2 space-y-4">
           {/* Membership */}
           <div className="ppl-card">
@@ -228,7 +240,7 @@ export default function MemberDetailPage() {
                     </span>
                   </div>
                   <p className="text-sm text-muted">
-                    {activeMembership.location.name} · Bills on {activeMembership.billingDay.toLowerCase()}s · Since {formatDate(activeMembership.startedAt)}
+                    {activeMembership.location.name} Â· Bills on {activeMembership.billingDay.toLowerCase()}s Â· Since {formatDate(activeMembership.startedAt)}
                   </p>
                 </div>
                 <div className="text-right">
@@ -271,8 +283,8 @@ export default function MemberDetailPage() {
                       <p className="text-sm font-medium text-foreground">{b.session.title}</p>
                       <p className="text-xs text-muted">
                         {formatDate(b.session.startTime)} at {formatTime(b.session.startTime)}
-                        {b.session.coach && ` · ${b.session.coach.fullName}`}
-                        {b.session.room && ` · ${b.session.room.name}`}
+                        {b.session.coach && ` Â· ${b.session.coach.fullName}`}
+                        {b.session.room && ` Â· ${b.session.room.name}`}
                       </p>
                     </div>
                     <span className={`ppl-badge text-xs ${STATUS_COLORS[b.status] || ''}`}>
