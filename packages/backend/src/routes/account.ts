@@ -34,6 +34,7 @@ router.get('/profile', async (req: Request, res: Response, next: NextFunction) =
             emergencyContact: true,
             emergencyPhone: true,
             trainingGoals: true,
+            trainingPreference: true,
             waiverSignedAt: true,
           },
         },
@@ -55,7 +56,7 @@ router.get('/profile', async (req: Request, res: Response, next: NextFunction) =
 router.put('/profile', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.userId;
-    const { fullName, phone, parentName, parentEmail, parentPhone, emergencyContact, emergencyPhone, trainingGoals } = req.body;
+    const { fullName, phone, parentName, parentEmail, parentPhone, emergencyContact, emergencyPhone, trainingGoals, trainingPreference } = req.body;
 
     // Update user
     const updateData: any = {};
@@ -77,6 +78,12 @@ router.put('/profile', async (req: Request, res: Response, next: NextFunction) =
     if (emergencyContact !== undefined) profileData.emergencyContact = emergencyContact;
     if (emergencyPhone !== undefined) profileData.emergencyPhone = emergencyPhone;
     if (trainingGoals !== undefined) profileData.trainingGoals = trainingGoals;
+    if (trainingPreference !== undefined) {
+      const validPrefs = ['IN_PERSON', 'REMOTE', 'HYBRID'];
+      if (validPrefs.includes(trainingPreference)) {
+        profileData.trainingPreference = trainingPreference;
+      }
+    }
 
     if (Object.keys(profileData).length > 0) {
       await prisma.clientProfile.updateMany({
