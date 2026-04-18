@@ -93,6 +93,21 @@ enum SchoolInvoiceStatus {
   VOID
 }
 
+enum CoachInviteStatus {
+  NOT_SENT
+  SENT
+  ACCEPTED      // Coach opened the link and submitted roster
+  EXPIRED
+}
+
+enum ContractStatus {
+  DRAFT
+  SENT
+  SIGNED
+  EXPIRED
+  VOIDED
+}
+
 enum PaymentStatus {
   SUCCEEDED
   FAILED
@@ -893,6 +908,17 @@ model SchoolTeam {
   brandLogoUrl        String?                        // Uploaded school logo
   brandColors         Json?                          // { primary: "#1a3e72", secondary: "#c4a34d" }
   signupUrl           String?  @unique               // Generated: /join/team/lexington-catholic
+
+  // Coach info
+  coachName           String?
+  coachEmail          String?
+  coachPhone          String?
+  coachInviteToken    String?  @unique               // Unique token for coach roster form link
+  coachInviteStatus   CoachInviteStatus @default(NOT_SENT)
+  coachInviteSentAt   DateTime?
+  rosterSubmittedAt   DateTime?                      // When coach finished submitting the roster
+
+  // Billing contact (may differ from coach)
   paymentContactName  String?
   paymentContactEmail String?
   totalAnnualBudget   Int?                           // cents — total the school pays
@@ -901,11 +927,13 @@ model SchoolTeam {
   updatedAt           DateTime @updatedAt
 
   // Relations
-  primaryLocation Location?        @relation(fields: [primaryLocationId], references: [id])
+  primaryLocation Location?          @relation(fields: [primaryLocationId], references: [id])
   athletes        AthleteProfile[]
   invoices        SchoolInvoice[]
+  contracts       SchoolContract[]
 
   @@index([slug])
+  @@index([coachInviteToken])
   @@map("school_teams")
 }
 
@@ -913,9 +941,13 @@ model SchoolInvoice {
   id               String              @id @default(uuid())
   schoolTeamId     String
   stripeInvoiceId  String?             @unique
+  description      String?                            // "Fall 2026 Remote Programming — 25 athletes"
   totalCents       Int
   paidCents        Int                 @default(0)
   status           SchoolInvoiceStatus @default(DRAFT)
+  dueDate          DateTime?
+  sentAt           DateTime?
+  paidAt           DateTime?
   periodStart      DateTime?
   periodEnd        DateTime?
   notes            String?
@@ -927,6 +959,31 @@ model SchoolInvoice {
 
   @@index([schoolTeamId, status])
   @@map("school_invoices")
+}
+
+model SchoolContract {
+  id               String         @id @default(uuid())
+  schoolTeamId     String
+  title            String                              // "PPL Remote Training Agreement — Fall 2026"
+  terms            String                              // Full contract text / terms
+  startDate        DateTime
+  endDate          DateTime
+  totalValueCents  Int?                                // Total contract value
+  status           ContractStatus @default(DRAFT)
+  signatureToken   String?        @unique              // Token for the signing link
+  signedByName     String?                             // Name of person who signed
+  signedByEmail    String?
+  signedAt         DateTime?
+  sentAt           DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  // Relations
+  schoolTeam SchoolTeam @relation(fields: [schoolTeamId], references: [id])
+
+  @@index([schoolTeamId])
+  @@index([signatureToken])
+  @@map("school_contracts")
 }
 
 // ============================================================
