@@ -3,6 +3,7 @@ import { prisma } from '../utils/prisma';
 import { ApiError } from '../utils/apiError';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 
 const router = Router();
 
@@ -562,6 +563,137 @@ router.post('/contracts/:token/sign', async (req: Request, res: Response, next: 
       data: updated,
       message: `Contract signed by ${signedByName}`,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+
+// ============================================================
+// COACH MANAGEMENT
+// ============================================================
+
+/**
+ * GET /api/schools/:id/coaches
+ * Admin: list all coaches for a school team.
+ */
+router.get('/:id/coaches', authenticate, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const schoolTeamId = param(req, 'id');
+    const coaches = await prisma.schoolCoach.findMany({
+      where: { schoolTeamId },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json({ data: coaches });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/schools/:id/coaches
+ * Admin: create a coach account for a school team.
+ */
+router.post('/:id/coaches', authenticate, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const schoolTeamId = param(req, 'id');
+    const school = await prisma.schoolTeam.findUnique({ where: { id: schoolTeamId } });
+    if (!school) throw new ApiError(404, 'School team not found');
+
+    const {
+      email, password, fullName, phone, role, title,
+      canTakeNotes, canViewGoals, canViewPrograms, canViewMetrics,
+    } = req.body;
+
+    if (!email || !password || !fullName) {
+      throw new ApiError(400, 'Email, password, and full name are required');
+    }
+
+    const existing = await prisma.schoolCoach.findFirst({
+      where: { email: email.toLowerCase(), schoolTeamId },
+    });
+    if (existing) throw new ApiError(409, 'A coach with this email already exists on this team');
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    const coach = await prisma.schoolCoach.create({
+      data: {
+        schoolTeamId,
+        email: email.toLowerCase(),
+        passwordHash,
+        fullName,
+        phone: phone || null,
+        role: role || 'ASSISTANT',
+        title: title || null,
+        canTakeNotes: canTakeNotes ?? true,
+        canViewGoals: canViewGoals ?? true,
+        canViewPrograms: canViewPrograms ?? true,
+        canViewMetrics: canViewMetrics ?? false,
+      },
+    });
+
+    const { passwordHash: _, ...safeCoach } = coach;
+    res.status(201).json({ data: safeCoach });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PUT /api/schools/:schoolId/coaches/:coachId
+ * Admin: update a coach account.
+ */
+router.put('/:schoolId/coaches/:coachId', authenticate, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const coachId = param(req, 'coachId');
+    const existing = await prisma.schoolCoach.findUnique({ where: { id: coachId } });
+    if (!existing) throw new ApiError(404, 'Coach not found');
+
+    const {
+      email, password, fullName, phone, role, title, isActive,
+      canTakeNotes, canViewGoals, canViewPrograms, canViewMetrics,
+    } = req.body;
+
+    const data: Record<string, unknown> = {};
+    if (email !== undefined) data.email = email.toLowerCase();
+    if (fullName !== undefined) data.fullName = fullName;
+    if (phone !== undefined) data.phone = phone || null;
+    if (role !== undefined) data.role = role;
+    if (title !== undefined) data.title = title || null;
+    if (isActive !== undefined) data.isActive = isActive;
+    if (canTakeNotes !== undefined) data.canTakeNotes = canTakeNotes;
+    if (canViewGoals !== undefined) data.canViewGoals = canViewGoals;
+    if (canViewPrograms !== undefined) data.canViewPrograms = canViewPrograms;
+    if (canViewMetrics !== undefined) data.canViewMetrics = canViewMetrics;
+
+    if (password) {
+      data.passwordHash = await bcrypt.hash(password, 12);
+    }
+
+    const coach = await prisma.schoolCoach.update({ where: { id: coachId }, data });
+    const { passwordHash: _, ...safeCoach } = coach;
+    res.json({ data: safeCoach });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * DELETE /api/schools/:schoolId/coaches/:coachId
+ * Admin: deactivate a coach (soft delete).
+ */
+router.delete('/:schoolId/coaches/:coachId', authenticate, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const coachId = param(req, 'coachId');
+    const existing = await prisma.schoolCoach.findUnique({ where: { id: coachId } });
+    if (!existing) throw new ApiError(404, 'Coach not found');
+
+    await prisma.schoolCoach.update({
+      where: { id: coachId },
+      data: { isActive: false },
+    });
+
+    res.json({ message: 'Coach deactivated' });
   } catch (err) {
     next(err);
   }
