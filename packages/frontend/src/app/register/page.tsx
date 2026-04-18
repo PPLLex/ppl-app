@@ -15,8 +15,9 @@ export default function RegisterPage() {
   );
 }
 
-// Total steps: 1=Account, 2=New/Returning, 3=Payment (if new), 4=Location+AgeGroup
+// Total steps: 1=Account, 2=New/Returning, 3=Payment (if new), 4=Training Preference, 5=Location+AgeGroup
 type AthleteSelection = 'new' | 'returning' | 'youth_graduate' | 'free_assessment';
+type TrainingPref = 'IN_PERSON' | 'REMOTE' | 'HYBRID';
 
 function RegisterForm() {
   const router = useRouter();
@@ -30,7 +31,7 @@ function RegisterForm() {
 
   // Determine starting step
   const getInitialStep = () => {
-    if (stepParam === 'location' && paymentStatus === 'success') return 4; // returning from Stripe success
+    if (stepParam === 'location' && paymentStatus === 'success') return 4; // returning from Stripe success â training pref
     if (stepParam === '2' && oauthProvider) return 2; // OAuth user needs onboarding
     return 1;
   };
@@ -52,6 +53,9 @@ function RegisterForm() {
   const [athleteSelection, setAthleteSelection] = useState<AthleteSelection | ''>('');
 
   // Step 4 fields
+  const [trainingPreference, setTrainingPreference] = useState<TrainingPref | ''>('');
+
+  // Step 5 fields
   const [locationId, setLocationId] = useState('');
   const [ageGroup, setAgeGroup] = useState('');
 
@@ -67,7 +71,7 @@ function RegisterForm() {
 
   // If returning from Stripe payment success, confirm the payment
   useEffect(() => {
-    if (paymentStatus === 'success' && step === 4) {
+    if (paymentStatus === 'success' && (step === 4 || step === 5)) {
       api.confirmOnboardingPayment().then((res) => {
         if (res.data?.paid) {
           setPaymentConfirmed(true);
@@ -169,10 +173,10 @@ function RegisterForm() {
           setRequiresPayment(res.data.requiresPayment);
 
           if (res.data.requiresPayment) {
-            // New athlete — redirect to Stripe
+            // New athlete â redirect to Stripe
             setStep(3);
           } else {
-            // Returning athlete — skip payment, go to location
+            // Returning athlete â skip payment, go to training preference
             setStep(4);
           }
         }
@@ -229,7 +233,7 @@ function RegisterForm() {
         return;
       } else if (res.data && 'alreadyPaid' in res.data) {
         setPaymentConfirmed(true);
-        setStep(4);
+        setStep(4); // Go to training preference
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Payment setup failed. Please try again.';
@@ -239,7 +243,7 @@ function RegisterForm() {
     }
   };
 
-  // Step 4: Final submit — location + age group
+  // Step 4: Final submit â location + age group
   const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -257,15 +261,15 @@ function RegisterForm() {
     try {
       if (isOAuthOnboarding && user) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await api.updateProfile({ homeLocationId: locationId, clientProfile: { ageGroup } } as any);
+        await api.updateProfile({ homeLocationId: locationId, clientProfile: { ageGroup }, trainingPreference: trainingPreference || undefined } as any);
         routeByRole(user.role);
       } else {
         const token = localStorage.getItem('ppl_token');
 
         if (token) {
-          // Account already created (payment flow or OAuth) — update profile
+          // Account already created (payment flow or OAuth) â update profile
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await api.updateProfile({ homeLocationId: locationId, clientProfile: { ageGroup } } as any);
+          await api.updateProfile({ homeLocationId: locationId, clientProfile: { ageGroup }, trainingPreference: trainingPreference || undefined } as any);
           router.push('/client');
         } else {
           // Standard email registration (returning athlete, no payment step)
@@ -299,12 +303,13 @@ function RegisterForm() {
   };
 
   // Total visual steps (payment step only shows for new athletes)
-  const totalSteps = requiresPayment ? 4 : 3;
+  const totalSteps = requiresPayment ? 5 : 4;
   const visualStep = () => {
     if (step === 1) return 1;
     if (step === 2) return 2;
     if (step === 3) return 3; // payment
-    if (step === 4) return requiresPayment ? 4 : 3; // location
+    if (step === 4) return requiresPayment ? 4 : 3; // training preference
+    if (step === 5) return requiresPayment ? 5 : 4; // location
     return step;
   };
 
@@ -328,7 +333,9 @@ function RegisterForm() {
               ? 'Just a couple more details to get you started'
               : step === 3
                 ? 'Complete your onboarding fee to get started'
-                : 'Create your account to start training'}
+                : step === 4
+                  ? 'How would you like to train?'
+                  : 'Create your account to start training'}
           </p>
         </div>
 
@@ -580,7 +587,7 @@ function RegisterForm() {
               {/* Fee notice for non-returning selections */}
               {athleteSelection && athleteSelection !== 'returning' && (
                 <div className="p-3 rounded-lg bg-ppl-dark-green/5 border border-ppl-dark-green/20 text-sm text-foreground">
-                  <span className="font-medium">One-time onboarding fee:</span> $300 — covers your initial assessment, program setup, and personalized training plan.
+                  <span className="font-medium">One-time onboarding fee:</span> $300 â covers your initial assessment, program setup, and personalized training plan.
                 </div>
               )}
 
@@ -628,7 +635,7 @@ function RegisterForm() {
                   <span className="font-medium text-foreground">PPL Onboarding Fee</span>
                   <span className="text-2xl font-bold text-foreground">$300</span>
                 </div>
-                <p className="text-xs text-muted mt-1">One-time payment — secure checkout via Stripe</p>
+                <p className="text-xs text-muted mt-1">One-time payment â secure checkout via Stripe</p>
               </div>
 
               <button
@@ -655,17 +662,137 @@ function RegisterForm() {
           )}
 
           {/* ============================================ */}
-          {/* STEP 4: Location + Age Group                 */}
+          {/* STEP 4: Training Preference                  */}
           {/* ============================================ */}
           {step === 4 && (
-            <form onSubmit={handleFinalSubmit} className="space-y-4">
+            <div className="space-y-5">
               {paymentConfirmed && (
                 <div className="p-3 rounded-lg bg-green-50 border border-green-200 text-green-800 text-sm mb-2">
-                  Payment confirmed! Just one more step — select your training location.
+                  Payment confirmed! Now let us know how you&apos;d like to train.
                 </div>
               )}
 
-              <h2 className="text-lg font-semibold text-foreground mb-2">Training Details</h2>
+              <div>
+                <h2 className="text-lg font-semibold text-foreground mb-1">How would you like to train?</h2>
+                <p className="text-sm text-muted">
+                  Choose your preferred training style. You can always change this later in your profile settings.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => setTrainingPreference('IN_PERSON')}
+                  className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                    trainingPreference === 'IN_PERSON'
+                      ? 'border-ppl-dark-green bg-ppl-dark-green/10'
+                      : 'border-border hover:border-border-light'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                      trainingPreference === 'IN_PERSON' ? 'border-ppl-dark-green' : 'border-muted'
+                    }`}>
+                      {trainingPreference === 'IN_PERSON' && (
+                        <div className="w-2.5 h-2.5 rounded-full bg-ppl-dark-green" />
+                      )}
+                    </div>
+                    <span className="font-semibold text-foreground text-base">In-Person</span>
+                  </div>
+                  <p className="text-sm text-muted ml-8">
+                    Train on-site at your PPL location with hands-on coaching.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setTrainingPreference('REMOTE')}
+                  className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                    trainingPreference === 'REMOTE'
+                      ? 'border-ppl-dark-green bg-ppl-dark-green/10'
+                      : 'border-border hover:border-border-light'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                      trainingPreference === 'REMOTE' ? 'border-ppl-dark-green' : 'border-muted'
+                    }`}>
+                      {trainingPreference === 'REMOTE' && (
+                        <div className="w-2.5 h-2.5 rounded-full bg-ppl-dark-green" />
+                      )}
+                    </div>
+                    <span className="font-semibold text-foreground text-base">Remote</span>
+                  </div>
+                  <p className="text-sm text-muted ml-8">
+                    Train virtually with video check-ins and remote programming from your PPL coach.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setTrainingPreference('HYBRID')}
+                  className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                    trainingPreference === 'HYBRID'
+                      ? 'border-ppl-dark-green bg-ppl-dark-green/10'
+                      : 'border-border hover:border-border-light'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                      trainingPreference === 'HYBRID' ? 'border-ppl-dark-green' : 'border-muted'
+                    }`}>
+                      {trainingPreference === 'HYBRID' && (
+                        <div className="w-2.5 h-2.5 rounded-full bg-ppl-dark-green" />
+                      )}
+                    </div>
+                    <span className="font-semibold text-foreground text-base">Hybrid</span>
+                  </div>
+                  <p className="text-sm text-muted ml-8">
+                    Mix of in-person sessions and remote training â the best of both worlds.
+                  </p>
+                </button>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setStep(requiresPayment ? 3 : 2)}
+                  className="ppl-btn ppl-btn-secondary flex-1 py-3"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!trainingPreference) {
+                      setError('Please select your training preference');
+                      return;
+                    }
+                    setError('');
+                    setStep(5);
+                  }}
+                  disabled={!trainingPreference}
+                  className="ppl-btn ppl-btn-primary flex-1 py-3 text-base"
+                >
+                  Continue
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ============================================ */}
+          {/* STEP 5: Location + Age Group                 */}
+          {/* ============================================ */}
+          {step === 5 && (
+            <form onSubmit={handleFinalSubmit} className="space-y-4">
+              <h2 className="text-lg font-semibold text-foreground mb-2">
+                {trainingPreference === 'REMOTE' ? 'Home Base & Age Group' : 'Training Details'}
+              </h2>
+              {trainingPreference === 'REMOTE' && (
+                <p className="text-sm text-muted -mt-1 mb-2">
+                  Even as a remote athlete, pick a home location for check-ins and coach assignments.
+                </p>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">
@@ -720,21 +847,17 @@ function RegisterForm() {
               </div>
 
               <div className="flex gap-3">
-                {!requiresPayment && !isOAuthOnboarding && (
-                  <button
-                    type="button"
-                    onClick={() => setStep(2)}
-                    className="ppl-btn ppl-btn-secondary flex-1 py-3"
-                  >
-                    Back
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setStep(4)}
+                  className="ppl-btn ppl-btn-secondary flex-1 py-3"
+                >
+                  Back
+                </button>
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className={`ppl-btn ppl-btn-primary py-3 text-base ${
-                    (requiresPayment || isOAuthOnboarding) ? 'w-full' : 'flex-1'
-                  }`}
+                  className="ppl-btn ppl-btn-primary flex-1 py-3 text-base"
                 >
                   {isLoading ? 'Setting up...' : isOAuthOnboarding ? 'Complete Setup' : 'Create Account'}
                 </button>
