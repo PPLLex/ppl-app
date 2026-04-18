@@ -900,6 +900,7 @@ export interface ClientDetail {
     ageGroup: string | null;
     notes: string | null;
     trainingGoals: string | null;
+    trainingPreference: 'IN_PERSON' | 'REMOTE' | 'HYBRID' | null;
     emergencyContactName: string | null;
     emergencyContactPhone: string | null;
   } | null;
@@ -943,6 +944,7 @@ export interface UserProfile {
     emergencyContact: string | null;
     emergencyPhone: string | null;
     trainingGoals: string | null;
+    trainingPreference: 'IN_PERSON' | 'REMOTE' | 'HYBRID' | null;
     waiverSignedAt: string | null;
   };
   homeLocation?: { id: string; name: string } | null;
