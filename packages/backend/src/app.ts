@@ -28,6 +28,8 @@ import programRoutes from './routes/programs';
 import locationRevenueRoutes from './routes/locationRevenue';
 import onboardingRoutes from './routes/onboarding';
 import schoolRoutes from './routes/schools';
+import schoolCoachAuthRoutes from './routes/schoolCoachAuth';
+import schoolCoachDashboardRoutes from './routes/schoolCoachDashboard';
 import { membershipGuard } from './middleware/membershipGuard';
 
 const app = express();
@@ -98,6 +100,8 @@ app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/onboarding', onboardingRoutes);
 app.use('/api/schools', schoolRoutes);
+app.use('/api/coach-auth', schoolCoachAuthRoutes);
+app.use('/api/coach-dashboard', schoolCoachDashboardRoutes);
 
 // New feature routes â protected by membership guard for client users
 // The guard checks internally if the path is allowlisted
