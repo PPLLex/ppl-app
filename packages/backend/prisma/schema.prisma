@@ -244,6 +244,7 @@ model ClientProfile {
   emergencyContactName  String?
   emergencyContactPhone String?
   trainingGoals         String?
+  trainingPreference    TrainingDeliveryPreference?
   notes                 String?
   waiverSignedAt        DateTime?
   createdAt             DateTime @default(now())
