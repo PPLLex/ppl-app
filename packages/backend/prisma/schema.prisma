@@ -108,6 +108,25 @@ enum ContractStatus {
   VOIDED
 }
 
+enum SchoolCoachRole {
+  HEAD_COACH
+  ASSISTANT_COACH
+  DIRECTOR
+}
+
+enum MetricType {
+  FASTBALL_VELO
+  CHANGEUP_VELO
+  CURVEBALL_VELO
+  SLIDER_VELO
+  CUTTER_VELO
+  SPIN_RATE
+  COMMAND_SCORE
+  MECHANICAL_SCORE
+  BODY_WEIGHT
+  CUSTOM
+}
+
 enum PaymentStatus {
   SUCCEEDED
   FAILED
@@ -173,6 +192,7 @@ model Location {
   auditLogs          AuditLog[]
   families           Family[]
   schoolTeams        SchoolTeam[]
+  scheduleTemplates  ScheduleTemplate[]
 
   @@map("locations")
 }
@@ -245,6 +265,14 @@ model User {
   coachPrograms      Program[]         @relation("CoachPrograms")
   athletePrograms    Program[]         @relation("AthletePrograms")
 
+  // Metrics relations
+  athleteMetrics     AthleteMetric[]   @relation("AthleteMetrics")
+  staffCoachMetrics  AthleteMetric[]   @relation("StaffCoachMetrics")
+
+  // Waitlist & schedule template relations
+  waitlists          Waitlist[]
+  scheduleTemplates  ScheduleTemplate[] @relation("TemplateCoach")
+
   @@index([homeLocationId])
   @@index([role])
   @@index([email])
@@ -302,8 +330,9 @@ model Room {
   updatedAt  DateTime @updatedAt
 
   // Relations
-  location Location  @relation(fields: [locationId], references: [id], onDelete: Cascade)
-  sessions Session[]
+  location          Location           @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  sessions          Session[]
+  scheduleTemplates ScheduleTemplate[]
 
   @@index([locationId])
   @@map("rooms")
@@ -332,7 +361,8 @@ model Session {
   location Location  @relation(fields: [locationId], references: [id])
   room     Room?     @relation(fields: [roomId], references: [id])
   coach    User?     @relation("SessionCoach", fields: [coachId], references: [id])
-  bookings Booking[]
+  bookings  Booking[]
+  waitlists Waitlist[]
 
   @@index([locationId, startTime])
   @@index([coachId])
@@ -362,6 +392,52 @@ model Booking {
   @@index([clientId, status])
   @@index([sessionId])
   @@map("bookings")
+}
+
+model Waitlist {
+  id         String   @id @default(uuid())
+  clientId   String
+  sessionId  String
+  position   Int      // 1-based queue position
+  notifiedAt DateTime? // when we told them a spot opened
+  expiredAt  DateTime? // if they didn't respond in time
+  createdAt  DateTime @default(now())
+
+  client  User    @relation(fields: [clientId], references: [id])
+  session Session @relation(fields: [sessionId], references: [id])
+
+  @@unique([clientId, sessionId])
+  @@index([sessionId, position])
+  @@map("waitlists")
+}
+
+/// Admin-defined weekly schedule template.
+/// Each entry is "every Monday at 3pm in Room A, College Pitching".
+/// A cron job uses these to auto-generate Session rows 2 weeks ahead.
+model ScheduleTemplate {
+  id              String      @id @default(uuid())
+  locationId      String
+  roomId          String?
+  coachId         String?
+  title           String
+  sessionType     SessionType
+  dayOfWeek       Int         // 0=Sunday … 6=Saturday
+  startHour       Int         // 0-23
+  startMinute     Int         @default(0)
+  durationMinutes Int         @default(60)
+  maxCapacity     Int         @default(8)
+  registrationCutoffHours Int @default(2)
+  cancellationCutoffHours Int @default(1)
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  location Location @relation(fields: [locationId], references: [id])
+  room     Room?    @relation(fields: [roomId], references: [id])
+  coach    User?    @relation("TemplateCoach", fields: [coachId], references: [id])
+
+  @@index([locationId, dayOfWeek])
+  @@map("schedule_templates")
 }
 
 // ============================================================
@@ -580,7 +656,8 @@ enum TrainingCategory {
 model CoachNote {
   id               String           @id @default(uuid())
   athleteId        String
-  coachId          String
+  coachId          String?          // PPL staff coach (null if school coach)
+  schoolCoachId    String?          // Partner school coach (null if PPL staff)
   trainingCategory TrainingCategory
   rawContent       String           // original note from coach
   cleanedContent   String?          // AI-cleaned version (grammar, profanity filtered)
@@ -591,12 +668,14 @@ model CoachNote {
   updatedAt        DateTime         @updatedAt
 
   // Relations
-  athlete User    @relation("AthleteNotes", fields: [athleteId], references: [id])
-  coach   User    @relation("CoachNotes", fields: [coachId], references: [id])
-  booking Booking? @relation(fields: [bookingId], references: [id])
+  athlete     User         @relation("AthleteNotes", fields: [athleteId], references: [id])
+  coach       User?        @relation("CoachNotes", fields: [coachId], references: [id])
+  schoolCoach SchoolCoach? @relation("SchoolCoachNotes", fields: [schoolCoachId], references: [id])
+  booking     Booking?     @relation(fields: [bookingId], references: [id])
 
   @@index([athleteId, createdAt])
   @@index([coachId, createdAt])
+  @@index([schoolCoachId, createdAt])
   @@index([athleteId, trainingCategory])
   @@map("coach_notes")
 }
@@ -931,6 +1010,7 @@ model SchoolTeam {
   athletes        AthleteProfile[]
   invoices        SchoolInvoice[]
   contracts       SchoolContract[]
+  coaches         SchoolCoach[]
 
   @@index([slug])
   @@index([coachInviteToken])
@@ -984,6 +1064,77 @@ model SchoolContract {
   @@index([schoolTeamId])
   @@index([signatureToken])
   @@map("school_contracts")
+}
+
+// ============================================================
+// PARTNER SCHOOL COACHES (Login accounts for school coaches)
+// ============================================================
+
+model SchoolCoach {
+  id              String          @id @default(uuid())
+  schoolTeamId    String
+  email           String          @unique
+  passwordHash    String
+  fullName        String
+  phone           String?
+  role            SchoolCoachRole @default(HEAD_COACH)
+  title           String?         // "Director of Pitching", "Head Baseball Coach", etc.
+
+  // Access control — admin checks these boxes per coach
+  canViewDashboard    Boolean @default(true)
+  canTakeNotes        Boolean @default(true)
+  canViewPrograms     Boolean @default(true)
+  canViewGoals        Boolean @default(true)
+  canViewMetrics      Boolean @default(true)
+  canMessageAthletes  Boolean @default(false)
+  receivesWeeklySummary Boolean @default(true)
+
+  // Push notification subscription (for PWA)
+  pushSubscription  Json?           // Web Push subscription object
+  notifyReminders   Boolean @default(true)
+
+  lastLoginAt     DateTime?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  schoolTeam      SchoolTeam      @relation(fields: [schoolTeamId], references: [id])
+  athleteNotes    CoachNote[]     @relation("SchoolCoachNotes")
+  athleteMetrics  AthleteMetric[] @relation("SchoolCoachMetrics")
+
+  @@index([schoolTeamId])
+  @@index([email])
+  @@map("school_coaches")
+}
+
+// ============================================================
+// ATHLETE METRICS (Velo, spin rate, performance tracking)
+// ============================================================
+
+model AthleteMetric {
+  id              String     @id @default(uuid())
+  athleteId       String
+  schoolCoachId   String?    // null if logged by PPL staff
+  staffCoachId    String?    // null if logged by school coach
+  metricType      MetricType
+  value           Float      // the measurement value
+  unit            String?    // "mph", "rpm", "/10", "lbs", etc.
+  customLabel     String?    // label when metricType is CUSTOM
+  sessionDate     DateTime   @default(now())
+  notes           String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  // Relations
+  athlete      User         @relation("AthleteMetrics", fields: [athleteId], references: [id])
+  schoolCoach  SchoolCoach? @relation("SchoolCoachMetrics", fields: [schoolCoachId], references: [id])
+  staffCoach   User?        @relation("StaffCoachMetrics", fields: [staffCoachId], references: [id])
+
+  @@index([athleteId, metricType])
+  @@index([athleteId, createdAt])
+  @@index([schoolCoachId])
+  @@map("athlete_metrics")
 }
 
 // ============================================================
