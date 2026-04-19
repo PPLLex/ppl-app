@@ -20,7 +20,30 @@ const SESSION_TYPE_COLORS: Record<string, string> = {
   CAGE_RENTAL: 'bg-rose-500/20 border-rose-500 text-rose-400',
 };
 
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DAY_NAMES_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+interface ScheduleTemplate {
+  id: string;
+  locationId: string;
+  roomId: string | null;
+  coachId: string | null;
+  title: string;
+  sessionType: string;
+  dayOfWeek: number;
+  startHour: number;
+  startMinute: number;
+  durationMinutes: number;
+  maxCapacity: number;
+  registrationCutoffHours: number;
+  cancellationCutoffHours: number;
+  isActive: boolean;
+  room?: { id: string; name: string } | null;
+  coach?: { id: string; fullName: string } | null;
+}
+
 export default function AdminSchedulePage() {
+  const [activeTab, setActiveTab] = useState<'calendar' | 'templates'>('calendar');
   const { user } = useAuth();
   const [sessions, setSessions] = useState<SessionWithAvailability[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -117,16 +140,57 @@ export default function AdminSchedulePage() {
           <h1 className="text-2xl font-bold text-foreground">Schedule</h1>
           <p className="text-muted text-sm mt-1">Manage sessions across all locations</p>
         </div>
+        <div className="flex items-center gap-3">
+          {activeTab === 'calendar' && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="ppl-btn ppl-btn-primary"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              New Session
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6 border-b border-border">
         <button
-          onClick={() => setShowCreateModal(true)}
-          className="ppl-btn ppl-btn-primary"
+          onClick={() => setActiveTab('calendar')}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'calendar'
+              ? 'border-ppl-light-green text-ppl-light-green'
+              : 'border-transparent text-muted hover:text-foreground'
+          }`}
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-          New Session
+          Weekly Calendar
+        </button>
+        <button
+          onClick={() => setActiveTab('templates')}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'templates'
+              ? 'border-ppl-light-green text-ppl-light-green'
+              : 'border-transparent text-muted hover:text-foreground'
+          }`}
+        >
+          Schedule Templates
         </button>
       </div>
+
+      {activeTab === 'templates' ? (
+        <ScheduleTemplatesView
+          locations={locations}
+          selectedLocationId={selectedLocationId}
+          onLocationChange={setSelectedLocationId}
+        />
+      ) : (
+      <></>
+      )}
+
+      {activeTab === 'calendar' && (
+      <>
 
       {/* Controls */}
       <div className="flex items-center gap-4 mb-6">
@@ -252,6 +316,431 @@ export default function AdminSchedulePage() {
           }}
         />
       )}
+      </>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// SCHEDULE TEMPLATES VIEW
+// ============================================================
+
+function ScheduleTemplatesView({
+  locations,
+  selectedLocationId,
+  onLocationChange,
+}: {
+  locations: Location[];
+  selectedLocationId: string;
+  onLocationChange: (id: string) => void;
+}) {
+  const [templates, setTemplates] = useState<ScheduleTemplate[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showCreateTemplate, setShowCreateTemplate] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const loadTemplates = useCallback(async () => {
+    if (!selectedLocationId) return;
+    setIsLoading(true);
+    try {
+      const res = await api.request(`/sessions/templates?locationId=${selectedLocationId}`);
+      setTemplates((res as any).data || []);
+    } catch (err) {
+      console.error('Failed to load templates:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedLocationId]);
+
+  useEffect(() => {
+    loadTemplates();
+  }, [loadTemplates]);
+
+  // Group templates by day
+  const templatesByDay = DAY_NAMES.map((_, dayIndex) =>
+    templates.filter((t) => t.dayOfWeek === dayIndex && t.isActive)
+      .sort((a, b) => a.startHour * 60 + a.startMinute - (b.startHour * 60 + b.startMinute))
+  );
+
+  const formatTemplateTime = (hour: number, minute: number) => {
+    const period = hour >= 12 ? 'PM' : 'AM';
+    const h = hour % 12 || 12;
+    return `${h}:${minute.toString().padStart(2, '0')} ${period}`;
+  };
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    setMessage(null);
+    try {
+      const res = await api.request<{ created: number }>('/sessions/templates/generate', {
+        method: 'POST',
+        body: JSON.stringify({ locationId: selectedLocationId, weeksAhead: 2 }),
+      });
+      setMessage({
+        type: 'success',
+        text: res.message || `Generated ${res.data?.created || 0} sessions`,
+      });
+    } catch (err) {
+      setMessage({ type: 'error', text: 'Failed to generate sessions' });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleDeleteTemplate = async (id: string) => {
+    try {
+      await api.request(`/sessions/templates/${id}`, { method: 'DELETE' });
+      loadTemplates();
+    } catch (err) {
+      console.error('Failed to delete template:', err);
+    }
+  };
+
+  return (
+    <div>
+      {/* Controls */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <select
+            value={selectedLocationId}
+            onChange={(e) => onLocationChange(e.target.value)}
+            className="ppl-input w-auto"
+          >
+            {locations.map((loc) => (
+              <option key={loc.id} value={loc.id}>{loc.name}</option>
+            ))}
+          </select>
+          <p className="text-sm text-muted">
+            {templates.filter((t) => t.isActive).length} active template(s)
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleGenerate}
+            disabled={generating || templates.length === 0}
+            className="ppl-btn ppl-btn-secondary"
+          >
+            {generating ? 'Generating...' : 'Generate Next 2 Weeks'}
+          </button>
+          <button
+            onClick={() => setShowCreateTemplate(true)}
+            className="ppl-btn ppl-btn-primary"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            New Template
+          </button>
+        </div>
+      </div>
+
+      {message && (
+        <div className={`mb-4 p-3 rounded-lg text-sm ${
+          message.type === 'success'
+            ? 'bg-ppl-dark-green/10 border border-ppl-dark-green/20 text-ppl-light-green'
+            : 'bg-danger/10 border border-danger/20 text-danger'
+        }`}>
+          {message.text}
+        </div>
+      )}
+
+      {/* Weekly Template Grid */}
+      <div className="ppl-card p-0 overflow-hidden">
+        <div className="grid grid-cols-7 border-b border-border">
+          {DAY_NAMES_SHORT.map((name, i) => (
+            <div key={i} className="p-3 text-center border-r border-border last:border-r-0">
+              <p className="text-xs text-muted uppercase">{name}</p>
+              <p className="text-xs text-muted mt-0.5">
+                {templatesByDay[i].length} session{templatesByDay[i].length !== 1 ? 's' : ''}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-7 min-h-[350px]">
+          {templatesByDay.map((dayTemplates, i) => (
+            <div key={i} className="border-r border-border last:border-r-0 p-2 space-y-2">
+              {isLoading ? (
+                <div className="h-16 bg-surface-hover rounded animate-pulse" />
+              ) : dayTemplates.length === 0 ? (
+                <p className="text-xs text-muted text-center pt-4">—</p>
+              ) : (
+                dayTemplates.map((tmpl) => (
+                  <div
+                    key={tmpl.id}
+                    className={`p-2 rounded-lg border text-xs group relative ${
+                      SESSION_TYPE_COLORS[tmpl.sessionType] || 'bg-surface border-border'
+                    }`}
+                  >
+                    <p className="font-semibold truncate">{tmpl.title}</p>
+                    <p className="opacity-80">
+                      {formatTemplateTime(tmpl.startHour, tmpl.startMinute)}
+                    </p>
+                    <p className="opacity-70">{tmpl.durationMinutes}min · {tmpl.maxCapacity} max</p>
+                    {tmpl.room && <p className="opacity-70">{tmpl.room.name}</p>}
+                    {tmpl.coach && <p className="opacity-70">{tmpl.coach.fullName}</p>}
+                    <button
+                      onClick={() => handleDeleteTemplate(tmpl.id)}
+                      className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-danger hover:text-danger/80 transition-opacity"
+                      title="Remove template"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <p className="text-xs text-muted mt-3">
+        Templates define your recurring weekly schedule. Click &quot;Generate Next 2 Weeks&quot; to create actual
+        sessions from these templates. This runs automatically every Sunday night.
+      </p>
+
+      {/* Create Template Modal */}
+      {showCreateTemplate && (
+        <CreateTemplateModal
+          locationId={selectedLocationId}
+          locations={locations}
+          onClose={() => setShowCreateTemplate(false)}
+          onCreated={() => {
+            setShowCreateTemplate(false);
+            loadTemplates();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// CREATE TEMPLATE MODAL
+// ============================================================
+
+function CreateTemplateModal({
+  locationId,
+  locations,
+  onClose,
+  onCreated,
+}: {
+  locationId: string;
+  locations: Location[];
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [form, setForm] = useState({
+    locationId,
+    title: '',
+    sessionType: 'MS_HS_PITCHING',
+    dayOfWeek: 1, // Monday
+    startHour: 15, // 3 PM
+    startMinute: 0,
+    durationMinutes: 60,
+    maxCapacity: 8,
+    roomId: '',
+  });
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    api.getLocation(form.locationId).then((res) => {
+      if (res.data?.rooms) setRooms(res.data.rooms);
+    });
+  }, [form.locationId]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setIsSubmitting(true);
+
+    try {
+      const title = form.title || SESSION_TYPE_LABELS[form.sessionType] || form.sessionType;
+      await api.request('/sessions/templates', {
+        method: 'POST',
+        body: JSON.stringify({ ...form, title, roomId: form.roomId || null }),
+      });
+      onCreated();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create template');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const updateForm = (updates: Partial<typeof form>) => {
+    setForm((prev) => ({ ...prev, ...updates }));
+  };
+
+  // Generate time options (6 AM to 10 PM in 30-min increments)
+  const timeOptions = [];
+  for (let h = 6; h <= 22; h++) {
+    for (const m of [0, 30]) {
+      const period = h >= 12 ? 'PM' : 'AM';
+      const display = `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${period}`;
+      timeOptions.push({ hour: h, minute: m, display });
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="ppl-card w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-foreground">New Schedule Template</h2>
+          <button onClick={onClose} className="text-muted hover:text-foreground">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <p className="text-sm text-muted mb-4">
+          Define a recurring weekly session slot. Sessions will be auto-generated from this template.
+        </p>
+
+        {error && (
+          <div className="mb-4 p-3 rounded-lg bg-danger/10 border border-danger/20 text-danger text-sm">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Location */}
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1.5">Location</label>
+            <select
+              value={form.locationId}
+              onChange={(e) => updateForm({ locationId: e.target.value })}
+              className="ppl-input"
+            >
+              {locations.map((loc) => (
+                <option key={loc.id} value={loc.id}>{loc.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Session Type */}
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1.5">Session Type</label>
+            <select
+              value={form.sessionType}
+              onChange={(e) => updateForm({ sessionType: e.target.value })}
+              className="ppl-input"
+            >
+              {Object.entries(SESSION_TYPE_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Title */}
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1.5">
+              Title <span className="text-muted">(optional)</span>
+            </label>
+            <input
+              type="text"
+              value={form.title}
+              onChange={(e) => updateForm({ title: e.target.value })}
+              placeholder={SESSION_TYPE_LABELS[form.sessionType]}
+              className="ppl-input"
+            />
+          </div>
+
+          {/* Day + Time */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">Day of Week</label>
+              <select
+                value={form.dayOfWeek}
+                onChange={(e) => updateForm({ dayOfWeek: parseInt(e.target.value) })}
+                className="ppl-input"
+              >
+                {DAY_NAMES.map((name, i) => (
+                  <option key={i} value={i}>{name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">Start Time</label>
+              <select
+                value={`${form.startHour}:${form.startMinute}`}
+                onChange={(e) => {
+                  const [h, m] = e.target.value.split(':').map(Number);
+                  updateForm({ startHour: h, startMinute: m });
+                }}
+                className="ppl-input"
+              >
+                {timeOptions.map((opt) => (
+                  <option key={`${opt.hour}:${opt.minute}`} value={`${opt.hour}:${opt.minute}`}>
+                    {opt.display}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Duration + Capacity */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">Duration</label>
+              <select
+                value={form.durationMinutes}
+                onChange={(e) => updateForm({ durationMinutes: parseInt(e.target.value) })}
+                className="ppl-input"
+              >
+                <option value={30}>30 min</option>
+                <option value={45}>45 min</option>
+                <option value={60}>1 hour</option>
+                <option value={90}>1.5 hours</option>
+                <option value={120}>2 hours</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">Max Athletes</label>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={form.maxCapacity}
+                onChange={(e) => updateForm({ maxCapacity: parseInt(e.target.value) })}
+                className="ppl-input"
+              />
+            </div>
+          </div>
+
+          {/* Room */}
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1.5">Room</label>
+            <select
+              value={form.roomId}
+              onChange={(e) => updateForm({ roomId: e.target.value })}
+              className="ppl-input"
+            >
+              <option value="">No specific room</option>
+              {rooms.map((room) => (
+                <option key={room.id} value={room.id}>{room.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="ppl-btn ppl-btn-secondary flex-1">
+              Cancel
+            </button>
+            <button type="submit" disabled={isSubmitting} className="ppl-btn ppl-btn-primary flex-1">
+              {isSubmitting ? 'Creating...' : 'Create Template'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
