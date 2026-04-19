@@ -127,6 +127,7 @@ router.put('/password', async (req: Request, res: Response, next: NextFunction) 
       select: { passwordHash: true },
     });
     if (!user) throw ApiError.notFound('User not found');
+    if (!user.passwordHash) throw ApiError.unauthorized('Current password is incorrect');
 
     const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
     if (!isValid) throw ApiError.unauthorized('Current password is incorrect');

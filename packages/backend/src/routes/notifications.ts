@@ -25,7 +25,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 
     const where: any = { userId };
     if (unreadOnly) {
-      where.status = { not: NotificationStatus.READ };
+      where.status = { not: NotificationStatus.SENT };
     }
 
     const [notifications, total, unreadCount] = await Promise.all([
@@ -37,7 +37,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       }),
       prisma.notification.count({ where }),
       prisma.notification.count({
-        where: { userId, status: { not: NotificationStatus.READ } },
+        where: { userId, status: { not: NotificationStatus.SENT } },
       }),
     ]);
 
@@ -63,7 +63,7 @@ router.put('/:id/read', async (req: Request, res: Response, next: NextFunction) 
 
     await prisma.notification.updateMany({
       where: { id: notifId, userId },
-      data: { status: NotificationStatus.READ },
+      data: { status: NotificationStatus.SENT },
     });
 
     res.json({ success: true });
@@ -81,8 +81,8 @@ router.put('/read-all', async (req: Request, res: Response, next: NextFunction) 
     const userId = req.user!.userId;
 
     await prisma.notification.updateMany({
-      where: { userId, status: { not: NotificationStatus.READ } },
-      data: { status: NotificationStatus.READ },
+      where: { userId, status: { not: NotificationStatus.SENT } },
+      data: { status: NotificationStatus.SENT },
     });
 
     res.json({ success: true });

@@ -12,6 +12,11 @@ function getCoach(req: Request) {
   return (req as any).coach as { schoolCoachId: string; schoolTeamId: string; email: string };
 }
 
+function param(req: Request, name: string): string {
+  const val = req.params[name];
+  return Array.isArray(val) ? val[0] : val;
+}
+
 // ============================================================
 // TEAM ROSTER
 // ============================================================
@@ -111,7 +116,7 @@ router.get('/roster', async (req: Request, res: Response, next: NextFunction) =>
 router.get('/athletes/:athleteId/notes', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { schoolTeamId, schoolCoachId } = getCoach(req);
-    const athleteId = req.params.athleteId;
+    const athleteId = param(req, 'athleteId');
 
     // Verify athlete is on this coach's team
     const athlete = await prisma.athleteProfile.findFirst({
@@ -135,7 +140,7 @@ router.get('/athletes/:athleteId/notes', async (req: Request, res: Response, nex
         content: n.cleanedContent || n.rawContent,
         rawContent: n.rawContent,
         sessionDate: n.sessionDate,
-        coachName: n.schoolCoach?.fullName || n.coach?.fullName || 'PPL Staff',
+        coachName: (n as any).schoolCoach?.fullName || (n as any).coach?.fullName || 'PPL Staff',
         isSchoolCoachNote: n.schoolCoachId === schoolCoachId,
         createdAt: n.createdAt,
       })),
@@ -152,7 +157,7 @@ router.get('/athletes/:athleteId/notes', async (req: Request, res: Response, nex
 router.post('/athletes/:athleteId/notes', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { schoolTeamId, schoolCoachId } = getCoach(req);
-    const athleteId = req.params.athleteId;
+    const athleteId = param(req, 'athleteId');
 
     // Verify permissions
     const coach = await prisma.schoolCoach.findUnique({ where: { id: schoolCoachId } });
@@ -194,7 +199,7 @@ router.post('/athletes/:athleteId/notes', async (req: Request, res: Response, ne
 router.get('/athletes/:athleteId/goals', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { schoolTeamId, schoolCoachId } = getCoach(req);
-    const athleteId = req.params.athleteId;
+    const athleteId = param(req, 'athleteId');
 
     const coach = await prisma.schoolCoach.findUnique({ where: { id: schoolCoachId } });
     if (!coach?.canViewGoals) throw new ApiError(403, 'You do not have permission to view goals');
@@ -229,7 +234,7 @@ router.get('/athletes/:athleteId/goals', async (req: Request, res: Response, nex
 router.get('/athletes/:athleteId/programs', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { schoolTeamId, schoolCoachId } = getCoach(req);
-    const athleteId = req.params.athleteId;
+    const athleteId = param(req, 'athleteId');
 
     const coach = await prisma.schoolCoach.findUnique({ where: { id: schoolCoachId } });
     if (!coach?.canViewPrograms) throw new ApiError(403, 'You do not have permission to view programs');
@@ -278,7 +283,7 @@ router.get('/athletes/:athleteId/programs', async (req: Request, res: Response, 
 router.get('/athletes/:athleteId/metrics', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { schoolTeamId, schoolCoachId } = getCoach(req);
-    const athleteId = req.params.athleteId;
+    const athleteId = param(req, 'athleteId');
 
     const coach = await prisma.schoolCoach.findUnique({ where: { id: schoolCoachId } });
     if (!coach?.canViewMetrics) throw new ApiError(403, 'You do not have permission to view metrics');
@@ -307,7 +312,7 @@ router.get('/athletes/:athleteId/metrics', async (req: Request, res: Response, n
         customLabel: m.customLabel,
         sessionDate: m.sessionDate,
         notes: m.notes,
-        loggedBy: m.schoolCoach?.fullName || m.staffCoach?.fullName || 'PPL Staff',
+        loggedBy: (m as any).schoolCoach?.fullName || (m as any).staffCoach?.fullName || 'PPL Staff',
         createdAt: m.createdAt,
       })),
     });
@@ -323,7 +328,7 @@ router.get('/athletes/:athleteId/metrics', async (req: Request, res: Response, n
 router.post('/athletes/:athleteId/metrics', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { schoolTeamId, schoolCoachId } = getCoach(req);
-    const athleteId = req.params.athleteId;
+    const athleteId = param(req, 'athleteId');
 
     const coach = await prisma.schoolCoach.findUnique({ where: { id: schoolCoachId } });
     if (!coach?.canViewMetrics) throw new ApiError(403, 'You do not have permission to log metrics');

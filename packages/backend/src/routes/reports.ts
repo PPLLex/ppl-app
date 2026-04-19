@@ -229,7 +229,7 @@ router.get('/members', async (req: Request, res: Response, next: NextFunction) =
     });
 
     const totalInactive = await prisma.clientMembership.count({
-      where: { status: { in: [MembershipStatus.CANCELLED, MembershipStatus.EXPIRED] } },
+      where: { status: { in: [MembershipStatus.CANCELLED, MembershipStatus.SUSPENDED] } },
     });
 
     // New this month

@@ -511,7 +511,7 @@ async function promoteFromWaitlist(
     type: NotificationType.BOOKING_REMINDER,
     title: 'A Spot Opened Up!',
     body: `Good news — a spot opened in ${session.title} on ${sessionDate} at ${sessionTime}. You have 30 minutes to book before the next person on the waitlist is notified.`,
-    channels: [NotificationChannel.EMAIL, NotificationChannel.SMS, NotificationChannel.IN_APP],
+    channels: [NotificationChannel.EMAIL, NotificationChannel.SMS, NotificationChannel.PUSH],
     metadata: { sessionId, waitlistId: next.id },
   });
 }
