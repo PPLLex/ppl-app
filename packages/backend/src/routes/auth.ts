@@ -4,6 +4,7 @@ import { prisma } from '../utils/prisma';
 import { ApiError } from '../utils/apiError';
 import { authenticate, generateToken, JwtPayload } from '../middleware/auth';
 import { Role } from '@prisma/client';
+import { sendEmail, buildWelcomeEmail } from '../services/emailService';
 
 const router = Router();
 
@@ -55,6 +56,14 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
         homeLocation: { select: { id: true, name: true } },
       },
     });
+
+    // Send welcome email (non-blocking)
+    sendEmail({
+      to: user.email,
+      subject: 'Welcome to Pitching Performance Lab!',
+      text: `Hey ${user.fullName.split(' ')[0]}, welcome to PPL! Log in to your dashboard to choose a membership plan and book your first session.`,
+      html: buildWelcomeEmail(user.fullName, user.homeLocation?.name || 'PPL'),
+    }).catch((err) => console.error('Failed to send welcome email:', err));
 
     // Generate token
     const tokenPayload: JwtPayload = {
@@ -141,7 +150,7 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
         user: {
           id: user.id,
           email: user.email,
-          fullName: user.fullName,
+          fullName,
           phone: user.phone,
           role: user.role,
           homeLocation: user.homeLocation,
