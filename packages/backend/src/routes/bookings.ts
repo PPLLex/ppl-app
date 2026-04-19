@@ -352,6 +352,11 @@ router.delete('/:id', authenticate, async (req: Request, res: Response, next: Ne
       },
     });
 
+    // Promote first person on the waitlist (non-blocking)
+    promoteFromWaitlist(booking.sessionId, booking.session).catch((err) =>
+      console.error('Waitlist promotion error:', err)
+    );
+
     res.json({
       success: true,
       message: `Session cancelled.${creditRestored ? ' Your credit has been restored to your account.' : ''}`,
@@ -458,6 +463,57 @@ function getWeekStart(date: Date, billingDay: string): Date {
   d.setDate(d.getDate() - diff);
   d.setHours(0, 0, 0, 0);
   return d;
+}
+
+// ============================================================
+// WAITLIST PROMOTION HELPER
+// ============================================================
+
+/**
+ * When a booking is cancelled and a spot opens, notify the first
+ * person on the waitlist. They get 30 min to book before the next
+ * person is notified. The actual booking still goes through the
+ * normal POST /api/bookings flow so credits are validated.
+ */
+async function promoteFromWaitlist(
+  sessionId: string,
+  session: { title: string; startTime: Date },
+) {
+  const next = await prisma.waitlist.findFirst({
+    where: { sessionId, notifiedAt: null, expiredAt: null },
+    orderBy: { position: 'asc' },
+    include: {
+      client: { select: { id: true, fullName: true, email: true } },
+    },
+  });
+
+  if (!next) return; // No one waiting
+
+  // Mark as notified
+  await prisma.waitlist.update({
+    where: { id: next.id },
+    data: { notifiedAt: new Date() },
+  });
+
+  const sessionDate = session.startTime.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
+  const sessionTime = session.startTime.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+  // Notify them via email + in-app
+  await notify({
+    userId: next.clientId,
+    type: NotificationType.BOOKING_REMINDER,
+    title: 'A Spot Opened Up!',
+    body: `Good news — a spot opened in ${session.title} on ${sessionDate} at ${sessionTime}. You have 30 minutes to book before the next person on the waitlist is notified.`,
+    channels: [NotificationChannel.EMAIL, NotificationChannel.SMS, NotificationChannel.IN_APP],
+    metadata: { sessionId, waitlistId: next.id },
+  });
 }
 
 export default router;
