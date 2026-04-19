@@ -54,7 +54,7 @@ export async function sendSessionReminders() {
       const existingReminder = await prisma.notification.findFirst({
         where: {
           userId: booking.clientId,
-          type: NotificationType.SESSION_REMINDER,
+          type: NotificationType.BOOKING_REMINDER,
           metadata: {
             path: ['bookingId'],
             equals: booking.id,
@@ -82,7 +82,7 @@ export async function sendSessionReminders() {
 
       await notify({
         userId: booking.clientId,
-        type: NotificationType.SESSION_REMINDER,
+        type: NotificationType.BOOKING_REMINDER,
         title: `Upcoming Session: ${session.title}`,
         body: `Your session "${session.title}" is coming up on ${dateStr} at ${timeStr} at ${locationStr}${roomStr}. See you there!`,
         channels: [NotificationChannel.EMAIL, NotificationChannel.SMS],
