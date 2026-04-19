@@ -64,7 +64,7 @@ app.use(express.json());
 app.use('/api/auth', authLimiter);
 app.use('/api', apiLimiter);
 
-// Membership guard â enforces "dummy mode" for clients without active membership
+// Membership guard — enforces "dummy mode" for clients without active membership
 // Checks JWT (if present) and blocks non-payment routes for suspended/past-due/cancelled members
 // Allowlisted paths (account, memberships, auth, webhooks, locations, notifications) are always accessible
 app.use('/api', membershipGuard);
@@ -100,10 +100,12 @@ app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/onboarding', onboardingRoutes);
 app.use('/api/schools', schoolRoutes);
+
+// School coach dashboard — separate auth system (not membership guarded)
 app.use('/api/coach-auth', schoolCoachAuthRoutes);
 app.use('/api/coach-dashboard', schoolCoachDashboardRoutes);
 
-// New feature routes â protected by membership guard for client users
+// New feature routes — protected by membership guard for client users
 // The guard checks internally if the path is allowlisted
 app.use('/api/coach-notes', coachNoteRoutes);
 app.use('/api/goals', goalRoutes);
