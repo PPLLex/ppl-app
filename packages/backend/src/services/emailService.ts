@@ -254,3 +254,97 @@ export function buildPPLEmail(title: string, body: string): string {
 </body>
 </html>`.trim();
 }
+
+
+/**
+ * Build a coach invite email for partner schools.
+ */
+export function buildCoachInviteEmail(
+  coachName: string,
+  schoolName: string,
+  password: string,
+  loginUrl: string,
+): string {
+  return buildPPLEmail('Coach Portal Access', `
+    <p style="margin:0 0 16px;color:#CCC;">Hey ${coachName.split(' ')[0]},</p>
+    <p style="margin:0 0 16px;color:#CCC;">You've been added as a coach for <strong style="color:#F5F5F5;">${schoolName}</strong> on Pitching Performance Lab's platform.</p>
+    <p style="margin:0 0 16px;color:#CCC;">Here are your login credentials:</p>
+    <table style="margin:0 0 20px;border-collapse:collapse;">
+      <tr><td style="padding:4px 12px 4px 0;color:#888;">Email:</td><td style="color:#F5F5F5;">${coachName}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0;color:#888;">Password:</td><td style="color:#F5F5F5;">${password}</td></tr>
+    </table>
+    <p style="margin:0 0 20px;text-align:center;">
+      <a href="${loginUrl}/auth/coach-login" style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#5B8C2A,#95C83C);color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">Log In to Coach Portal</a>
+    </p>
+    <p style="font-size:13px;color:#888;margin:0;">Please change your password after your first login.</p>
+  `);
+}
+
+/**
+ * Send a coach invite email (convenience wrapper).
+ */
+export async function sendCoachInviteEmail(
+  email: string,
+  fullName: string,
+  schoolName: string,
+  password: string,
+  frontendUrl: string,
+): Promise<void> {
+  const html = buildCoachInviteEmail(fullName, schoolName, password, frontendUrl);
+  await sendEmail({
+    to: email,
+    subject: `Your PPL Coach Portal Access â ${schoolName}`,
+    text: `Hey ${fullName.split(' ')[0]}, you've been added as a coach for ${schoolName} on PPL. Log in at ${frontendUrl}/auth/coach-login with password: ${password}`,
+    html,
+  });
+}
+
+/**
+ * Membership status change email (activated, paused, cancelled).
+ */
+export function buildMembershipStatusEmail(
+  memberName: string,
+  status: 'ACTIVE' | 'PAUSED' | 'CANCELLED',
+  planName: string,
+): string {
+  const statusMessages: Record<string, { title: string; body: string }> = {
+    ACTIVE: {
+      title: 'Membership Activated',
+      body: `Your <strong style="color:#F5F5F5;">${planName}</strong> membership is now active. You can start booking sessions right away.`,
+    },
+    PAUSED: {
+      title: 'Membership Paused',
+      body: `Your <strong style="color:#F5F5F5;">${planName}</strong> membership has been paused. Your credits will be preserved until you resume.`,
+    },
+    CANCELLED: {
+      title: 'Membership Cancelled',
+      body: `Your <strong style="color:#F5F5F5;">${planName}</strong> membership has been cancelled. You can still use any remaining credits until they expire.`,
+    },
+  };
+
+  const msg = statusMessages[status] || statusMessages.ACTIVE;
+
+  return buildPPLEmail(msg.title, `
+    <p style="margin:0 0 16px;color:#CCC;">Hey ${memberName.split(' ')[0]},</p>
+    <p style="margin:0 0 16px;color:#CCC;">${msg.body}</p>
+    <p style="font-size:13px;color:#888;margin:0;">If you have questions, reply to this email or contact us at info@pitchingperformancelab.com.</p>
+  `);
+}
+
+/**
+ * Card update required email (for failed payments).
+ */
+export function buildCardUpdateEmail(
+  memberName: string,
+  lastFour: string,
+  updateUrl: string,
+): string {
+  return buildPPLEmail('Update Your Payment Method', `
+    <p style="margin:0 0 16px;color:#CCC;">Hey ${memberName.split(' ')[0]},</p>
+    <p style="margin:0 0 16px;color:#CCC;">We were unable to process your payment using the card ending in <strong style="color:#F5F5F5;">${lastFour}</strong>. Please update your payment method to avoid any interruption to your training.</p>
+    <p style="margin:0 0 20px;text-align:center;">
+      <a href="${updateUrl}" style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#5B8C2A,#95C83C);color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">Update Payment Method</a>
+    </p>
+    <p style="font-size:13px;color:#888;margin:0;">If your payment was already resolved, you can ignore this email.</p>
+  `);
+}
