@@ -2,6 +2,8 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../utils/prisma';
 import { ApiError } from '../utils/apiError';
 import { authenticate, requireAdmin } from '../middleware/auth';
+import { sendCoachInviteEmail, sendEmail, buildPPLEmail } from '../services/emailService';
+import { config } from '../config';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 
@@ -57,6 +59,28 @@ router.get('/:id', authenticate, requireAdmin, async (req: Request, res: Respons
         athletes: {
           include: {
             user: { select: { id: true, fullName: true, email: true, phone: true, isActive: true } },
+          },
+        },
+        coaches: {
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+            phone: true,
+            role: true,
+            title: true,
+            canViewDashboard: true,
+            canTakeNotes: true,
+            canViewPrograms: true,
+            canViewGoals: true,
+            canViewMetrics: true,
+            canMessageAthletes: true,
+            receivesWeeklySummary: true,
+            notifyReminders: true,
+            lastLoginAt: true,
+            isActive: true,
+            createdAt: true,
           },
         },
         invoices: { orderBy: { createdAt: 'desc' } },
@@ -197,14 +221,29 @@ router.post('/:id/invite-coach', authenticate, requireAdmin, async (req: Request
       },
     });
 
-    // TODO: Send actual email to coach with the invite link
-    // The link would be: /join/team/{slug}/roster?token={coachInviteToken}
-    const inviteLink = `/join/team/${school.slug}/roster?token=${coachInviteToken}`;
+    const inviteLink = `${config.frontendUrl}/join/team/${school.slug}/roster?token=${coachInviteToken}`;
+
+    // Send invite email to coach
+    const html = buildPPLEmail('Team Roster Invite', `
+      <p style="margin:0 0 16px;color:#CCC;">Hey Coach${school.coachName ? ` ${school.coachName.split(' ')[0]}` : ''},</p>
+      <p style="margin:0 0 16px;color:#CCC;">PPL needs your help setting up <strong style="color:#F5F5F5;">${school.name}</strong>'s roster. Click below to add your athletes.</p>
+      <p style="margin:0 0 20px;text-align:center;">
+        <a href="${inviteLink}" style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#5B8C2A,#95C83C);color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">Submit Roster</a>
+      </p>
+      <p style="font-size:13px;color:#888;margin:0;">If you didn't expect this email, you can ignore it.</p>
+    `);
+
+    sendEmail({
+      to: school.coachEmail,
+      subject: `Submit your roster for ${school.name} â PPL`,
+      text: `Hey Coach, PPL needs your help setting up ${school.name}'s roster. Visit ${inviteLink} to add your athletes.`,
+      html,
+    }).catch((err) => console.error('Failed to send coach invite email:', err));
 
     res.json({
       data: updated,
       inviteLink,
-      message: `Invite ready for ${school.coachEmail}`,
+      message: `Invite sent to ${school.coachEmail}`,
     });
   } catch (err) {
     next(err);
@@ -212,7 +251,7 @@ router.post('/:id/invite-coach', authenticate, requireAdmin, async (req: Request
 });
 
 // ============================================================
-// COACH ROSTER SUBMISSION (PUBLIC — no auth required)
+// COACH ROSTER SUBMISSION (PUBLIC â no auth required)
 // ============================================================
 
 /**
@@ -271,14 +310,14 @@ router.post('/roster/:token', async (req: Request, res: Response, next: NextFunc
     for (const athlete of athletes) {
       const { firstName, lastName, email, phone } = athlete;
       if (!firstName || !lastName || !email) {
-        skipped.push(`${firstName || '?'} ${lastName || '?'} — missing required fields`);
+        skipped.push(`${firstName || '?'} ${lastName || '?'} â missing required fields`);
         continue;
       }
 
       // Check if user already exists
       const existingUser = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
       if (existingUser) {
-        skipped.push(`${firstName} ${lastName} — email already registered`);
+        skipped.push(`${firstName} ${lastName} â email already registered`);
         continue;
       }
 
@@ -313,7 +352,7 @@ router.post('/roster/:token', async (req: Request, res: Response, next: NextFunc
           },
         });
 
-        // Create onboarding record — partner school athletes don't pay onboarding fee
+        // Create onboarding record â partner school athletes don't pay onboarding fee
         await tx.onboardingRecord.create({
           data: {
             athleteId: (await tx.athleteProfile.findUnique({ where: { userId: user.id } }))!.id,
@@ -324,7 +363,7 @@ router.post('/roster/:token', async (req: Request, res: Response, next: NextFunc
       });
 
       created.push(`${firstName} ${lastName}`);
-    }
+   }
 
     // Mark roster as submitted
     await prisma.schoolTeam.update({
@@ -335,7 +374,26 @@ router.post('/roster/:token', async (req: Request, res: Response, next: NextFunc
       },
     });
 
-    // TODO: Send branded invite emails to each created athlete
+    // Send welcome emails to each created athlete (non-blocking)
+    for (const athlete of athletes) {
+      if (athlete.email && created.includes(`${athlete.firstName} ${athlete.lastName}`)) {
+        const welcomeHtml = buildPPLEmail('Welcome to PPL!', `
+          <p style="margin:0 0 16px;color:#CCC;">Hey ${athlete.firstName},</p>
+          <p style="margin:0 0 16px;color:#CCC;">Your coach has added you to <strong style="color:#F5F5F5;">${school.name}</strong>'s training program at Pitching Performance Lab.</p>
+          <p style="margin:0 0 16px;color:#CCC;">Set up your password to access your dashboard, view your training programs, and track your progress.</p>
+          <p style="margin:0 0 20px;text-align:center;">
+            <a href="${config.frontendUrl}/auth/setup-password?email=${encodeURIComponent(athlete.email)}" style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#5B8C2A,#95C83C);color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">Set Up Account</a>
+          </p>
+        `);
+
+        sendEmail({
+          to: athlete.email,
+          subject: `Welcome to PPL â ${school.name}`,
+          text: `Hey ${athlete.firstName}, your coach has added you to ${school.name}'s training program at PPL. Set up your account at ${config.frontendUrl}/auth/setup-password?email=${encodeURIComponent(athlete.email)}`,
+          html: welcomeHtml,
+        }).catch((err) => console.error(`Failed to send welcome email to ${athlete.email}:`, err));
+      }
+    }
 
     res.json({
       data: {
@@ -568,22 +626,45 @@ router.post('/contracts/:token/sign', async (req: Request, res: Response, next: 
   }
 });
 
-
 // ============================================================
-// COACH MANAGEMENT
+// SCHOOL COACH MANAGEMENT (Admin)
 // ============================================================
 
 /**
  * GET /api/schools/:id/coaches
- * Admin: list all coaches for a school team.
+ * Admin: list all coaches for a school.
  */
 router.get('/:id/coaches', authenticate, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const schoolTeamId = param(req, 'id');
+
+    const school = await prisma.schoolTeam.findUnique({ where: { id: schoolTeamId } });
+    if (!school) throw new ApiError(404, 'School team not found');
+
     const coaches = await prisma.schoolCoach.findMany({
       where: { schoolTeamId },
       orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        phone: true,
+        role: true,
+        title: true,
+        canViewDashboard: true,
+        canTakeNotes: true,
+        canViewPrograms: true,
+        canViewGoals: true,
+        canViewMetrics: true,
+        canMessageAthletes: true,
+        receivesWeeklySummary: true,
+        notifyReminders: true,
+        lastLoginAt: true,
+        isActive: true,
+        createdAt: true,
+      },
     });
+
     res.json({ data: coaches });
   } catch (err) {
     next(err);
@@ -592,27 +673,41 @@ router.get('/:id/coaches', authenticate, requireAdmin, async (req: Request, res:
 
 /**
  * POST /api/schools/:id/coaches
- * Admin: create a coach account for a school team.
+ * Admin: create a new coach login for a school.
  */
 router.post('/:id/coaches', authenticate, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const schoolTeamId = param(req, 'id');
-    const school = await prisma.schoolTeam.findUnique({ where: { id: schoolTeamId } });
-    if (!school) throw new ApiError(404, 'School team not found');
-
     const {
-      email, password, fullName, phone, role, title,
-      canTakeNotes, canViewGoals, canViewPrograms, canViewMetrics,
+      email,
+      password,
+      fullName,
+      phone,
+      role,
+      title,
+      canViewDashboard,
+      canTakeNotes,
+      canViewPrograms,
+      canViewGoals,
+      canViewMetrics,
+      canMessageAthletes,
+      receivesWeeklySummary,
+      notifyReminders,
     } = req.body;
 
     if (!email || !password || !fullName) {
       throw new ApiError(400, 'Email, password, and full name are required');
     }
+    if (password.length < 8) {
+      throw new ApiError(400, 'Password must be at least 8 characters');
+    }
 
-    const existing = await prisma.schoolCoach.findFirst({
-      where: { email: email.toLowerCase(), schoolTeamId },
-    });
-    if (existing) throw new ApiError(409, 'A coach with this email already exists on this team');
+    const school = await prisma.schoolTeam.findUnique({ where: { id: schoolTeamId } });
+    if (!school) throw new ApiError(404, 'School team not found');
+
+    // Check for duplicate email
+    const existing = await prisma.schoolCoach.findUnique({ where: { email: email.toLowerCase() } });
+   if (existing) throw new ApiError(409, 'A coach with this email already exists');
 
     const passwordHash = await bcrypt.hash(password, 12);
 
@@ -623,17 +718,48 @@ router.post('/:id/coaches', authenticate, requireAdmin, async (req: Request, res
         passwordHash,
         fullName,
         phone: phone || null,
-        role: role || 'ASSISTANT',
+        role: role || 'HEAD_COACH',
         title: title || null,
-        canTakeNotes: canTakeNotes ?? true,
-        canViewGoals: canViewGoals ?? true,
-        canViewPrograms: canViewPrograms ?? true,
-        canViewMetrics: canViewMetrics ?? false,
+        canViewDashboard: canViewDashboard !== false,
+        canTakeNotes: canTakeNotes !== false,
+        canViewPrograms: canViewPrograms !== false,
+        canViewGoals: canViewGoals !== false,
+        canViewMetrics: canViewMetrics !== false,
+        canMessageAthletes: canMessageAthletes === true,
+        receivesWeeklySummary: receivesWeeklySummary !== false,
+        notifyReminders: notifyReminders !== false,
       },
     });
 
-    const { passwordHash: _, ...safeCoach } = coach;
-    res.status(201).json({ data: safeCoach });
+    // Send invite email to the new coach (non-blocking)
+    sendCoachInviteEmail(
+      coach.email,
+      coach.fullName,
+      school.name,
+      password,
+      config.frontendUrl
+    ).catch((err) => console.error('Failed to send coach invite email:', err));
+
+    res.status(201).json({
+      data: {
+        id: coach.id,
+        email: coach.email,
+        fullName: coach.fullName,
+        phone: coach.phone,
+        role: coach.role,
+        title: coach.title,
+        canViewDashboard: coach.canViewDashboard,
+        canTakeNotes: coach.canTakeNotes,
+        canViewPrograms: coach.canViewPrograms,
+        canViewGoals: coach.canViewGoals,
+        canViewMetrics: coach.canViewMetrics,
+        canMessageAthletes: coach.canMessageAthletes,
+        receivesWeeklySummary: coach.receivesWeeklySummary,
+        notifyReminders: coach.notifyReminders,
+        isActive: coach.isActive,
+        createdAt: coach.createdAt,
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -641,38 +767,80 @@ router.post('/:id/coaches', authenticate, requireAdmin, async (req: Request, res
 
 /**
  * PUT /api/schools/:schoolId/coaches/:coachId
- * Admin: update a coach account.
+ * Admin: update a coach's permissions, info, or reset password.
  */
 router.put('/:schoolId/coaches/:coachId', authenticate, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const coachId = param(req, 'coachId');
+    const {
+      email,
+      fullName,
+      phone,
+      role,
+      title,
+      password, // optional â only set if admin wants to reset it
+      canViewDashboard,
+      canTakeNotes,
+      canViewPrograms,
+      canViewGoals,
+      canViewMetrics,
+      canMessageAthletes,
+      receivesWeeklySummary,
+      notifyReminders,
+      isActive,
+    } = req.body;
+
     const existing = await prisma.schoolCoach.findUnique({ where: { id: coachId } });
     if (!existing) throw new ApiError(404, 'Coach not found');
 
-    const {
-      email, password, fullName, phone, role, title, isActive,
-      canTakeNotes, canViewGoals, canViewPrograms, canViewMetrics,
-    } = req.body;
-
     const data: Record<string, unknown> = {};
-    if (email !== undefined) data.email = email.toLowerCase();
+
+    if (email !== undefined) {
+      const dup = await prisma.schoolCoach.findFirst({ where: { email: email.toLowerCase(), id: { not: coachId } } });
+      if (dup) throw new ApiError(409, 'Another coach with this email already exists');
+      data.email = email.toLowerCase();
+    }
     if (fullName !== undefined) data.fullName = fullName;
     if (phone !== undefined) data.phone = phone || null;
     if (role !== undefined) data.role = role;
     if (title !== undefined) data.title = title || null;
-    if (isActive !== undefined) data.isActive = isActive;
-    if (canTakeNotes !== undefined) data.canTakeNotes = canTakeNotes;
-    if (canViewGoals !== undefined) data.canViewGoals = canViewGoals;
-    if (canViewPrograms !== undefined) data.canViewPrograms = canViewPrograms;
-    if (canViewMetrics !== undefined) data.canViewMetrics = canViewMetrics;
-
-    if (password) {
+    if (password !== undefined) {
+      if (password.length < 8) throw new ApiError(400, 'Password must be at least 8 characters');
       data.passwordHash = await bcrypt.hash(password, 12);
     }
+    if (canViewDashboard !== undefined) data.canViewDashboard = canViewDashboard;
+    if (canTakeNotes !== undefined) data.canTakeNotes = canTakeNotes;
+    if (canViewPrograms !== undefined) data.canViewPrograms = canViewPrograms;
+    if (canViewGoals !== undefined) data.canViewGoals = canViewGoals;
+    if (canViewMetrics !== undefined) data.canViewMetrics = canViewMetrics;
+    if (canMessageAthletes !== undefined) data.canMessageAthletes = canMessageAthletes;
+    if (receivesWeeklySummary !== undefined) data.receivesWeeklySummary = receivesWeeklySummary;
+    if (notifyReminders !== undefined) data.notifyReminders = notifyReminders;
+    if (isActive !== undefined) data.isActive = isActive;
 
     const coach = await prisma.schoolCoach.update({ where: { id: coachId }, data });
-    const { passwordHash: _, ...safeCoach } = coach;
-    res.json({ data: safeCoach });
+
+    res.json({
+      data: {
+        id: coach.id,
+        email: coach.email,
+        fullName: coach.fullName,
+        phone: coach.phone,
+        role: coach.role,
+        title: coach.title,
+        canViewDashboard: coach.canViewDashboard,
+        canTakeNotes: coach.canTakeNotes,
+        canViewPrograms: coach.canViewPrograms,
+        canViewGoals: coach.canViewGoals,
+        canViewMetrics: coach.canViewMetrics,
+        canMessageAthletes: coach.canMessageAthletes,
+        receivesWeeklySummary: coach.receivesWeeklySummary,
+        notifyReminders: coach.notifyReminders,
+        isActive: coach.isActive,
+        lastLoginAt: coach.lastLoginAt,
+        createdAt: coach.createdAt,
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -685,6 +853,7 @@ router.put('/:schoolId/coaches/:coachId', authenticate, requireAdmin, async (req
 router.delete('/:schoolId/coaches/:coachId', authenticate, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const coachId = param(req, 'coachId');
+
     const existing = await prisma.schoolCoach.findUnique({ where: { id: coachId } });
     if (!existing) throw new ApiError(404, 'Coach not found');
 
