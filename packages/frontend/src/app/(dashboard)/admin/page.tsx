@@ -104,7 +104,7 @@ export default function AdminDashboard() {
               {todayStats ? `${todayStats.bookingsToday} bookings` : ''}
             </p>
           </div>
-          <Link href="/admin/billing" className="ppl-card hover:border-ppl-dark-green/50 transition-colors">
+          <Link href="/admin/revenue" className="ppl-card hover:border-ppl-dark-green/50 transition-colors">
             <p className="text-sm text-muted">Total Revenue</p>
             <p className="text-3xl font-bold mt-1 text-ppl-light-green">
               {memberStats ? formatPrice(memberStats.totalRevenueCents) : '—'}

@@ -55,6 +55,7 @@ export default function AdminSchedulePage() {
     return d;
   });
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [rosterSessionId, setRosterSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Load locations
@@ -274,6 +275,7 @@ export default function AdminSchedulePage() {
                   .map((session) => (
                     <div
                       key={session.id}
+                      onClick={() => setRosterSessionId(session.id)}
                       className={`p-2 rounded-lg border text-xs cursor-pointer transition-all hover:scale-[1.02] ${
                         SESSION_TYPE_COLORS[session.sessionType] || 'bg-surface border-border'
                       }`}
@@ -314,6 +316,14 @@ export default function AdminSchedulePage() {
             setShowCreateModal(false);
             loadSessions();
           }}
+        />
+      )}
+
+      {/* Roster Modal */}
+      {rosterSessionId && (
+        <RosterModal
+          sessionId={rosterSessionId}
+          onClose={() => setRosterSessionId(null)}
         />
       )}
       </>
@@ -959,6 +969,306 @@ function CreateSessionModal({
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// ROSTER MODAL  (Session Participants + Violation Tracking)
+// ============================================================
+
+interface RosterClient {
+  id: string;
+  fullName: string;
+  email: string;
+  phone: string | null;
+}
+
+interface RosterEntry {
+  bookingId: string;
+  client: RosterClient;
+  status: string;
+  bookedAt: string;
+}
+
+interface ViolationEntry {
+  id: string;
+  clientId: string;
+  type: 'NO_SIGNUP' | 'WRONG_TIME';
+  amountCents: number;
+  status: string;
+  notes: string | null;
+  client: RosterClient;
+  assessedBy: { id: string; fullName: string };
+  createdAt: string;
+}
+
+interface RosterData {
+  session: {
+    id: string;
+    title: string;
+    sessionType: string;
+    startTime: string;
+    endTime: string;
+    maxCapacity: number;
+  };
+  roster: RosterEntry[];
+  violations: ViolationEntry[];
+}
+
+function RosterModal({ sessionId, onClose }: { sessionId: string; onClose: () => void }) {
+  const [data, setData] = useState<RosterData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showViolationForm, setShowViolationForm] = useState(false);
+  const [violationForm, setViolationForm] = useState({
+    clientSearch: '',
+    clientId: '',
+    clientName: '',
+    type: 'NO_SIGNUP' as 'NO_SIGNUP' | 'WRONG_TIME',
+    notes: '',
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [searchResults, setSearchResults] = useState<Array<{ id: string; fullName: string; email: string }>>([]);
+
+  const loadRoster = useCallback(async () => {
+    try {
+      const res = await api.request<RosterData>(`/sessions/${sessionId}/roster`);
+      if (res.data) setData(res.data);
+    } catch (err) {
+      console.error('Failed to load roster:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [sessionId]);
+
+  useEffect(() => { loadRoster(); }, [loadRoster]);
+
+  // Search members for violation form
+  const searchMembers = async (query: string) => {
+    setViolationForm((f) => ({ ...f, clientSearch: query, clientId: '', clientName: '' }));
+    if (query.length < 2) { setSearchResults([]); return; }
+    try {
+      const res = await api.request<Array<{ id: string; fullName: string; email: string }>>(
+        `/members?search=${encodeURIComponent(query)}&limit=5`
+      );
+      if (res.data) setSearchResults(res.data);
+    } catch { setSearchResults([]); }
+  };
+
+  const selectClient = (c: { id: string; fullName: string }) => {
+    setViolationForm((f) => ({ ...f, clientId: c.id, clientName: c.fullName, clientSearch: c.fullName }));
+    setSearchResults([]);
+  };
+
+  const submitViolation = async () => {
+    if (!violationForm.clientId) return;
+    setSubmitting(true);
+    try {
+      await api.request(`/sessions/${sessionId}/violations`, {
+        method: 'POST',
+        body: JSON.stringify({
+          clientId: violationForm.clientId,
+          type: violationForm.type,
+          notes: violationForm.notes || null,
+        }),
+      });
+      setShowViolationForm(false);
+      setViolationForm({ clientSearch: '', clientId: '', clientName: '', type: 'NO_SIGNUP', notes: '' });
+      loadRoster();
+    } catch (err) {
+      console.error('Failed to log violation:', err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const waiveViolation = async (violationId: string) => {
+    try {
+      await api.request(`/sessions/violations/${violationId}/waive`, { method: 'PUT' });
+      loadRoster();
+    } catch (err) {
+      console.error('Failed to waive violation:', err);
+    }
+  };
+
+  const formatTime = (iso: string) =>
+    new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+      <div className="bg-surface rounded-xl border border-border w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-xl" onClick={(e) => e.stopPropagation()}>
+        {isLoading || !data ? (
+          <div className="p-8 text-center"><div className="animate-pulse h-24 bg-background rounded-lg" /></div>
+        ) : (
+          <>
+            {/* Header */}
+            <div className="p-4 border-b border-border sticky top-0 bg-surface z-10">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="font-bold text-foreground">{data.session.title}</h2>
+                  <p className="text-xs text-muted">
+                    {formatTime(data.session.startTime)} - {formatTime(data.session.endTime)}
+                    {' · '}
+                    {SESSION_TYPE_LABELS[data.session.sessionType] || data.session.sessionType}
+                  </p>
+                </div>
+                <button onClick={onClose} className="text-muted hover:text-foreground text-lg">&times;</button>
+              </div>
+            </div>
+
+            {/* Roster */}
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-foreground">
+                  Registered Athletes ({data.roster.length}/{data.session.maxCapacity})
+                </h3>
+              </div>
+              {data.roster.length > 0 ? (
+                <div className="space-y-1.5">
+                  {data.roster.map((entry) => (
+                    <div key={entry.bookingId} className="flex items-center justify-between p-2 bg-background rounded-lg">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{entry.client.fullName}</p>
+                        <p className="text-xs text-muted">{entry.client.email}</p>
+                      </div>
+                      <span className="ppl-badge ppl-badge-active text-xs">{entry.status}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted text-center py-3">No athletes registered yet</p>
+              )}
+            </div>
+
+            {/* Violations */}
+            <div className="p-4 border-t border-border">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-foreground">
+                  Attendance Violations ({data.violations.length})
+                </h3>
+                <button
+                  onClick={() => setShowViolationForm(!showViolationForm)}
+                  className="ppl-btn ppl-btn-secondary text-xs"
+                >
+                  {showViolationForm ? 'Cancel' : '+ Log Violation'}
+                </button>
+              </div>
+
+              {/* Violation Form */}
+              {showViolationForm && (
+                <div className="bg-background rounded-lg p-3 mb-3 space-y-2">
+                  <div className="relative">
+                    <label className="text-xs text-muted block mb-0.5">Athlete</label>
+                    <input
+                      type="text"
+                      value={violationForm.clientSearch}
+                      onChange={(e) => searchMembers(e.target.value)}
+                      className="ppl-input text-sm"
+                      placeholder="Search by name..."
+                    />
+                    {searchResults.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 bg-surface border border-border rounded-lg mt-1 z-20 shadow-lg">
+                        {searchResults.map((c) => (
+                          <button
+                            key={c.id}
+                            onClick={() => selectClient(c)}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-background transition-colors"
+                          >
+                            <span className="text-foreground">{c.fullName}</span>
+                            <span className="text-muted text-xs ml-2">{c.email}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {violationForm.clientId && (
+                      <p className="text-xs text-ppl-light-green mt-0.5">Selected: {violationForm.clientName}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted block mb-0.5">Violation Type</label>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setViolationForm((f) => ({ ...f, type: 'NO_SIGNUP' }))}
+                        className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                          violationForm.type === 'NO_SIGNUP'
+                            ? 'bg-red-500/20 text-red-400 ring-1 ring-red-500/30'
+                            : 'bg-background text-muted hover:bg-surface/50'
+                        }`}
+                      >
+                        No Signup ($20)
+                      </button>
+                      <button
+                        onClick={() => setViolationForm((f) => ({ ...f, type: 'WRONG_TIME' }))}
+                        className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                          violationForm.type === 'WRONG_TIME'
+                            ? 'bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/30'
+                            : 'bg-background text-muted hover:bg-surface/50'
+                        }`}
+                      >
+                        Wrong Time ($10)
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted block mb-0.5">Notes (optional)</label>
+                    <input
+                      type="text"
+                      value={violationForm.notes}
+                      onChange={(e) => setViolationForm((f) => ({ ...f, notes: e.target.value }))}
+                      className="ppl-input text-sm"
+                      placeholder="What happened?"
+                    />
+                  </div>
+                  <button
+                    onClick={submitViolation}
+                    disabled={!violationForm.clientId || submitting}
+                    className="ppl-btn ppl-btn-primary text-xs w-full justify-center"
+                  >
+                    {submitting ? 'Logging...' : `Log ${violationForm.type === 'NO_SIGNUP' ? '$20' : '$10'} Violation`}
+                  </button>
+                </div>
+              )}
+
+              {/* Violation List */}
+              {data.violations.length > 0 ? (
+                <div className="space-y-1.5">
+                  {data.violations.map((v) => (
+                    <div key={v.id} className="flex items-center justify-between p-2 bg-background rounded-lg">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{v.client.fullName}</p>
+                        <p className="text-xs text-muted">
+                          {v.type === 'NO_SIGNUP' ? 'No signup' : 'Wrong time'}
+                          {' · '}${(v.amountCents / 100).toFixed(0)}
+                          {v.notes && ` · ${v.notes}`}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-medium ${
+                          v.status === 'PENDING' ? 'text-amber-400' :
+                          v.status === 'PAID' ? 'text-ppl-light-green' : 'text-muted'
+                        }`}>
+                          {v.status}
+                        </span>
+                        {v.status === 'PENDING' && (
+                          <button
+                            onClick={() => waiveViolation(v.id)}
+                            className="text-xs text-muted hover:text-foreground"
+                            title="Waive fine"
+                          >
+                            Waive
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted text-center py-2">No violations logged</p>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

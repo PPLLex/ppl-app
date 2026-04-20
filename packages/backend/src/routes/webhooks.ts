@@ -221,6 +221,34 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
     return;
   }
 
+  // Get Stripe's failure reason if available
+  let failureReason = 'Payment declined or failed';
+  let friendlyReason = 'Your bank declined the payment.';
+  try {
+    if (invoice.payment_intent) {
+      const pi = await stripe.paymentIntents.retrieve(invoice.payment_intent as string);
+      const lastCharge = pi.latest_charge;
+      if (lastCharge && typeof lastCharge === 'string') {
+        const charge = await stripe.charges.retrieve(lastCharge);
+        if (charge.failure_message) failureReason = charge.failure_message;
+        // Map Stripe decline codes to friendly messages
+        const code = charge.failure_code || '';
+        switch (code) {
+          case 'card_declined': friendlyReason = 'Your card was declined by your bank.'; break;
+          case 'insufficient_funds': friendlyReason = 'Your card has insufficient funds.'; break;
+          case 'expired_card': friendlyReason = 'Your card has expired. Please update your card.'; break;
+          case 'incorrect_cvc': friendlyReason = 'The CVC code was incorrect.'; break;
+          case 'processing_error': friendlyReason = 'A processing error occurred. Please try again.'; break;
+          case 'lost_card': friendlyReason = 'This card has been reported lost. Please use a different card.'; break;
+          case 'stolen_card': friendlyReason = 'This card has been reported stolen. Please use a different card.'; break;
+          default: friendlyReason = charge.failure_message || 'Your bank declined the payment.'; break;
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Error fetching Stripe failure reason:', err);
+  }
+
   // Record the failed payment
   await prisma.payment.create({
     data: {
@@ -230,17 +258,17 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
       stripeInvoiceId: invoice.id,
       amountCents: invoice.amount_due,
       status: PaymentStatus.FAILED,
-      failureReason: 'Payment declined or failed',
+      failureReason,
     },
   });
 
-  // Set membership to PAST_DUE
+  // Set membership to PAST_DUE — triggers dummy mode via membershipGuard
   await prisma.clientMembership.update({
     where: { id: membership.id },
     data: { status: MembershipStatus.PAST_DUE },
   });
 
-  // Revoke credits for limited plans
+  // Revoke ALL credits — full lockdown
   if (membership.plan.sessionsPerWeek !== null) {
     const weekStart = getWeekStart(new Date(), membership.billingDay);
 
@@ -257,7 +285,7 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
       if (remaining > 0) {
         await prisma.weeklyCredit.update({
           where: { id: weeklyCredit.id },
-          data: { creditsTotal: weeklyCredit.creditsUsed }, // Set total = used, so remaining = 0
+          data: { creditsTotal: weeklyCredit.creditsUsed },
         });
 
         await prisma.creditTransaction.create({
@@ -265,21 +293,27 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
             clientId: membership.clientId,
             transactionType: 'revoke',
             amount: -remaining,
-            notes: `Credits revoked due to failed payment for ${membership.plan.name}`,
+            notes: `Credits frozen due to failed payment for ${membership.plan.name}. Reason: ${failureReason}`,
           },
         });
       }
     }
   }
 
-  // Notify the client
+  // Notify the client via ALL channels — push, SMS, and email
+  const amount = `$${(invoice.amount_due / 100).toFixed(2)}`;
   await notify({
     userId: membership.clientId,
     type: NotificationType.PAYMENT_FAILED,
-    title: 'Payment Failed',
-    body: `Your payment of $${(invoice.amount_due / 100).toFixed(2)} for ${membership.plan.name} was unsuccessful. Please contact us to update your payment method and avoid losing access to your sessions.`,
-    channels: [NotificationChannel.EMAIL, NotificationChannel.SMS],
-    metadata: { membershipId: membership.id, amountCents: invoice.amount_due },
+    title: 'Payment Failed — Account On Hold',
+    body: `Your ${amount} payment for ${membership.plan.name} failed. Reason: ${friendlyReason} Your account is now on hold — you cannot book sessions or access training programs until your payment is resolved. Please update your payment method in the app to restore access.`,
+    channels: [NotificationChannel.EMAIL, NotificationChannel.SMS, NotificationChannel.PUSH],
+    metadata: {
+      membershipId: membership.id,
+      amountCents: invoice.amount_due,
+      failureReason: friendlyReason,
+      action: 'UPDATE_PAYMENT',
+    },
   });
 
   // Notify all admins
@@ -293,7 +327,7 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
       userId: admin.id,
       type: NotificationType.PAYMENT_FAILED,
       title: `Payment Failed: ${membership.client.fullName}`,
-      body: `Payment of $${(invoice.amount_due / 100).toFixed(2)} failed for ${membership.client.fullName} (${membership.client.email}). Plan: ${membership.plan.name}. Membership set to PAST DUE.`,
+      body: `Payment of ${amount} failed for ${membership.client.fullName} (${membership.client.email}). Plan: ${membership.plan.name}. Reason: ${failureReason}. Account locked to dummy mode until payment resolves.`,
       channels: [NotificationChannel.EMAIL],
       metadata: { membershipId: membership.id, clientId: membership.clientId },
     });
@@ -309,6 +343,9 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
       stripeInvoiceId: invoice.id,
       planName: membership.plan.name,
       membershipStatus: 'PAST_DUE',
+      failureReason,
+      friendlyReason,
+      accountLocked: true,
     },
   });
 }

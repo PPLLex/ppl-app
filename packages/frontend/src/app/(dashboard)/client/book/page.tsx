@@ -125,26 +125,6 @@ export default function ClientBookPage() {
     }
   };
 
-  const handleJoinWaitlist = async (sessionId: string) => {
-    setMessage(null);
-    setBookingInProgress(true);
-
-    try {
-      const res = await api.request<{ position: number }>(`/sessions/${sessionId}/waitlist`, {
-        method: 'POST',
-      });
-      setMessage({
-        type: 'success',
-        text: res.message || "You've been added to the waitlist! We'll notify you when a spot opens.",
-      });
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to join waitlist';
-      setMessage({ type: 'error', text: msg });
-    } finally {
-      setBookingInProgress(false);
-    }
-  };
-
   const navigateWeek = (direction: number) => {
     setSelectedDate(null);
     setSelectedSession(null);
@@ -302,13 +282,7 @@ export default function ClientBookPage() {
                             Cancel
                           </button>
                         ) : full ? (
-                          <button
-                            onClick={() => handleJoinWaitlist(session.id)}
-                            disabled={bookingInProgress}
-                            className="ppl-btn ppl-btn-secondary text-xs"
-                          >
-                            Join Waitlist
-                          </button>
+                          <span className="text-xs text-red-400 font-medium">Full</span>
                         ) : !regOpen ? (
                           <span className="text-xs text-muted">Closed</span>
                         ) : (

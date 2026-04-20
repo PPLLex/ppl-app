@@ -192,7 +192,9 @@ model Location {
   auditLogs          AuditLog[]
   families           Family[]
   schoolTeams        SchoolTeam[]
-  scheduleTemplates  ScheduleTemplate[]
+  scheduleTemplates     ScheduleTemplate[]
+  sessionTypeConfigs    SessionTypeConfig[]
+  attendanceViolations  AttendanceViolation[]
 
   @@map("locations")
 }
@@ -269,9 +271,10 @@ model User {
   athleteMetrics     AthleteMetric[]   @relation("AthleteMetrics")
   staffCoachMetrics  AthleteMetric[]   @relation("StaffCoachMetrics")
 
-  // Waitlist & schedule template relations
-  waitlists          Waitlist[]
-  scheduleTemplates  ScheduleTemplate[] @relation("TemplateCoach")
+  // Schedule template & violation relations
+  scheduleTemplates         ScheduleTemplate[]      @relation("TemplateCoach")
+  attendanceViolations      AttendanceViolation[]   @relation("ViolationClient")
+  assessedViolations        AttendanceViolation[]   @relation("ViolationAssessor")
 
   @@index([homeLocationId])
   @@index([role])
@@ -361,8 +364,8 @@ model Session {
   location Location  @relation(fields: [locationId], references: [id])
   room     Room?     @relation(fields: [roomId], references: [id])
   coach    User?     @relation("SessionCoach", fields: [coachId], references: [id])
-  bookings  Booking[]
-  waitlists Waitlist[]
+  bookings              Booking[]
+  attendanceViolations  AttendanceViolation[]
 
   @@index([locationId, startTime])
   @@index([coachId])
@@ -394,21 +397,46 @@ model Booking {
   @@map("bookings")
 }
 
-model Waitlist {
-  id         String   @id @default(uuid())
-  clientId   String
-  sessionId  String
-  position   Int      // 1-based queue position
-  notifiedAt DateTime? // when we told them a spot opened
-  expiredAt  DateTime? // if they didn't respond in time
-  createdAt  DateTime @default(now())
+// ============================================================
+// ATTENDANCE VIOLATIONS & FINES
+// ============================================================
 
-  client  User    @relation(fields: [clientId], references: [id])
-  session Session @relation(fields: [sessionId], references: [id])
+enum ViolationType {
+  NO_SIGNUP       // Showed up without booking ($20 fine)
+  WRONG_TIME      // Showed up at incorrect session time ($10 fine)
+}
 
-  @@unique([clientId, sessionId])
-  @@index([sessionId, position])
-  @@map("waitlists")
+enum ViolationStatus {
+  PENDING         // Fine assessed, not yet paid
+  PAID            // Fine collected via Stripe
+  WAIVED          // Admin waived the fine
+}
+
+model AttendanceViolation {
+  id            String          @id @default(uuid())
+  clientId      String
+  sessionId     String?         // Which session they walked into (null if no specific session)
+  locationId    String
+  type          ViolationType
+  amountCents   Int             // 2000 = $20, 1000 = $10
+  status        ViolationStatus @default(PENDING)
+  notes         String?         // Coach/admin notes on what happened
+  assessedById  String          // Staff/admin who logged it
+  paidAt        DateTime?
+  waivedAt      DateTime?
+  waivedById    String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  client     User      @relation("ViolationClient", fields: [clientId], references: [id])
+  session    Session?  @relation(fields: [sessionId], references: [id])
+  location   Location  @relation(fields: [locationId], references: [id])
+  assessedBy User      @relation("ViolationAssessor", fields: [assessedById], references: [id])
+
+  @@index([clientId])
+  @@index([sessionId])
+  @@index([status])
+  @@map("attendance_violations")
 }
 
 /// Admin-defined weekly schedule template.
@@ -438,6 +466,30 @@ model ScheduleTemplate {
 
   @@index([locationId, dayOfWeek])
   @@map("schedule_templates")
+}
+
+// ============================================================
+// SESSION TYPE CONFIGURATION  (per-location defaults per type)
+// ============================================================
+
+model SessionTypeConfig {
+  id                      String      @id @default(uuid())
+  locationId              String
+  sessionType             SessionType
+  label                   String      // Display name, e.g. "College Pitching"
+  maxCapacity             Int         @default(8)
+  durationMinutes         Int         @default(60)
+  registrationCutoffHours Int         @default(2)
+  cancellationCutoffHours Int         @default(1)
+  color                   String?     // Hex color for calendar display, e.g. "#10B981"
+  isActive                Boolean     @default(true)
+  createdAt               DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
+
+  location Location @relation(fields: [locationId], references: [id])
+
+  @@unique([locationId, sessionType])
+  @@map("session_type_configs")
 }
 
 // ============================================================

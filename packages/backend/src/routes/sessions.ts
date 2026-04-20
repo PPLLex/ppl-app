@@ -636,62 +636,57 @@ router.post('/templates/generate', authenticate, requireStaffOrAdmin, async (req
 });
 
 // ============================================================
-// WAITLIST
+// ATTENDANCE VIOLATIONS (Roster Management)
 // ============================================================
 
 /**
- * POST /api/sessions/:id/waitlist
- * Client: join the waitlist for a full session.
+ * GET /api/sessions/:id/roster
+ * Staff/Admin: get session roster — booked athletes + any violations logged.
  */
-router.post('/:id/waitlist', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+router.get('/:id/roster', authenticate, requireStaffOrAdmin, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const sessionId = param(req, 'id');
-    const user = req.user!;
 
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
       include: {
-        _count: { select: { bookings: { where: { status: { in: ['CONFIRMED', 'COMPLETED'] } } } } },
+        bookings: {
+          where: { status: { in: ['CONFIRMED', 'COMPLETED'] } },
+          include: {
+            client: { select: { id: true, fullName: true, email: true, phone: true } },
+          },
+        },
+        attendanceViolations: {
+          include: {
+            client: { select: { id: true, fullName: true, email: true, phone: true } },
+            assessedBy: { select: { id: true, fullName: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
 
-    if (!session || !session.isActive) throw ApiError.notFound('Session not found');
+    if (!session) throw ApiError.notFound('Session not found');
 
-    // Must be full to join waitlist
-    if (session._count.bookings < session.maxCapacity) {
-      throw ApiError.badRequest('Session has open spots — book directly instead of joining the waitlist');
-    }
-
-    // Can't already be booked
-    const existingBooking = await prisma.booking.findUnique({
-      where: { clientId_sessionId: { clientId: user.userId, sessionId } },
-    });
-    if (existingBooking && existingBooking.status === 'CONFIRMED') {
-      throw ApiError.conflict('You are already booked for this session');
-    }
-
-    // Can't already be on waitlist
-    const existingWaitlist = await prisma.waitlist.findUnique({
-      where: { clientId_sessionId: { clientId: user.userId, sessionId } },
-    });
-    if (existingWaitlist) {
-      throw ApiError.conflict('You are already on the waitlist for this session');
-    }
-
-    // Get next position
-    const lastInLine = await prisma.waitlist.findFirst({
-      where: { sessionId },
-      orderBy: { position: 'desc' },
-    });
-    const position = (lastInLine?.position ?? 0) + 1;
-
-    const entry = await prisma.waitlist.create({
-      data: { clientId: user.userId, sessionId, position },
-    });
-
-    res.status(201).json({
-      data: entry,
-      message: `You're #${position} on the waitlist`,
+    res.json({
+      success: true,
+      data: {
+        session: {
+          id: session.id,
+          title: session.title,
+          sessionType: session.sessionType,
+          startTime: session.startTime.toISOString(),
+          endTime: session.endTime.toISOString(),
+          maxCapacity: session.maxCapacity,
+        },
+        roster: session.bookings.map((b) => ({
+          bookingId: b.id,
+          client: b.client,
+          status: b.status,
+          bookedAt: b.createdAt,
+        })),
+        violations: session.attendanceViolations,
+      },
     });
   } catch (error) {
     next(error);
@@ -699,58 +694,129 @@ router.post('/:id/waitlist', authenticate, async (req: Request, res: Response, n
 });
 
 /**
- * DELETE /api/sessions/:id/waitlist
- * Client: remove yourself from the waitlist.
+ * POST /api/sessions/:id/violations
+ * Staff/Admin: log an attendance violation (no-signup or wrong-time).
+ * Body: { clientId, type: 'NO_SIGNUP' | 'WRONG_TIME', notes? }
  */
-router.delete('/:id/waitlist', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+router.post('/:id/violations', authenticate, requireStaffOrAdmin, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const sessionId = param(req, 'id');
     const user = req.user!;
+    const { clientId, type, notes } = req.body;
 
-    const entry = await prisma.waitlist.findUnique({
-      where: { clientId_sessionId: { clientId: user.userId, sessionId } },
-    });
-    if (!entry) throw ApiError.notFound('You are not on the waitlist for this session');
-
-    await prisma.waitlist.delete({ where: { id: entry.id } });
-
-    // Reorder remaining entries
-    const remaining = await prisma.waitlist.findMany({
-      where: { sessionId },
-      orderBy: { position: 'asc' },
-    });
-    for (let i = 0; i < remaining.length; i++) {
-      if (remaining[i].position !== i + 1) {
-        await prisma.waitlist.update({
-          where: { id: remaining[i].id },
-          data: { position: i + 1 },
-        });
-      }
+    if (!clientId || !type) {
+      throw ApiError.badRequest('clientId and violation type are required');
+    }
+    if (!['NO_SIGNUP', 'WRONG_TIME'].includes(type)) {
+      throw ApiError.badRequest('type must be NO_SIGNUP or WRONG_TIME');
     }
 
-    res.json({ message: 'Removed from waitlist' });
+    const session = await prisma.session.findUnique({ where: { id: sessionId } });
+    if (!session) throw ApiError.notFound('Session not found');
+
+    // Determine fine amount
+    const amountCents = type === 'NO_SIGNUP' ? 2000 : 1000; // $20 or $10
+
+    const violation = await prisma.attendanceViolation.create({
+      data: {
+        clientId,
+        sessionId,
+        locationId: session.locationId,
+        type,
+        amountCents,
+        notes: notes || null,
+        assessedById: user.userId,
+      },
+      include: {
+        client: { select: { id: true, fullName: true, email: true } },
+        assessedBy: { select: { id: true, fullName: true } },
+      },
+    });
+
+    await createAuditLog({
+      userId: user.userId,
+      locationId: session.locationId,
+      action: 'attendance_violation.created',
+      resourceType: 'attendance_violation',
+      resourceId: violation.id,
+      changes: {
+        clientId,
+        type,
+        amountCents,
+        sessionTitle: session.title,
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      data: violation,
+      message: `${type === 'NO_SIGNUP' ? '$20 no-signup' : '$10 wrong-time'} violation logged for ${violation.client.fullName}`,
+    });
   } catch (error) {
     next(error);
   }
 });
 
 /**
- * GET /api/sessions/:id/waitlist
- * Staff/Admin: see the waitlist for a session.
+ * PUT /api/sessions/violations/:violationId/waive
+ * Admin: waive a violation fine.
  */
-router.get('/:id/waitlist', authenticate, requireStaffOrAdmin, async (req: Request, res: Response, next: NextFunction) => {
+router.put('/violations/:violationId/waive', authenticate, requireStaffOrAdmin, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const sessionId = param(req, 'id');
+    const user = req.user!;
+    if (user.role !== Role.ADMIN) throw ApiError.forbidden('Only admins can waive fines');
 
-    const waitlist = await prisma.waitlist.findMany({
-      where: { sessionId },
-      include: {
-        client: { select: { id: true, fullName: true, email: true, phone: true } },
+    const violationId = param(req, 'violationId');
+    const violation = await prisma.attendanceViolation.findUnique({ where: { id: violationId } });
+    if (!violation) throw ApiError.notFound('Violation not found');
+
+    const updated = await prisma.attendanceViolation.update({
+      where: { id: violationId },
+      data: {
+        status: 'WAIVED',
+        waivedAt: new Date(),
+        waivedById: user.userId,
       },
-      orderBy: { position: 'asc' },
     });
 
-    res.json({ data: waitlist });
+    res.json({ success: true, data: updated, message: 'Fine waived' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/sessions/violations/pending?locationId=
+ * Staff/Admin: list all pending (unpaid) violations at a location.
+ */
+router.get('/violations/pending', authenticate, requireStaffOrAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { locationId } = req.query;
+
+    const where: Record<string, unknown> = { status: 'PENDING' };
+    if (locationId) where.locationId = locationId as string;
+
+    const violations = await prisma.attendanceViolation.findMany({
+      where: where as any,
+      include: {
+        client: { select: { id: true, fullName: true, email: true, phone: true } },
+        session: { select: { id: true, title: true, startTime: true } },
+        assessedBy: { select: { id: true, fullName: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const totalPendingCents = violations.reduce((sum, v) => sum + v.amountCents, 0);
+
+    res.json({
+      success: true,
+      data: violations,
+      summary: {
+        count: violations.length,
+        totalPendingCents,
+        totalPendingDollars: (totalPendingCents / 100).toFixed(2),
+      },
+    });
   } catch (error) {
     next(error);
   }

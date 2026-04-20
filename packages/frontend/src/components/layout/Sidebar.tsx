@@ -85,6 +85,7 @@ const adminNav: NavItem[] = [
   { label: 'Dashboard', href: '/admin', icon: <Icons.Home /> },
   { label: 'Schedule', href: '/admin/schedule', icon: <Icons.Calendar /> },
   { label: 'Members', href: '/admin/members', icon: <Icons.Users /> },
+  { label: 'Revenue', href: '/admin/revenue', icon: <Icons.Chart /> },
   { label: 'Billing', href: '/admin/billing', icon: <Icons.CreditCard /> },
   { label: 'Locations', href: '/admin/locations', icon: <Icons.Location /> },
   { label: 'Messages', href: '/admin/messages', icon: <Icons.Chat /> },

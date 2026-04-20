@@ -310,6 +310,20 @@ class ApiClient {
     });
   }
 
+  async updateStaffRole(id: string, role: 'ADMIN' | 'STAFF') {
+    return this.request(`/staff/${id}/role`, {
+      method: 'PUT',
+      body: JSON.stringify({ role }),
+    });
+  }
+
+  async updateStaffLocations(id: string, assignments: { locationId: string; locationRole: string }[]) {
+    return this.request(`/staff/${id}/locations`, {
+      method: 'PUT',
+      body: JSON.stringify({ assignments }),
+    });
+  }
+
   // Membership plan management (admin)
   async createMembershipPlan(data: Partial<MembershipPlan> & { priceCents: number }) {
     return this.request<MembershipPlan>('/memberships/plans', {
@@ -759,6 +773,23 @@ class ApiClient {
       body: JSON.stringify(data),
     });
   }
+
+  // ─── Session Type Configs ───
+
+  async getSessionTypeConfigs(locationId: string) {
+    return this.request(`/session-type-configs?locationId=${locationId}`);
+  }
+
+  async updateSessionTypeConfigs(locationId: string, configs: SessionTypeConfigInput[]) {
+    return this.request('/session-type-configs', {
+      method: 'PUT',
+      body: JSON.stringify({ locationId, configs }),
+    });
+  }
+
+  async getSessionTypeDefaults(sessionType: string, locationId: string) {
+    return this.request(`/session-type-configs/defaults/${sessionType}?locationId=${locationId}`);
+  }
 }
 
 // Types
@@ -848,6 +879,31 @@ export interface CreateSessionData {
   cancellationCutoffHours?: number;
   recurringRule?: string;
   recurringCount?: number;
+}
+
+export interface SessionTypeConfig {
+  id: string | null;
+  locationId: string;
+  sessionType: string;
+  label: string;
+  maxCapacity: number;
+  durationMinutes: number;
+  registrationCutoffHours: number;
+  cancellationCutoffHours: number;
+  color: string | null;
+  isActive: boolean;
+  persisted: boolean;
+}
+
+export interface SessionTypeConfigInput {
+  sessionType: string;
+  label: string;
+  maxCapacity: number;
+  durationMinutes: number;
+  registrationCutoffHours: number;
+  cancellationCutoffHours: number;
+  color?: string | null;
+  isActive: boolean;
 }
 
 export interface Booking {
@@ -1147,7 +1203,7 @@ export interface StaffMember {
   email: string;
   phone: string | null;
   role: 'ADMIN' | 'STAFF';
-  locations: { id: string; name: string }[];
+  locations: { id: string; name: string; locationRole?: 'OWNER' | 'COORDINATOR' | 'COACH' }[];
 }
 
 // Coach Notes types
