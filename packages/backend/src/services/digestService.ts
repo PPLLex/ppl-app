@@ -82,7 +82,7 @@ export async function sendWeeklyDigests() {
       }),
       category: n.trainingCategory,
       content: n.cleanedContent || n.rawContent,
-      coachName: n.coach.fullName,
+      coachName: n.coach?.fullName ?? 'PPL Staff',
     }));
 
     const emailHtml = buildDigestEmail(athleteName, digestNotes);
@@ -113,8 +113,9 @@ export async function sendWeeklyDigests() {
         athleteId,
         weekStart: oneWeekAgo,
         weekEnd: now,
-        noteCount: notes.length,
-        sentAt: now,
+        emailSentAt: now,
+        recipients: recipientList.map((r) => r.email),
+        noteIds: notes.map((n) => n.id),
       },
     });
   }

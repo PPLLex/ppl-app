@@ -150,7 +150,7 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
         user: {
           id: user.id,
           email: user.email,
-          fullName,
+          fullName: user.fullName,
           phone: user.phone,
           role: user.role,
           homeLocation: user.homeLocation,
