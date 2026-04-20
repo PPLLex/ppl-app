@@ -3,6 +3,36 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, Location, Room } from '@/lib/api';
 
+/** Friendly timezone label */
+function tzLabel(tz: string): string {
+  const map: Record<string, string> = {
+    'America/New_York': 'Eastern Time',
+    'America/Chicago': 'Central Time',
+    'America/Denver': 'Mountain Time',
+    'America/Los_Angeles': 'Pacific Time',
+    'America/Anchorage': 'Alaska Time',
+    'Pacific/Honolulu': 'Hawaii Time',
+  };
+  return map[tz] || tz;
+}
+
+/** Parse an existing address string into components */
+function parseAddress(address: string | undefined): { street: string; city: string; state: string; zip: string } {
+  if (!address) return { street: '', city: '', state: '', zip: '' };
+  const parts = address.split(',').map((s) => s.trim());
+  if (parts.length >= 2) {
+    const street = parts[0];
+    const city = parts.length >= 3 ? parts[1] : '';
+    const stateZip = parts[parts.length - 1].trim();
+    const stateZipMatch = stateZip.match(/^([A-Z]{2})\s*(\d{5})?$/i);
+    if (stateZipMatch) {
+      return { street, city, state: stateZipMatch[1].toUpperCase(), zip: stateZipMatch[2] || '' };
+    }
+    return { street, city, state: stateZip, zip: '' };
+  }
+  return { street: address, city: '', state: '', zip: '' };
+}
+
 export default function AdminLocationsPage() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -74,7 +104,7 @@ export default function AdminLocationsPage() {
                   {loc.address && <p className="text-sm text-muted mt-0.5">{loc.address}</p>}
                   <div className="flex gap-4 mt-1">
                     {loc.phone && <p className="text-xs text-muted">{loc.phone}</p>}
-                    <p className="text-xs text-muted">Timezone: {loc.timezone || 'America/Chicago'}</p>
+                    <p className="text-xs text-muted">Timezone: {tzLabel(loc.timezone || 'America/Chicago')}</p>
                   </div>
                 </div>
                 <button
@@ -166,26 +196,55 @@ function LocationModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const parsed = parseAddress(location?.address);
   const [form, setForm] = useState({
     name: location?.name || '',
-    address: location?.address || '',
+    street: parsed.street,
+    city: parsed.city,
+    state: parsed.state,
+    zip: parsed.zip,
     phone: location?.phone || '',
     timezone: location?.timezone || 'America/Chicago',
-    closedDay: (location as any)?.closedDay || 'sunday',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  // Auto-detect timezone when zip changes
+  useEffect(() => {
+    if (form.zip.length === 5) {
+      fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://ppl-app-production.up.railway.app'}/api/locations/timezone-from-zip/${form.zip}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.success && data.data?.timezone) {
+            setForm((prev) => ({ ...prev, timezone: data.data.timezone }));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [form.zip]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) { setError('Name is required'); return; }
     setIsSubmitting(true);
     setError('');
+
+    // Combine address fields into a single string
+    const addressParts = [form.street, form.city, `${form.state} ${form.zip}`.trim()].filter(Boolean);
+    const address = addressParts.join(', ');
+
     try {
+      const payload = {
+        name: form.name,
+        address,
+        phone: form.phone,
+        zip: form.zip,
+        timezone: form.timezone,
+      };
       if (location) {
-        await api.updateLocation(location.id, form);
+        await api.updateLocation(location.id, payload);
       } else {
-        await api.createLocation(form);
+        await api.createLocation(payload);
       }
       onSaved();
     } catch (err: unknown) {
@@ -204,6 +263,11 @@ function LocationModal({
           </h2>
           <button onClick={onClose} className="text-muted hover:text-foreground text-xl">&times;</button>
         </div>
+        {!location && (
+          <p className="text-xs text-muted mb-3">
+            A <strong>13+</strong> and <strong>Youth</strong> calendar will be created automatically.
+          </p>
+        )}
         {error && (
           <div className="mb-3 p-2 bg-danger/10 border border-danger/20 rounded-lg text-sm text-danger">{error}</div>
         )}
@@ -215,19 +279,53 @@ function LocationModal({
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               className="ppl-input"
-              placeholder="PPL South"
+              placeholder="PPL Southlake"
               required
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-muted block mb-1">Address</label>
+            <label className="text-xs font-medium text-muted block mb-1">Street Address</label>
             <input
               type="text"
-              value={form.address}
-              onChange={(e) => setForm({ ...form, address: e.target.value })}
+              value={form.street}
+              onChange={(e) => setForm({ ...form, street: e.target.value })}
               className="ppl-input"
-              placeholder="123 Main St, Dallas TX"
+              placeholder="1234 Performance Blvd"
             />
+          </div>
+          <div className="grid grid-cols-6 gap-2">
+            <div className="col-span-3">
+              <label className="text-xs font-medium text-muted block mb-1">City</label>
+              <input
+                type="text"
+                value={form.city}
+                onChange={(e) => setForm({ ...form, city: e.target.value })}
+                className="ppl-input"
+                placeholder="Southlake"
+              />
+            </div>
+            <div className="col-span-1">
+              <label className="text-xs font-medium text-muted block mb-1">State</label>
+              <input
+                type="text"
+                value={form.state}
+                onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase().slice(0, 2) })}
+                className="ppl-input"
+                placeholder="TX"
+                maxLength={2}
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="text-xs font-medium text-muted block mb-1">Zip Code</label>
+              <input
+                type="text"
+                value={form.zip}
+                onChange={(e) => setForm({ ...form, zip: e.target.value.replace(/\D/g, '').slice(0, 5) })}
+                className="ppl-input"
+                placeholder="76092"
+                maxLength={5}
+              />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -237,21 +335,15 @@ function LocationModal({
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
                 className="ppl-input"
-                placeholder="(214) 555-0100"
+                placeholder="(817) 555-0100"
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted block mb-1">Closed Day</label>
-              <select
-                value={form.closedDay}
-                onChange={(e) => setForm({ ...form, closedDay: e.target.value })}
-                className="ppl-input"
-              >
-                <option value="">None</option>
-                <option value="sunday">Sunday</option>
-                <option value="monday">Monday</option>
-                <option value="saturday">Saturday</option>
-              </select>
+              <label className="text-xs font-medium text-muted block mb-1">Timezone</label>
+              <div className="ppl-input bg-surface/50 flex items-center text-sm text-foreground">
+                {tzLabel(form.timezone)}
+              </div>
+              <p className="text-[10px] text-muted mt-0.5">Auto-detected from zip</p>
             </div>
           </div>
           <button type="submit" disabled={isSubmitting} className="ppl-btn ppl-btn-primary w-full justify-center">
