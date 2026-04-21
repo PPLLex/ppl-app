@@ -15,7 +15,11 @@ export default function RegisterPage() {
   );
 }
 
-// Total steps: 1=Account, 2=New/Returning, 3=Payment (if new), 4=Training Preference, 5=Location+AgeGroup
+// Total steps:
+//   1 = Account, 2 = New/Returning, 3 = Onboarding fee (if new),
+//   4 = Training Preference, 5 = Location, 6 = Current Playing Level
+// After step 6 we route to /client/membership which already handles plan
+// selection + weekly subscription via Stripe Elements.
 type AthleteSelection = 'new' | 'returning' | 'youth_graduate' | 'free_assessment';
 type TrainingPref = 'IN_PERSON' | 'REMOTE' | 'HYBRID';
 
@@ -244,6 +248,20 @@ function RegisterForm() {
   };
 
   // Step 4: Final submit â location + age group
+  // Step 5 submit: location only — advance to playing level screen.
+  const handleLocationNext = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (!locationId) {
+      setError('Please select your training location');
+      return;
+    }
+    setStep(6);
+  };
+
+  // Step 6 submit: playing level. Registers the account if we don't have a
+  // session yet, then routes to /client/membership which already handles
+  // plan selection + weekly Stripe subscription.
   const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -253,7 +271,7 @@ function RegisterForm() {
       return;
     }
     if (!ageGroup) {
-      setError('Please select your age group');
+      setError('Please select your current playing level');
       return;
     }
 
@@ -262,7 +280,7 @@ function RegisterForm() {
       if (isOAuthOnboarding && user) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await api.updateProfile({ homeLocationId: locationId, clientProfile: { ageGroup }, trainingPreference: trainingPreference || undefined } as any);
-        routeByRole(user.role);
+        router.push('/client/membership');
       } else {
         const token = localStorage.getItem('ppl_token');
 
@@ -270,9 +288,9 @@ function RegisterForm() {
           // Account already created (payment flow or OAuth) â update profile
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await api.updateProfile({ homeLocationId: locationId, clientProfile: { ageGroup }, trainingPreference: trainingPreference || undefined } as any);
-          router.push('/client');
+          router.push('/client/membership');
         } else {
-          // Standard email registration (returning athlete, no payment step)
+          // Standard email registration (returning athlete, no onboarding fee).
           const res = await api.register({
             fullName,
             email,
@@ -285,12 +303,13 @@ function RegisterForm() {
           if (res.data) {
             localStorage.setItem('ppl_token', res.data.token);
 
-            // Set onboarding status after account creation
+            // Set onboarding status after account creation. Also fires the
+            // returning-athlete alert email to admins + coordinators.
             if (athleteSelection) {
               await api.setOnboardingStatus(athleteSelection as AthleteSelection);
             }
 
-            router.push('/client');
+            router.push('/client/membership');
           }
         }
       }
@@ -302,14 +321,16 @@ function RegisterForm() {
     }
   };
 
-  // Total visual steps (payment step only shows for new athletes)
-  const totalSteps = requiresPayment ? 5 : 4;
+  // Total visual steps (onboarding-fee payment step only shows for new athletes).
+  // With location split from playing level, we now have 5 or 6 visible dots.
+  const totalSteps = requiresPayment ? 6 : 5;
   const visualStep = () => {
     if (step === 1) return 1;
     if (step === 2) return 2;
-    if (step === 3) return 3; // payment
+    if (step === 3) return 3; // onboarding fee
     if (step === 4) return requiresPayment ? 4 : 3; // training preference
     if (step === 5) return requiresPayment ? 5 : 4; // location
+    if (step === 6) return requiresPayment ? 6 : 5; // current playing level
     return step;
   };
 
@@ -335,7 +356,11 @@ function RegisterForm() {
                 ? 'Complete your onboarding fee to get started'
                 : step === 4
                   ? 'How would you like to train?'
-                  : 'Create your account to start training'}
+                  : step === 5
+                    ? 'Where will you train?'
+                    : step === 6
+                      ? 'What level are you playing at?'
+                      : 'Create your account to start training'}
           </p>
         </div>
 
@@ -784,69 +809,41 @@ function RegisterForm() {
           {/* STEP 5: Location + Age Group                 */}
           {/* ============================================ */}
           {step === 5 && (
-            <form onSubmit={handleFinalSubmit} className="space-y-4">
-              <h2 className="text-lg font-semibold text-foreground mb-2">
-                {trainingPreference === 'REMOTE' ? 'Home Base & Age Group' : 'Training Details'}
+            <form onSubmit={handleLocationNext} className="space-y-4">
+              <h2 className="text-lg font-semibold text-foreground mb-1">
+                {trainingPreference === 'REMOTE' ? 'Home Base' : 'Your Training Location'}
               </h2>
-              {trainingPreference === 'REMOTE' && (
-                <p className="text-sm text-muted -mt-1 mb-2">
-                  Even as a remote athlete, pick a home location for check-ins and coach assignments.
-                </p>
-              )}
+              <p className="text-sm text-muted mb-3">
+                {trainingPreference === 'REMOTE'
+                  ? 'Even as a remote athlete, pick a home location for check-ins and coach assignments.'
+                  : 'Where will you be training most of the time?'}
+              </p>
 
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Select Your Location
-                </label>
-                <div className="space-y-2">
-                  {locations.map((loc) => (
-                    <button
-                      key={loc.id}
-                      type="button"
-                      onClick={() => setLocationId(loc.id)}
-                      className={`w-full text-left p-3 rounded-lg border transition-all ${
-                        locationId === loc.id
-                          ? 'border-highlight bg-highlight/10'
-                          : 'border-border hover:border-border-light'
-                      }`}
-                    >
-                      <span className="font-medium text-foreground">{loc.name}</span>
-                      {loc.address && (
-                        <span className="block text-sm text-muted mt-0.5">{loc.address}</span>
-                      )}
-                    </button>
-                  ))}
-                </div>
+              <div className="space-y-2.5">
+                {locations.map((loc) => (
+                  <button
+                    key={loc.id}
+                    type="button"
+                    onClick={() => setLocationId(loc.id)}
+                    className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+                      locationId === loc.id
+                        ? 'border-highlight bg-highlight/10 shadow-sm'
+                        : 'border-border hover:border-border-light bg-surface'
+                    }`}
+                  >
+                    <div className="font-bold text-foreground text-base leading-tight">
+                      {loc.name}
+                    </div>
+                    {loc.address && (
+                      <div className="text-xs text-muted/80 mt-1.5 font-normal">
+                        {loc.address}
+                      </div>
+                    )}
+                  </button>
+                ))}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Age Group
-                </label>
-                <div className="space-y-2">
-                  {[
-                    { value: 'youth', label: 'Youth', desc: '12 and under' },
-                    { value: 'ms_hs', label: 'Middle School / High School', desc: 'Ages 13-18' },
-                    { value: 'college', label: 'College', desc: 'College athletes' },
-                  ].map((group) => (
-                    <button
-                      key={group.value}
-                      type="button"
-                      onClick={() => setAgeGroup(group.value)}
-                      className={`w-full text-left p-3 rounded-lg border transition-all ${
-                        ageGroup === group.value
-                          ? 'border-highlight bg-highlight/10'
-                          : 'border-border hover:border-border-light'
-                      }`}
-                    >
-                      <span className="font-medium text-foreground">{group.label}</span>
-                      <span className="block text-sm text-muted mt-0.5">{group.desc}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex gap-3">
+              <div className="flex gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setStep(4)}
@@ -856,10 +853,70 @@ function RegisterForm() {
                 </button>
                 <button
                   type="submit"
+                  className="ppl-btn ppl-btn-primary flex-1 py-3 text-base"
+                >
+                  Continue
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* ============================================ */}
+          {/* STEP 6: Current Playing Level                */}
+          {/* ============================================ */}
+          {step === 6 && (
+            <form onSubmit={handleFinalSubmit} className="space-y-4">
+              <h2 className="text-lg font-semibold text-foreground mb-1">
+                Current Playing Level
+              </h2>
+              <p className="text-sm text-muted mb-3">
+                This determines which membership plans and training sessions you'll see.
+              </p>
+
+              <div className="space-y-2.5">
+                {[
+                  { value: 'youth', label: 'Youth', desc: '12 and under' },
+                  { value: 'ms_hs', label: 'Middle School / High School', desc: 'Ages 13–18' },
+                  { value: 'college', label: 'College', desc: 'College athletes' },
+                ].map((group) => (
+                  <button
+                    key={group.value}
+                    type="button"
+                    onClick={() => setAgeGroup(group.value)}
+                    className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+                      ageGroup === group.value
+                        ? 'border-highlight bg-highlight/10 shadow-sm'
+                        : 'border-border hover:border-border-light bg-surface'
+                    }`}
+                  >
+                    <div className="font-bold text-foreground text-base leading-tight">
+                      {group.label}
+                    </div>
+                    <div className="text-xs text-muted/80 mt-1.5 font-normal">
+                      {group.desc}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setStep(5)}
+                  className="ppl-btn ppl-btn-secondary flex-1 py-3"
+                >
+                  Back
+                </button>
+                <button
+                  type="submit"
                   disabled={isLoading}
                   className="ppl-btn ppl-btn-primary flex-1 py-3 text-base"
                 >
-                  {isLoading ? 'Setting up...' : isOAuthOnboarding ? 'Complete Setup' : 'Create Account'}
+                  {isLoading
+                    ? 'Setting up...'
+                    : isOAuthOnboarding
+                      ? 'Complete setup'
+                      : 'Continue to membership'}
                 </button>
               </div>
             </form>
