@@ -87,6 +87,12 @@ const Icons = {
   ),
 };
 
+const UserIcon = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+  </svg>
+);
+
 const adminNav: NavItem[] = [
   { label: 'Dashboard', href: '/admin', icon: <Icons.Home /> },
   { label: 'Check In', href: '/admin/checkin', icon: <Icons.Shield /> },
@@ -100,6 +106,7 @@ const adminNav: NavItem[] = [
   { label: 'Reports', href: '/admin/reports', icon: <Icons.Chart /> },
   { label: 'Audit Log', href: '/admin/audit-logs', icon: <Icons.Shield /> },
   { label: 'Settings', href: '/admin/settings', icon: <Icons.Settings /> },
+  { label: 'My Profile', href: '/profile', icon: <UserIcon /> },
 ];
 
 const staffNav: NavItem[] = [
@@ -110,6 +117,7 @@ const staffNav: NavItem[] = [
   { label: 'Session Notes', href: '/staff/notes', icon: <Icons.Pencil /> },
   { label: 'Programs', href: '/staff/programs', icon: <Icons.Dumbbell /> },
   { label: 'Messages', href: '/staff/messages', icon: <Icons.Chat /> },
+  { label: 'My Profile', href: '/profile', icon: <UserIcon /> },
 ];
 
 const clientNav: NavItem[] = [
@@ -218,13 +226,17 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
 
         {/* User info + logout */}
         <div className="p-3 border-t border-border">
-          <div className="px-3 py-2 mb-2">
+          <Link
+            href={user.role === 'CLIENT' ? '/client/account' : '/profile'}
+            onClick={handleNavClick}
+            className="block px-3 py-2 mb-2 rounded-lg hover:bg-surface-hover transition-colors cursor-pointer"
+          >
             <p className="text-sm font-medium text-foreground truncate">{user.fullName}</p>
             <p className="text-xs text-muted truncate">{user.email}</p>
             {user.homeLocation && (
               <p className="text-xs text-primary-text mt-0.5">{user.homeLocation.name}</p>
             )}
-          </div>
+          </Link>
           <button
             onClick={logout}
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted hover:text-danger hover:bg-danger/10 transition-all w-full"
