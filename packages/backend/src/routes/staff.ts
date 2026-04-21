@@ -356,14 +356,31 @@ router.post(
         roleLabels: sl.roles.map((r) => ROLE_LABELS[r] || r),
       }));
 
-      await sendStaffReinstateEmail({
+      // Fire-and-forget the SMTP call. If we awaited it, a slow SMTP server
+      // would block the admin-facing response (seen in testing — CDP-level
+      // timeout fired on the browser before SMTP finished). The send result
+      // is logged server-side either way, and the admin can re-hit the button
+      // if the first one didn't land.
+      const started = Date.now();
+      sendStaffReinstateEmail({
         to: user.email,
         fullName: user.fullName,
         assignments,
         frontendUrl: config.frontendUrl,
         needsPhone: !user.phone,
         needsAvatar: !user.avatarUrl,
-      });
+      })
+        .then(() =>
+          console.log(
+            `[staff welcome] sent to ${user.email} in ${Date.now() - started}ms`
+          )
+        )
+        .catch((err) =>
+          console.error(
+            `[staff welcome] failed for ${user.email} after ${Date.now() - started}ms:`,
+            err
+          )
+        );
 
       await createAuditLog({
         action: 'STAFF_WELCOME_RESENT',
@@ -380,7 +397,8 @@ router.post(
 
       res.json({
         success: true,
-        message: `Welcome email sent to ${user.fullName} (${user.email}).`,
+        queued: true,
+        message: `Welcome email queued for ${user.fullName} (${user.email}). They should see it within a minute.`,
       });
     } catch (error) {
       next(error);
