@@ -149,7 +149,6 @@ function AddStaffModal({
 }) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -236,7 +235,6 @@ function AddStaffModal({
       await api.inviteStaff({
         fullName: fullName.trim(),
         email: email.trim().toLowerCase(),
-        phone: phone.trim() || undefined,
         role: computedGlobalRole,
         locations: locationAssignments,
       });
@@ -296,16 +294,6 @@ function AddStaffModal({
                   placeholder="john@example.com"
                 />
               </div>
-            </div>
-            <div className="sm:w-1/2">
-              <label className="block text-sm font-medium text-foreground mb-1">Phone</label>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-highlight/50"
-                placeholder="(555) 123-4567"
-              />
             </div>
           </div>
 
@@ -383,7 +371,7 @@ function AddStaffModal({
           )}
 
           <p className="text-xs text-muted">
-            An email invite will be sent to {email || 'the provided email'}. They&apos;ll set their own password and profile picture when they accept.
+            An email invite will be sent to {email || 'the provided email'}. They&apos;ll set their own password, phone number, and profile picture when they accept.
           </p>
         </div>
 
@@ -577,20 +565,16 @@ export default function AdminStaffPage() {
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
-    try {
-      const [staffRes, inviteRes, locRes] = await Promise.all([
-        api.getStaffList(),
-        api.getStaffInvites(),
-        api.getLocations(),
-      ]);
-      setStaff(staffRes.data || []);
-      setInvites(inviteRes.data || []);
-      setLocations(locRes.data || []);
-    } catch {
-      // silently handle
-    } finally {
-      setLoading(false);
-    }
+    // Load each independently so one failure doesn't block the others
+    const [staffRes, inviteRes, locRes] = await Promise.allSettled([
+      api.getStaffList(),
+      api.getStaffInvites(),
+      api.getLocations(),
+    ]);
+    if (staffRes.status === 'fulfilled') setStaff(staffRes.value.data || []);
+    if (inviteRes.status === 'fulfilled') setInvites(inviteRes.value.data || []);
+    if (locRes.status === 'fulfilled') setLocations(locRes.value.data || []);
+    setLoading(false);
   }, []);
 
   useEffect(() => {

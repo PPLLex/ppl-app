@@ -46,7 +46,7 @@ router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
         email: true,
         phone: true,
         role: true,
-        profileImageUrl: true,
+        avatarUrl: true,
         createdAt: true,
         staffLocations: {
           select: {
@@ -67,7 +67,7 @@ router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
       email: s.email,
       phone: s.phone,
       role: s.role,
-      profileImageUrl: s.profileImageUrl,
+      profileImageUrl: s.avatarUrl,
       createdAt: s.createdAt,
       locations: s.staffLocations.map((sl: any) => ({
         ...sl.location,
