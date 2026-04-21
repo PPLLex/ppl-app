@@ -9,12 +9,13 @@ import { api, StaffMember, StaffInvite, Location } from '@/lib/api';
 
 type LocationRole = 'OWNER' | 'PITCHING_COORDINATOR' | 'YOUTH_COORDINATOR' | 'COACH' | 'TRAINER';
 
+// Display-friendly labels
 const ROLE_LABELS: Record<string, string> = {
-  OWNER: 'Owner',
-  PITCHING_COORDINATOR: 'Pitching Coordinator',
+  OWNER: 'Admin',
+  PITCHING_COORDINATOR: 'PPL Coordinator',
   YOUTH_COORDINATOR: 'Youth Coordinator',
-  COACH: 'Coach',
-  TRAINER: 'Trainer',
+  COACH: 'Performance Coach',
+  TRAINER: 'Youth Coach',
 };
 
 const ROLE_COLORS: Record<string, string> = {
@@ -25,9 +26,117 @@ const ROLE_COLORS: Record<string, string> = {
   TRAINER: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
 };
 
+// Program role options shown in the Add Staff modal
+type ProgramRole = 'ADMIN' | 'COORDINATOR' | 'PERFORMANCE_COACH';
+
+const PROGRAM_ROLE_LABELS: Record<ProgramRole, string> = {
+  ADMIN: 'Admin',
+  COORDINATOR: 'Coordinator',
+  PERFORMANCE_COACH: 'Performance Coach',
+};
+
+// Map program + role to backend LocationRole
+function mapToLocationRoles(
+  program: 'PPL' | 'YOUTH',
+  roles: Set<ProgramRole>
+): LocationRole[] {
+  const result: LocationRole[] = [];
+  for (const r of roles) {
+    if (r === 'ADMIN') result.push('OWNER');
+    else if (r === 'COORDINATOR') result.push(program === 'PPL' ? 'PITCHING_COORDINATOR' : 'YOUTH_COORDINATOR');
+    else if (r === 'PERFORMANCE_COACH') result.push(program === 'PPL' ? 'COACH' : 'TRAINER');
+  }
+  return result;
+}
+
 // ============================================================
 // ADD STAFF MODAL
 // ============================================================
+
+// Per-location, per-program role selections
+type LocationRoleSelections = Record<string, { ppl: Set<ProgramRole>; youth: Set<ProgramRole> }>;
+
+function RoleToggleButton({
+  label,
+  active,
+  disabled,
+  color,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  disabled: boolean;
+  color: 'amber' | 'highlight' | 'emerald';
+  onClick: () => void;
+}) {
+  const colorMap = {
+    amber: active ? 'bg-amber-500/20 text-amber-400 border-amber-500/50' : '',
+    highlight: active ? 'bg-highlight/20 text-highlight-text border-highlight/50' : '',
+    emerald: active ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50' : '',
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled && !active}
+      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+        active
+          ? colorMap[color]
+          : disabled
+          ? 'border-border/50 text-muted/40 cursor-not-allowed'
+          : 'border-border text-muted hover:border-muted hover:text-foreground'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function ProgramRow({
+  program,
+  roles,
+  onToggle,
+}: {
+  program: 'PPL' | 'YOUTH';
+  roles: Set<ProgramRole>;
+  onToggle: (role: ProgramRole) => void;
+}) {
+  const isCoach = roles.has('PERFORMANCE_COACH');
+  const isAdminOrCoord = roles.has('ADMIN') || roles.has('COORDINATOR');
+
+  return (
+    <div className="flex items-center justify-between py-2.5">
+      <div className="flex items-center gap-2 min-w-[90px]">
+        <span className={`w-2 h-2 rounded-full ${program === 'PPL' ? 'bg-highlight' : 'bg-blue-500'}`} />
+        <span className="text-sm font-medium text-foreground">{program === 'PPL' ? 'PPL' : 'PPL Youth'}</span>
+      </div>
+      <div className="flex gap-2">
+        <RoleToggleButton
+          label="Admin"
+          active={roles.has('ADMIN')}
+          disabled={isCoach}
+          color="amber"
+          onClick={() => onToggle('ADMIN')}
+        />
+        <RoleToggleButton
+          label="Coordinator"
+          active={roles.has('COORDINATOR')}
+          disabled={isCoach}
+          color="highlight"
+          onClick={() => onToggle('COORDINATOR')}
+        />
+        <RoleToggleButton
+          label="Performance Coach"
+          active={roles.has('PERFORMANCE_COACH')}
+          disabled={isAdminOrCoord}
+          color="emerald"
+          onClick={() => onToggle('PERFORMANCE_COACH')}
+        />
+      </div>
+    </div>
+  );
+}
 
 function AddStaffModal({
   locations,
@@ -41,25 +150,52 @@ function AddStaffModal({
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [globalRole, setGlobalRole] = useState<'STAFF' | 'ADMIN'>('STAFF');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  // Program-based role assignments
-  // PPL row = PITCHING_COORDINATOR for selected locations
-  // PPL Youth row = YOUTH_COORDINATOR for selected locations
-  // Additional roles row = COACH / TRAINER per location
-  const [pplLocations, setPplLocations] = useState<Set<string>>(new Set());
-  const [youthLocations, setYouthLocations] = useState<Set<string>>(new Set());
-  const [coachLocations, setCoachLocations] = useState<Set<string>>(new Set());
-  const [trainerLocations, setTrainerLocations] = useState<Set<string>>(new Set());
+  // Role selections per location: { [locationId]: { ppl: Set<ProgramRole>, youth: Set<ProgramRole> } }
+  const [selections, setSelections] = useState<LocationRoleSelections>({});
 
-  const toggleSet = (set: Set<string>, setFn: (s: Set<string>) => void, id: string) => {
-    const next = new Set(set);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setFn(next);
+  const toggleRole = (locationId: string, program: 'ppl' | 'youth', role: ProgramRole) => {
+    setSelections((prev) => {
+      const loc = prev[locationId] || { ppl: new Set<ProgramRole>(), youth: new Set<ProgramRole>() };
+      const current = new Set(loc[program]);
+
+      if (current.has(role)) {
+        // Toggle off
+        current.delete(role);
+      } else {
+        // Mutual exclusivity: Performance Coach can't combine with Admin or Coordinator
+        if (role === 'PERFORMANCE_COACH') {
+          current.delete('ADMIN');
+          current.delete('COORDINATOR');
+        } else {
+          // Selecting Admin or Coordinator removes Performance Coach
+          current.delete('PERFORMANCE_COACH');
+        }
+        current.add(role);
+      }
+
+      return {
+        ...prev,
+        [locationId]: { ...loc, [program]: current },
+      };
+    });
   };
+
+  // Auto-determine global role: if ADMIN on any row → ADMIN, otherwise STAFF
+  const computedGlobalRole = (() => {
+    for (const locId of Object.keys(selections)) {
+      const loc = selections[locId];
+      if (loc.ppl.has('ADMIN') || loc.youth.has('ADMIN')) return 'ADMIN' as const;
+    }
+    return 'STAFF' as const;
+  })();
+
+  // Check if any roles are selected
+  const hasAnySelection = Object.values(selections).some(
+    (loc) => loc.ppl.size > 0 || loc.youth.size > 0
+  );
 
   const handleSubmit = async () => {
     setError('');
@@ -68,28 +204,25 @@ function AddStaffModal({
       return;
     }
 
-    // Build location assignments from the program rows
+    if (!hasAnySelection) {
+      setError('Select at least one role at one location');
+      return;
+    }
+
+    // Build location assignments from selections
     const locationMap = new Map<string, Set<LocationRole>>();
 
-    for (const locId of pplLocations) {
-      if (!locationMap.has(locId)) locationMap.set(locId, new Set());
-      locationMap.get(locId)!.add('PITCHING_COORDINATOR');
-    }
-    for (const locId of youthLocations) {
-      if (!locationMap.has(locId)) locationMap.set(locId, new Set());
-      locationMap.get(locId)!.add('YOUTH_COORDINATOR');
-    }
-    for (const locId of coachLocations) {
-      if (!locationMap.has(locId)) locationMap.set(locId, new Set());
-      locationMap.get(locId)!.add('COACH');
-    }
-    for (const locId of trainerLocations) {
-      if (!locationMap.has(locId)) locationMap.set(locId, new Set());
-      locationMap.get(locId)!.add('TRAINER');
+    for (const [locId, sel] of Object.entries(selections)) {
+      const pplRoles = mapToLocationRoles('PPL', sel.ppl);
+      const youthRoles = mapToLocationRoles('YOUTH', sel.youth);
+      const allRoles = [...pplRoles, ...youthRoles];
+      if (allRoles.length > 0) {
+        locationMap.set(locId, new Set(allRoles));
+      }
     }
 
     if (locationMap.size === 0) {
-      setError('Select at least one location and role');
+      setError('Select at least one role at one location');
       return;
     }
 
@@ -104,7 +237,7 @@ function AddStaffModal({
         fullName: fullName.trim(),
         email: email.trim().toLowerCase(),
         phone: phone.trim() || undefined,
-        role: globalRole,
+        role: computedGlobalRole,
         locations: locationAssignments,
       });
       onSuccess();
@@ -122,7 +255,10 @@ function AddStaffModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-6 border-b border-border flex items-center justify-between">
-          <h2 className="text-lg font-bold text-foreground">Add Staff Member</h2>
+          <div>
+            <h2 className="text-lg font-bold text-foreground">Add Staff Member</h2>
+            <p className="text-xs text-muted mt-0.5">Invite someone to join the PPL team</p>
+          </div>
           <button onClick={onClose} className="text-muted hover:text-foreground">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -138,28 +274,30 @@ function AddStaffModal({
           )}
 
           {/* Basic Info */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Full Name *</label>
-              <input
-                type="text"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-highlight/50"
-                placeholder="John Smith"
-              />
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Full Name *</label>
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-highlight/50"
+                  placeholder="John Smith"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Email *</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-highlight/50"
+                  placeholder="john@example.com"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Email *</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-highlight/50"
-                placeholder="john@example.com"
-              />
-            </div>
-            <div>
+            <div className="sm:w-1/2">
               <label className="block text-sm font-medium text-foreground mb-1">Phone</label>
               <input
                 type="tel"
@@ -169,163 +307,78 @@ function AddStaffModal({
                 placeholder="(555) 123-4567"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Access Level</label>
-              <select
-                value={globalRole}
-                onChange={(e) => setGlobalRole(e.target.value as 'STAFF' | 'ADMIN')}
-                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-highlight/50"
-              >
-                <option value="STAFF">Staff</option>
-                <option value="ADMIN">Admin</option>
-              </select>
-            </div>
           </div>
 
-          {/* Program / Location Grid */}
+          {/* Location Cards */}
           <div>
-            <h3 className="text-sm font-semibold text-foreground mb-3">Assign Locations & Roles</h3>
+            <h3 className="text-sm font-semibold text-foreground mb-1">Location Assignments</h3>
             <p className="text-xs text-muted mb-4">
-              Select which locations this person will work at and in what capacity. They can hold multiple roles at the same location.
+              Choose roles for each program at each location. Performance Coach cannot be combined with Admin or Coordinator.
             </p>
 
-            <div className="border border-border rounded-lg overflow-hidden">
-              {/* Header row */}
-              <div className="grid bg-background/50 border-b border-border" style={{ gridTemplateColumns: `160px repeat(${locations.length}, 1fr)` }}>
-                <div className="px-4 py-2.5 text-xs font-semibold text-muted uppercase tracking-wider">Role</div>
-                {locations.map((loc) => (
-                  <div key={loc.id} className="px-3 py-2.5 text-xs font-semibold text-muted uppercase tracking-wider text-center">
-                    {loc.name.replace(/^PPL\s*/i, '').trim() || loc.name}
-                  </div>
-                ))}
-              </div>
+            <div className="space-y-3">
+              {locations.map((loc) => {
+                const sel = selections[loc.id] || { ppl: new Set<ProgramRole>(), youth: new Set<ProgramRole>() };
+                const hasRoles = sel.ppl.size > 0 || sel.youth.size > 0;
 
-              {/* PPL (Pitching Coordinator) Row */}
-              <div className="grid border-b border-border hover:bg-surface-hover/50 transition-colors" style={{ gridTemplateColumns: `160px repeat(${locations.length}, 1fr)` }}>
-                <div className="px-4 py-3 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-highlight" />
-                  <span className="text-sm font-medium text-foreground">PPL</span>
-                </div>
-                {locations.map((loc) => (
-                  <div key={loc.id} className="px-3 py-3 flex items-center justify-center">
-                    <button
-                      onClick={() => toggleSet(pplLocations, setPplLocations, loc.id)}
-                      className={`w-7 h-7 rounded-lg border-2 transition-all flex items-center justify-center ${
-                        pplLocations.has(loc.id)
-                          ? 'bg-highlight border-highlight text-background'
-                          : 'border-border hover:border-muted'
-                      }`}
-                    >
-                      {pplLocations.has(loc.id) && (
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
+                return (
+                  <div
+                    key={loc.id}
+                    className={`border rounded-xl overflow-hidden transition-colors ${
+                      hasRoles ? 'border-highlight/40 bg-surface' : 'border-border bg-surface'
+                    }`}
+                  >
+                    {/* Location header */}
+                    <div className={`px-4 py-3 flex items-center justify-between ${
+                      hasRoles ? 'bg-highlight/5 border-b border-highlight/20' : 'bg-background/30 border-b border-border'
+                    }`}>
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                          hasRoles ? 'bg-highlight/20' : 'bg-background'
+                        }`}>
+                          <svg className={`w-4 h-4 ${hasRoles ? 'text-highlight-text' : 'text-muted'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                          </svg>
+                        </div>
+                        <span className="text-sm font-semibold text-foreground">{loc.name}</span>
+                      </div>
+                      {hasRoles && (
+                        <span className="text-xs text-highlight-text font-medium px-2 py-0.5 bg-highlight/15 rounded-full">
+                          {sel.ppl.size + sel.youth.size} role{sel.ppl.size + sel.youth.size !== 1 ? 's' : ''}
+                        </span>
                       )}
-                    </button>
-                  </div>
-                ))}
-              </div>
+                    </div>
 
-              {/* PPL Youth (Youth Coordinator) Row */}
-              <div className="grid border-b border-border hover:bg-surface-hover/50 transition-colors" style={{ gridTemplateColumns: `160px repeat(${locations.length}, 1fr)` }}>
-                <div className="px-4 py-3 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-blue-500" />
-                  <span className="text-sm font-medium text-foreground">PPL Youth</span>
-                </div>
-                {locations.map((loc) => (
-                  <div key={loc.id} className="px-3 py-3 flex items-center justify-center">
-                    <button
-                      onClick={() => toggleSet(youthLocations, setYouthLocations, loc.id)}
-                      className={`w-7 h-7 rounded-lg border-2 transition-all flex items-center justify-center ${
-                        youthLocations.has(loc.id)
-                          ? 'bg-blue-500 border-blue-500 text-white'
-                          : 'border-border hover:border-muted'
-                      }`}
-                    >
-                      {youthLocations.has(loc.id) && (
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </button>
+                    {/* Program rows */}
+                    <div className="px-4 divide-y divide-border">
+                      <ProgramRow
+                        program="PPL"
+                        roles={sel.ppl}
+                        onToggle={(role) => toggleRole(loc.id, 'ppl', role)}
+                      />
+                      <ProgramRow
+                        program="YOUTH"
+                        roles={sel.youth}
+                        onToggle={(role) => toggleRole(loc.id, 'youth', role)}
+                      />
+                    </div>
                   </div>
-                ))}
-              </div>
-
-              {/* Coach Row */}
-              <div className="grid border-b border-border hover:bg-surface-hover/50 transition-colors" style={{ gridTemplateColumns: `160px repeat(${locations.length}, 1fr)` }}>
-                <div className="px-4 py-3 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <span className="text-sm font-medium text-foreground">Coach</span>
-                </div>
-                {locations.map((loc) => (
-                  <div key={loc.id} className="px-3 py-3 flex items-center justify-center">
-                    <button
-                      onClick={() => toggleSet(coachLocations, setCoachLocations, loc.id)}
-                      className={`w-7 h-7 rounded-lg border-2 transition-all flex items-center justify-center ${
-                        coachLocations.has(loc.id)
-                          ? 'bg-emerald-500 border-emerald-500 text-white'
-                          : 'border-border hover:border-muted'
-                      }`}
-                    >
-                      {coachLocations.has(loc.id) && (
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              {/* Trainer Row */}
-              <div className="grid hover:bg-surface-hover/50 transition-colors" style={{ gridTemplateColumns: `160px repeat(${locations.length}, 1fr)` }}>
-                <div className="px-4 py-3 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-purple-500" />
-                  <span className="text-sm font-medium text-foreground">Trainer</span>
-                </div>
-                {locations.map((loc) => (
-                  <div key={loc.id} className="px-3 py-3 flex items-center justify-center">
-                    <button
-                      onClick={() => toggleSet(trainerLocations, setTrainerLocations, loc.id)}
-                      className={`w-7 h-7 rounded-lg border-2 transition-all flex items-center justify-center ${
-                        trainerLocations.has(loc.id)
-                          ? 'bg-purple-500 border-purple-500 text-white'
-                          : 'border-border hover:border-muted'
-                      }`}
-                    >
-                      {trainerLocations.has(loc.id) && (
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
           </div>
 
-          {/* Summary of selections */}
-          {(pplLocations.size > 0 || youthLocations.size > 0 || coachLocations.size > 0 || trainerLocations.size > 0) && (
-            <div className="bg-background/50 border border-border rounded-lg p-4">
-              <h4 className="text-xs font-semibold text-muted uppercase mb-2">Assignment Summary</h4>
-              <div className="space-y-1.5">
-                {locations.map((loc) => {
-                  const roles: string[] = [];
-                  if (pplLocations.has(loc.id)) roles.push('Pitching Coordinator');
-                  if (youthLocations.has(loc.id)) roles.push('Youth Coordinator');
-                  if (coachLocations.has(loc.id)) roles.push('Coach');
-                  if (trainerLocations.has(loc.id)) roles.push('Trainer');
-                  if (roles.length === 0) return null;
-                  return (
-                    <div key={loc.id} className="flex items-start gap-2 text-sm">
-                      <span className="font-medium text-foreground min-w-[120px]">{loc.name}:</span>
-                      <span className="text-muted">{roles.join(', ')}</span>
-                    </div>
-                  );
-                })}
-              </div>
+          {/* Auto-computed access level indicator */}
+          {hasAnySelection && (
+            <div className="flex items-center gap-2 px-3 py-2.5 bg-background/50 border border-border rounded-lg">
+              <span className={`w-2 h-2 rounded-full ${computedGlobalRole === 'ADMIN' ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+              <span className="text-xs text-muted">
+                Global access level: <span className="font-semibold text-foreground">{computedGlobalRole === 'ADMIN' ? 'Admin' : 'Staff'}</span>
+                {computedGlobalRole === 'ADMIN'
+                  ? ' — can see everything across all locations'
+                  : ' — access limited to assigned locations and roles'}
+              </span>
             </div>
           )}
 
@@ -344,7 +397,7 @@ function AddStaffModal({
           </button>
           <button
             onClick={handleSubmit}
-            disabled={saving}
+            disabled={saving || !hasAnySelection}
             className="px-6 py-2 bg-highlight text-on-accent rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
           >
             {saving ? 'Sending Invite...' : 'Send Invite'}
