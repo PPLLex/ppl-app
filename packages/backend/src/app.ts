@@ -12,7 +12,7 @@ import sessionRoutes from './routes/sessions';
 import bookingRoutes from './routes/bookings';
 import membershipRoutes from './routes/memberships';
 import memberRoutes from './routes/members';
-import staffRoutes from './routes/staff';
+import staffRoutes, { staffPublicRouter } from './routes/staff';
 import conversationRoutes from './routes/conversations';
 import reportRoutes from './routes/reports';
 import notificationRoutes from './routes/notifications';
@@ -88,6 +88,9 @@ app.get('/api/health', (_req, res) => {
     cron: getCronStatus(),
   });
 });
+
+// Public staff invite routes (no auth required) — must be before /api/staff authenticated routes
+app.use('/api/staff', staffPublicRouter);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/locations', locationRoutes);

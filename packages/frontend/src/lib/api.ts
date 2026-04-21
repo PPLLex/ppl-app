@@ -363,11 +363,25 @@ class ApiClient {
     return this.request<StaffMember[]>('/staff');
   }
 
-  async inviteStaff(data: { fullName: string; email: string; password: string; role: string; phone?: string }) {
-    return this.request<StaffMember>('/staff/invite', {
+  async getStaffInvites() {
+    return this.request<StaffInvite[]>('/staff/invites');
+  }
+
+  async inviteStaff(data: {
+    fullName: string;
+    email: string;
+    phone?: string;
+    role?: string;
+    locations: { locationId: string; roles: string[] }[];
+  }) {
+    return this.request<StaffInvite>('/staff/invite', {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  }
+
+  async revokeStaffInvite(inviteId: string) {
+    return this.request(`/staff/invites/${inviteId}`, { method: 'DELETE' });
   }
 
   async updateStaffRole(id: string, role: 'ADMIN' | 'STAFF') {
@@ -377,10 +391,26 @@ class ApiClient {
     });
   }
 
-  async updateStaffLocations(id: string, assignments: { locationId: string; locationRole: string }[]) {
+  async updateStaffLocations(id: string, assignments: { locationId: string; roles: string[] }[]) {
     return this.request(`/staff/${id}/locations`, {
       method: 'PUT',
       body: JSON.stringify({ assignments }),
+    });
+  }
+
+  async removeStaffMember(id: string) {
+    return this.request(`/staff/${id}`, { method: 'DELETE' });
+  }
+
+  // Public staff invite (no auth)
+  async getStaffInviteDetails(token: string) {
+    return this.request<StaffInviteDetails>(`/staff/invite/${token}`);
+  }
+
+  async acceptStaffInvite(token: string, data: { password: string; phone?: string; profileImageUrl?: string }) {
+    return this.request<{ id: string; fullName: string; email: string }>(`/staff/invite/${token}/accept`, {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
   }
 
@@ -1535,7 +1565,40 @@ export interface StaffMember {
   email: string;
   phone: string | null;
   role: 'ADMIN' | 'STAFF';
-  locations: { id: string; name: string; locationRole?: 'OWNER' | 'COORDINATOR' | 'COACH' }[];
+  profileImageUrl: string | null;
+  createdAt: string;
+  locations: {
+    id: string;
+    name: string;
+    roles: ('OWNER' | 'PITCHING_COORDINATOR' | 'YOUTH_COORDINATOR' | 'COACH' | 'TRAINER')[];
+  }[];
+}
+
+export interface StaffInvite {
+  id: string;
+  email: string;
+  fullName: string;
+  phone: string | null;
+  token: string;
+  role: 'ADMIN' | 'STAFF';
+  locations: { locationId: string; roles: string[] }[];
+  expiresAt: string;
+  usedAt: string | null;
+  invitedBy: string | null;
+  createdAt: string;
+}
+
+export interface StaffInviteDetails {
+  fullName: string;
+  email: string;
+  phone: string | null;
+  role: string;
+  locations: {
+    locationId: string;
+    roles: string[];
+    locationName: string;
+    roleLabels: string[];
+  }[];
 }
 
 // Coach Notes types

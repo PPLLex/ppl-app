@@ -23,11 +23,15 @@ async function assertRevenueAccess(userId: string, role: Role, locationId: strin
   if (!assignment) {
     throw ApiError.forbidden('You are not assigned to this location');
   }
-  if (assignment.locationRole === LocationRole.COACH) {
+  // Only COACH-only assignments are blocked from revenue; coordinators/owners/trainers can view
+  const revenueRoles: LocationRole[] = [LocationRole.OWNER, LocationRole.PITCHING_COORDINATOR, LocationRole.YOUTH_COORDINATOR];
+  const hasRevenueAccess = assignment.roles.some((r) => revenueRoles.includes(r));
+  if (!hasRevenueAccess) {
     throw ApiError.forbidden('Coaches do not have access to revenue data');
   }
 
-  return assignment.locationRole;
+  // Return the highest-privilege role
+  return assignment.roles.includes(LocationRole.OWNER) ? LocationRole.OWNER : assignment.roles[0];
 }
 
 /**
@@ -168,14 +172,16 @@ router.get('/:locationId/my-role', async (req: Request, res: Response, next: Nex
 
     const assignment = await prisma.staffLocation.findUnique({
       where: { staffId_locationId: { staffId: user.userId, locationId } },
-      select: { locationRole: true },
+      select: { roles: true },
     });
 
     if (!assignment) {
-      return res.json({ success: true, data: { locationRole: null, globalRole: user.role } });
+      return res.json({ success: true, data: { locationRole: null, roles: [], globalRole: user.role } });
     }
 
-    res.json({ success: true, data: { locationRole: assignment.locationRole, globalRole: user.role } });
+    // Return the primary role for backward compat + full roles array
+    const primaryRole = assignment.roles.includes(LocationRole.OWNER) ? LocationRole.OWNER : assignment.roles[0];
+    res.json({ success: true, data: { locationRole: primaryRole, roles: assignment.roles, globalRole: user.role } });
   } catch (error) {
     next(error);
   }
@@ -213,7 +219,8 @@ router.get('/my-assignments', async (req: Request, res: Response, next: NextFunc
       success: true,
       data: assignments.map((a) => ({
         ...a.location,
-        locationRole: a.locationRole,
+        locationRole: a.roles.includes(LocationRole.OWNER) ? LocationRole.OWNER : a.roles[0],
+        roles: a.roles,
       })),
     });
   } catch (error) {

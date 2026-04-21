@@ -46,9 +46,11 @@ enum BillingDay {
 }
 
 enum LocationRole {
-  OWNER        // Full revenue, settings, manage staff at this location
-  COORDINATOR  // See revenue, member data, payment statuses — no settings changes
-  COACH        // See schedule and their own assigned clients only
+  OWNER                  // Full revenue, settings, manage staff at this location
+  PITCHING_COORDINATOR   // Regular pitching coordinator — revenue splits, member data
+  YOUTH_COORDINATOR      // Youth pitching coordinator — revenue splits, member data
+  COACH                  // See schedule and their own assigned clients only
+  TRAINER                // General trainer — similar to coach
 }
 
 // --- Family & Onboarding enums ---
@@ -305,20 +307,38 @@ model ClientProfile {
 }
 
 model StaffLocation {
-  id           String       @id @default(uuid())
+  id           String         @id @default(uuid())
   staffId      String
   locationId   String
-  locationRole LocationRole @default(COACH)
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  roles        LocationRole[] @default([COACH])
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 
   // Relations
   staff    User     @relation(fields: [staffId], references: [id], onDelete: Cascade)
   location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
 
   @@unique([staffId, locationId])
-  @@index([locationId, locationRole])
+  @@index([locationId])
   @@map("staff_locations")
+}
+
+model StaffInvite {
+  id        String    @id @default(uuid())
+  email     String
+  fullName  String
+  phone     String?
+  token     String    @unique @default(uuid())
+  role      Role      @default(STAFF)
+  locations Json      // [{locationId, roles: ['PITCHING_COORDINATOR', ...]}]
+  expiresAt DateTime
+  usedAt    DateTime?
+  invitedBy String?
+  createdAt DateTime  @default(now())
+
+  @@index([token])
+  @@index([email])
+  @@map("staff_invites")
 }
 
 // ============================================================

@@ -80,6 +80,11 @@ const Icons = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5h1.5m13.5 0h1.5m-15 0v-3m13.5 3v-3m-10.5 0h7.5m-7.5 0v3m7.5-3v3M6.75 7.5h-1.5v9h1.5v-9zm12 0h-1.5v9h1.5v-9z" />
     </svg>
   ),
+  UserGroup: () => (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+    </svg>
+  ),
 };
 
 const adminNav: NavItem[] = [
@@ -87,6 +92,7 @@ const adminNav: NavItem[] = [
   { label: 'Check In', href: '/admin/checkin', icon: <Icons.Shield /> },
   { label: 'Schedule', href: '/admin/schedule', icon: <Icons.Calendar /> },
   { label: 'Members', href: '/admin/members', icon: <Icons.Users /> },
+  { label: 'Staff', href: '/admin/staff', icon: <Icons.UserGroup /> },
   { label: 'Revenue', href: '/admin/revenue', icon: <Icons.Chart /> },
   { label: 'Billing', href: '/admin/billing', icon: <Icons.CreditCard /> },
   { label: 'Locations', href: '/admin/locations', icon: <Icons.Location /> },
