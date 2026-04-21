@@ -81,14 +81,11 @@ html {
    ============================================================ */
 
 .ppl-gradient {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  background: var(--color-highlight);
 }
 
 .ppl-gradient-text {
-  background: linear-gradient(135deg, var(--color-primary-text), var(--color-accent-text));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--color-highlight-text);
 }
 
 .ppl-card {
@@ -119,8 +116,8 @@ html {
 }
 
 .ppl-btn-primary {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
-  color: var(--color-on-primary);
+  background: var(--color-highlight);
+  color: var(--color-on-accent);
 }
 
 .ppl-btn-primary:hover:not(:disabled) {

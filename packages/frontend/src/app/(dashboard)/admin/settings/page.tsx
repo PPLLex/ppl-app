@@ -325,7 +325,7 @@ function GeneralSettings() {
               <span className="inline-block w-5 h-5 rounded" style={{ background: branding.primaryColor }} title="Primary" />
               <span className="inline-block w-5 h-5 rounded" style={{ background: branding.accentColor }} title="Accent" />
             </div>
-            <span className="inline-block h-5 px-2 rounded text-white text-[11px] leading-5 font-medium" style={{ background: `linear-gradient(135deg, ${branding.primaryColor}, ${branding.accentColor})` }}>
+            <span className="inline-block h-5 px-2 rounded text-[11px] leading-5 font-medium ppl-btn ppl-btn-primary">
               Button
             </span>
           </div>
