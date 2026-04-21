@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import NotificationBell from '@/components/layout/NotificationBell';
@@ -15,13 +15,41 @@ export default function DashboardLayout({
 }) {
   const { user, isLoading, isAuthenticated } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.push('/login');
+      return;
     }
-  }, [isLoading, isAuthenticated, router]);
+
+    // Role-based URL enforcement.
+    //
+    // CLIENT accounts can only browse /client/* (plus the shared /profile).
+    // Trying to navigate to /admin/... or /staff/... silently bounced to a
+    // page shell full of 403 errors — better to redirect them home.
+    //
+    // ADMIN and STAFF are allowed to roam: admins sometimes want to view
+    // the client-side experience for support, and staff use /admin/checkin
+    // as a shared kiosk route. The sidebar already shows the nav matching
+    // their actual role regardless of URL.
+    if (!isLoading && user) {
+      const goesToAdmin = pathname?.startsWith('/admin') ?? false;
+      const goesToStaff = pathname?.startsWith('/staff') ?? false;
+      if (user.role === 'CLIENT' && (goesToAdmin || goesToStaff)) {
+        router.replace('/client');
+        return;
+      }
+      if (user.role === 'STAFF' && goesToAdmin) {
+        // Allow STAFF into /admin/checkin (kiosk) but nothing else.
+        if (!pathname?.startsWith('/admin/checkin')) {
+          router.replace('/staff');
+          return;
+        }
+      }
+    }
+  }, [isLoading, isAuthenticated, user, pathname, router]);
 
   if (isLoading) {
     return (
