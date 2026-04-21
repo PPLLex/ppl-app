@@ -175,7 +175,7 @@ router.get('/bookings', async (req: Request, res: Response, next: NextFunction) 
         createdAt: { gte: startDate },
       },
       include: {
-        session: { select: { startTime: true, type: true } },
+        session: { select: { startTime: true, sessionType: true } },
       },
     });
 
@@ -193,7 +193,7 @@ router.get('/bookings', async (req: Request, res: Response, next: NextFunction) 
       const hour = b.session.startTime.getHours();
       hourCount.set(hour, (hourCount.get(hour) || 0) + 1);
 
-      typeCount.set(b.session.type, (typeCount.get(b.session.type) || 0) + 1);
+      typeCount.set(b.session.sessionType, (typeCount.get(b.session.sessionType) || 0) + 1);
     });
 
     res.json({
@@ -511,7 +511,7 @@ router.get('/dashboard', async (req: Request, res: Response, next: NextFunction)
         action: true,
         resourceType: true,
         resourceId: true,
-        userName: true,
+        user: { select: { fullName: true } },
         createdAt: true,
       },
     });
@@ -570,7 +570,7 @@ router.get('/dashboard', async (req: Request, res: Response, next: NextFunction)
           action: a.action,
           resourceType: a.resourceType,
           resourceId: a.resourceId,
-          userName: a.userName,
+          userName: a.user?.fullName || 'System',
           createdAt: a.createdAt.toISOString(),
         })),
       },
