@@ -128,17 +128,8 @@ router.post('/invite', async (req: Request, res: Response, next: NextFunction) =
       }
     }
 
-    // Check for existing user
-    const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-    if (existing) throw ApiError.conflict('A user with this email already exists');
-
-    // Check for existing pending invite
-    const existingInvite = await prisma.staffInvite.findFirst({
-      where: { email: email.toLowerCase(), usedAt: null, expiresAt: { gt: new Date() } },
-    });
-    if (existingInvite) throw ApiError.conflict('A pending invitation already exists for this email');
-
-    // Validate locations exist
+    // Validate locations exist (done before the user-existence check so the
+    // same validation applies to both the fresh-invite and reinstate paths)
     const locationIds = locations.map((l: any) => l.locationId);
     const validLocations = await prisma.location.findMany({
       where: { id: { in: locationIds } },
@@ -149,6 +140,94 @@ router.post('/invite', async (req: Request, res: Response, next: NextFunction) =
     }
 
     const userRole = role === 'ADMIN' ? Role.ADMIN : Role.STAFF;
+
+    // Check for existing user.
+    //
+    // Our DELETE /api/staff/:id is a soft-remove: it wipes the staff location
+    // assignments and demotes the user's role to CLIENT, but keeps the user
+    // record intact so we don't lose booking history, payments, and audit
+    // trail. That creates a scenario where an admin "deletes" a staff member
+    // and then tries to re-add them — the email still exists and a naive
+    // uniqueness check would block the re-add.
+    //
+    // Policy:
+    //   - If the email belongs to an active STAFF or ADMIN → true conflict.
+    //   - If the email belongs to a CLIENT (i.e. was previously staff, or
+    //     is a real client now being hired) → reinstate them in place.
+    //     Preserves their login + history, and skips the invite/password
+    //     reset round trip since they already have credentials.
+    const existing = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+    });
+
+    if (existing && (existing.role === Role.ADMIN || existing.role === Role.STAFF)) {
+      throw ApiError.conflict('A staff user with this email already exists');
+    }
+
+    if (existing && existing.role === Role.CLIENT) {
+      // Reinstate: update role + replace staff-location assignments in one tx.
+      const locationAssignments = locations.map((l: any) => ({
+        staffId: existing.id,
+        locationId: l.locationId,
+        roles: l.roles as LocationRole[],
+      }));
+
+      const reinstated = await prisma.$transaction(async (tx) => {
+        const user = await tx.user.update({
+          where: { id: existing.id },
+          data: {
+            role: userRole,
+            fullName,
+            phone: phone || existing.phone,
+          },
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            phone: true,
+            role: true,
+          },
+        });
+
+        await tx.staffLocation.deleteMany({ where: { staffId: user.id } });
+        if (locationAssignments.length > 0) {
+          await tx.staffLocation.createMany({ data: locationAssignments });
+        }
+
+        return user;
+      });
+
+      const roleSummary = locations
+        .map((l: any) => {
+          const locName =
+            validLocations.find((vl) => vl.id === l.locationId)?.name || l.locationId;
+          return `${locName}: ${l.roles.map((r: string) => ROLE_LABELS[r] || r).join(', ')}`;
+        })
+        .join('; ');
+
+      await createAuditLog({
+        action: 'STAFF_REINSTATED',
+        userId: req.user!.userId,
+        resourceType: 'User',
+        resourceId: reinstated.id,
+        changes: { fullName, email, role: userRole, locations: roleSummary },
+      });
+
+      res.status(200).json({
+        success: true,
+        data: reinstated,
+        reinstated: true,
+        message: `${fullName} reinstated as staff. Their existing login still works — no invite email sent.`,
+      });
+      return;
+    }
+
+    // Check for existing pending invite (only relevant on the fresh-invite path)
+    const existingInvite = await prisma.staffInvite.findFirst({
+      where: { email: email.toLowerCase(), usedAt: null, expiresAt: { gt: new Date() } },
+    });
+    if (existingInvite) throw ApiError.conflict('A pending invitation already exists for this email');
+
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7); // 7-day expiry
 
@@ -306,6 +385,11 @@ router.put('/:id/locations', async (req: Request, res: Response, next: NextFunct
 /**
  * DELETE /api/staff/:id
  * Deactivate a staff member (remove all location assignments, set role to CLIENT).
+ *
+ * Note: this is a soft-remove — we keep the user record so bookings, payments,
+ * notes, and audit trail remain intact. If the admin later re-adds someone by
+ * the same email, POST /api/staff/invite detects the demoted CLIENT state and
+ * reinstates them in place (see the reinstate branch above).
  */
 router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
