@@ -194,7 +194,7 @@ export default function ClientNotesPage() {
         <button
           onClick={() => setFilter('')}
           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-            !filter ? 'bg-primary text-white' : 'bg-surface border border-border text-muted hover:text-foreground'
+            !filter ? 'bg-highlight text-on-accent' : 'bg-surface border border-border text-muted hover:text-foreground'
           }`}
         >
           All
@@ -204,7 +204,7 @@ export default function ClientNotesPage() {
             key={cat}
             onClick={() => setFilter(cat)}
             className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-              filter === cat ? 'bg-primary text-white' : 'bg-surface border border-border text-muted hover:text-foreground'
+              filter === cat ? 'bg-highlight text-on-accent' : 'bg-surface border border-border text-muted hover:text-foreground'
             }`}
           >
             {formatCategory(cat)}

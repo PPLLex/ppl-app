@@ -1161,7 +1161,7 @@ function StaffSettings() {
                                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                                     currentRole === role
                                       ? role === 'OWNER'
-                                        ? 'bg-primary text-white'
+                                        ? 'bg-highlight text-on-accent'
                                         : role === 'COORDINATOR'
                                         ? 'bg-accent/20 text-accent-text ring-1 ring-accent/30'
                                         : 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/30'
@@ -1383,7 +1383,7 @@ function InviteStaffModal({
                             className={`px-2 py-1 rounded text-[11px] font-medium transition-colors ${
                               currentRole === role
                                 ? role === 'OWNER'
-                                  ? 'bg-primary text-white'
+                                  ? 'bg-highlight text-on-accent'
                                   : role === 'COORDINATOR'
                                   ? 'bg-accent/20 text-accent-text ring-1 ring-accent/30'
                                   : 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/30'

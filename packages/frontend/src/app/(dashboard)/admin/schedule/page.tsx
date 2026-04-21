@@ -244,14 +244,14 @@ export default function AdminSchedulePage() {
             return (
               <div
                 key={i}
-                className={`p-3 text-center border-r border-border last:border-r-0 ${
-                  isToday ? 'bg-highlight/10' : ''
-                }`}
+                className="p-3 text-center border-r border-border last:border-r-0"
               >
-                <p className="text-xs text-muted uppercase">{dayName}</p>
+                <p className={`text-xs uppercase ${isToday ? 'text-highlight-text font-semibold' : 'text-muted'}`}>{dayName}</p>
                 <p
                   className={`text-lg font-bold mt-0.5 ${
-                    isToday ? 'text-accent-text' : 'text-foreground'
+                    isToday
+                      ? 'text-background bg-highlight-text w-8 h-8 rounded-full flex items-center justify-center mx-auto'
+                      : 'text-foreground'
                   }`}
                 >
                   {dayNum}
@@ -1062,7 +1062,7 @@ function CreateSessionModal({
                 onClick={() => setIsRecurring(false)}
                 className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
                   !isRecurring
-                    ? 'bg-primary text-white'
+                    ? 'bg-highlight text-on-accent'
                     : 'bg-background text-muted hover:text-foreground'
                 }`}
               >
@@ -1073,7 +1073,7 @@ function CreateSessionModal({
                 onClick={() => setIsRecurring(true)}
                 className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
                   isRecurring
-                    ? 'bg-primary text-white'
+                    ? 'bg-highlight text-on-accent'
                     : 'bg-background text-muted hover:text-foreground'
                 }`}
               >
@@ -1107,8 +1107,8 @@ function CreateSessionModal({
                       onClick={() => toggleDay(idx)}
                       className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
                         recurringDays.includes(idx)
-                          ? 'bg-primary text-white ring-1 ring-accent/30'
-                          : 'bg-background text-muted hover:text-foreground hover:bg-surface/50'
+                          ? 'bg-highlight text-on-accent'
+                          : 'bg-background text-muted hover:text-foreground hover:bg-surface-hover'
                       }`}
                     >
                       {day}

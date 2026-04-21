@@ -271,7 +271,7 @@ export default function MessagePanel({ conversationFilter }: MessagePanelProps) 
                     <div
                       className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${
                         isMe
-                          ? 'bg-primary text-white rounded-br-md'
+                          ? 'bg-highlight text-on-accent rounded-br-md'
                           : 'bg-surface text-foreground rounded-bl-md'
                       }`}
                     >

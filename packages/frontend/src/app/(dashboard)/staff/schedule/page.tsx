@@ -566,8 +566,8 @@ function CreateSessionModal({
           <div>
             <label className="text-xs font-medium text-muted block mb-1.5">Schedule Type</label>
             <div className="flex rounded-lg overflow-hidden border border-border">
-              <button type="button" onClick={() => setIsRecurring(false)} className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${!isRecurring ? 'bg-primary text-white' : 'bg-background text-muted hover:text-foreground'}`}>One-Time</button>
-              <button type="button" onClick={() => setIsRecurring(true)} className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${isRecurring ? 'bg-primary text-white' : 'bg-background text-muted hover:text-foreground'}`}>Recurring</button>
+              <button type="button" onClick={() => setIsRecurring(false)} className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${!isRecurring ? 'bg-highlight text-on-accent' : 'bg-background text-muted hover:text-foreground'}`}>One-Time</button>
+              <button type="button" onClick={() => setIsRecurring(true)} className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${isRecurring ? 'bg-highlight text-on-accent' : 'bg-background text-muted hover:text-foreground'}`}>Recurring</button>
             </div>
           </div>
 
@@ -582,7 +582,7 @@ function CreateSessionModal({
                 <label className="text-xs font-medium text-muted block mb-1.5">Days of the Week</label>
                 <div className="flex gap-1">
                   {DAY_NAMES_SHORT.map((day, idx) => (
-                    <button key={day} type="button" onClick={() => toggleDay(idx)} className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${recurringDays.includes(idx) ? 'bg-primary text-white ring-1 ring-accent/30' : 'bg-background text-muted hover:text-foreground'}`}>{day}</button>
+                    <button key={day} type="button" onClick={() => toggleDay(idx)} className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${recurringDays.includes(idx) ? 'bg-highlight text-on-accent ' : 'bg-background text-muted hover:text-foreground'}`}>{day}</button>
                   ))}
                 </div>
                 {recurringDays.length > 0 && <p className="text-xs text-accent-text mt-1">Every {recurringDays.map((d) => DAY_NAMES[d]).join(', ')}</p>}

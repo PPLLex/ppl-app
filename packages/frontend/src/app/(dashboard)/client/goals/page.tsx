@@ -195,7 +195,7 @@ export default function ClientGoalsPage() {
             onClick={() => setFilter(tab.value)}
             className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
               filter === tab.value
-                ? 'bg-primary text-white'
+                ? 'bg-highlight text-on-accent'
                 : 'bg-surface border border-border text-muted hover:text-foreground'
             }`}
           >
