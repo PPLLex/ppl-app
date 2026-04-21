@@ -1,8 +1,18 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { api, SessionWithAvailability, SessionDetail } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  roomBucket,
+  roomChipLabel,
+  filterSessionsByRoom,
+  spotsStatus,
+  spotsLabelShort,
+  spotsPillClasses,
+  type RoomFilter,
+  type RoomBucket,
+} from '@/lib/rooms';
 
 const SESSION_TYPE_LABELS: Record<string, string> = {
   COLLEGE_PITCHING: 'College Pitching',
@@ -33,11 +43,26 @@ export default function StaffSchedulePage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [attendanceSessionId, setAttendanceSessionId] = useState<string | null>(null);
 
+  // Coaches default to seeing both calendars — most PPL coaches work 13+ and
+  // Youth in the same day — with a chip to narrow.
+  const [roomFilter, setRoomFilter] = useState<RoomFilter>('all');
+
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(selectedWeek);
     d.setDate(d.getDate() + i);
     return d;
   });
+
+  const visibleSessions = useMemo(
+    () => filterSessionsByRoom(sessions, roomFilter),
+    [sessions, roomFilter]
+  );
+
+  const presentBuckets = useMemo(() => {
+    const buckets = new Set<RoomBucket>();
+    for (const s of sessions) buckets.add(roomBucket(s.room));
+    return buckets;
+  }, [sessions]);
 
   const loadSessions = useCallback(async () => {
     setIsLoading(true);
@@ -78,7 +103,7 @@ export default function StaffSchedulePage() {
   };
 
   const getSessionsForDay = (date: Date) => {
-    return sessions.filter((s) => {
+    return visibleSessions.filter((s) => {
       const sd = new Date(s.startTime);
       return (
         sd.getFullYear() === date.getFullYear() &&
@@ -133,6 +158,30 @@ export default function StaffSchedulePage() {
         <button onClick={goToToday} className="ppl-btn ppl-btn-secondary text-xs ml-2">
           Today
         </button>
+
+        {/* Room filter chips */}
+        {(presentBuckets.has('teen') || presentBuckets.has('youth')) && (
+          <div className="flex gap-2 ml-auto">
+            {(['all', 'teen', 'youth'] as const).map((f) => {
+              const active = roomFilter === f;
+              const label = f === 'all' ? 'All rooms' : roomChipLabel(f);
+              return (
+                <button
+                  key={f}
+                  onClick={() => setRoomFilter(f)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                    active
+                      ? 'ppl-gradient text-white shadow-sm'
+                      : 'bg-surface border border-border text-muted hover:text-foreground'
+                  }`}
+                  aria-pressed={active}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Calendar Grid */}
@@ -160,23 +209,36 @@ export default function StaffSchedulePage() {
                 {daySessions.length === 0 ? (
                   <div className="text-center text-muted text-xs mt-10">No sessions</div>
                 ) : (
-                  daySessions.map((session) => (
-                    <div
-                      key={session.id}
-                      onClick={() => setAttendanceSessionId(session.id)}
-                      className={`p-2 rounded-lg mb-1.5 border-l-3 text-xs cursor-pointer hover:scale-[1.02] transition-transform ${
-                        SESSION_TYPE_COLORS[session.sessionType] || 'bg-surface border-border'
-                      }`}
-                    >
-                      <div className="font-semibold text-foreground">{formatTime(session.startTime)}</div>
-                      <div className="font-medium mt-0.5">
-                        {SESSION_TYPE_LABELS[session.sessionType] || session.title}
+                  daySessions.map((session) => {
+                    const status = spotsStatus(session.spotsRemaining, session.maxCapacity);
+                    const pill = spotsPillClasses(status);
+                    const pillText = spotsLabelShort(session.spotsRemaining, session.maxCapacity);
+                    return (
+                      <div
+                        key={session.id}
+                        onClick={() => setAttendanceSessionId(session.id)}
+                        className="p-2 rounded-lg mb-1.5 border border-border bg-surface text-xs cursor-pointer hover:border-border-light hover:bg-surface-hover transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <span className="font-semibold text-foreground">
+                            {formatTime(session.startTime)}
+                          </span>
+                          <span
+                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${pill}`}
+                            title={`${session.currentEnrolled}/${session.maxCapacity} booked`}
+                          >
+                            {pillText}
+                          </span>
+                        </div>
+                        <div className="text-foreground/90 truncate">
+                          {SESSION_TYPE_LABELS[session.sessionType] || session.title}
+                        </div>
+                        {session.room?.name && (
+                          <div className="text-muted truncate">{session.room.name}</div>
+                        )}
                       </div>
-                      <div className="text-muted mt-0.5">
-                        {session.room?.name} &middot; {session.currentEnrolled}/{session.maxCapacity}
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             );

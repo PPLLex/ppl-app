@@ -554,7 +554,7 @@ function RegisterForm() {
                     <span className="font-semibold text-foreground text-base">PPL Youth Graduate</span>
                   </div>
                   <p className="text-sm text-muted ml-8">
-                    I trained in the PPL Youth program and am moving up to the 13+ age groups.
+                    I trained in the PPL Youth program and am moving up to the 13+ age groups (Middle School, High School, College, and Pro).
                   </p>
                 </button>
 

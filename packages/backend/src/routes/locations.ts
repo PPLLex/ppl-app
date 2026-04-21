@@ -152,7 +152,7 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
 /**
  * POST /api/locations
  * Admin-only: create a new location
- * Auto-creates "13+" and "Youth" calendars for the location
+ * Auto-creates "13+ (Middle School, High School, College, and Pro)" and "Youth" calendars for the location
  */
 router.post('/', authenticate, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -173,10 +173,17 @@ router.post('/', authenticate, requireAdmin, async (req: Request, res: Response,
       },
     });
 
-    // Auto-create "13+" and "Youth" calendars for the new location
+    // Auto-create "13+ (Middle School, High School, College, and Pro)" and "Youth" calendars
+    // for the new location. Keeping the parenthetical in the canonical room name so every
+    // surface (dropdowns, calendar labels, reports, emails) reads the same thing without
+    // relying on per-screen copy to add the clarification.
     await prisma.room.createMany({
       data: [
-        { locationId: location.id, name: '13+', sortOrder: 0 },
+        {
+          locationId: location.id,
+          name: '13+ (Middle School, High School, College, and Pro)',
+          sortOrder: 0,
+        },
         { locationId: location.id, name: 'Youth', sortOrder: 1 },
       ],
     });

@@ -1,8 +1,19 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { api, SessionWithAvailability, Booking, MyWeekData, BookingWithCancelInfo } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  roomBucket,
+  roomChipLabel,
+  filterSessionsByRoom,
+  defaultRoomFilter,
+  spotsStatus,
+  spotsLabel,
+  spotsPillClasses,
+  type RoomFilter,
+  type RoomBucket,
+} from '@/lib/rooms';
 
 const SESSION_TYPE_LABELS: Record<string, string> = {
   COLLEGE_PITCHING: 'College Pitching',
@@ -35,6 +46,29 @@ export default function ClientBookPage() {
     d.setHours(0, 0, 0, 0);
     return d;
   });
+
+  // Room filter — defaults to the calendar matching the athlete's age group.
+  // Clients can still toggle between 13+, Youth, and All (useful for parents
+  // with kids in both programs).
+  const [roomFilter, setRoomFilter] = useState<RoomFilter>(() =>
+    defaultRoomFilter({
+      role: 'CLIENT',
+      ageGroup: (user?.ageGroup as 'youth' | 'ms_hs' | 'college' | undefined) ?? null,
+    })
+  );
+
+  // Re-evaluate the default filter once the user record loads (first render
+  // often doesn't have ageGroup yet).
+  useEffect(() => {
+    if (user?.ageGroup) {
+      setRoomFilter((prev) =>
+        prev === 'all'
+          ? defaultRoomFilter({ role: 'CLIENT', ageGroup: user.ageGroup as 'youth' | 'ms_hs' | 'college' })
+          : prev
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.ageGroup]);
 
   const locationId = user?.homeLocation?.id;
 
@@ -81,12 +115,24 @@ export default function ClientBookPage() {
     return d;
   });
 
-  // Sessions for selected date
+  // Which room buckets exist in the currently loaded week (drives which
+  // filter chips we actually show — don't render a Youth chip if there are
+  // no Youth sessions that week).
+  const presentBuckets = useMemo(() => {
+    const buckets = new Set<RoomBucket>();
+    for (const s of sessions) buckets.add(roomBucket(s.room));
+    return buckets;
+  }, [sessions]);
+
+  // Sessions for selected date, filtered by the active room filter.
   const selectedDateSessions = selectedDate
-    ? sessions.filter((s) => {
-        const sDate = new Date(s.startTime);
-        return sDate.toDateString() === selectedDate.toDateString();
-      })
+    ? filterSessionsByRoom(
+        sessions.filter((s) => {
+          const sDate = new Date(s.startTime);
+          return sDate.toDateString() === selectedDate.toDateString();
+        }),
+        roomFilter
+      )
     : [];
 
   // Check if client is already booked
@@ -345,6 +391,32 @@ export default function ClientBookPage() {
         </button>
       </div>
 
+      {/* Room filter chips — shown only if both age-group calendars have
+          sessions this week (otherwise there's nothing to toggle between). */}
+      {presentBuckets.has('teen') && presentBuckets.has('youth') && (
+        <div className="flex gap-2 mb-4">
+          {(['all', 'teen', 'youth'] as const).map((f) => {
+            const active = roomFilter === f;
+            const label =
+              f === 'all' ? 'All' : f === 'teen' ? roomChipLabel('teen') : roomChipLabel('youth');
+            return (
+              <button
+                key={f}
+                onClick={() => setRoomFilter(f)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  active
+                    ? 'ppl-gradient text-white shadow-sm'
+                    : 'bg-surface border border-border text-muted hover:text-foreground'
+                }`}
+                aria-pressed={active}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* ── DATE PICKER ── */}
       <div className="grid grid-cols-7 gap-2 mb-6">
         {weekDays.map((day, i) => {
@@ -419,6 +491,10 @@ export default function ClientBookPage() {
                   );
                   const isSelectedForBatch = selectedForBatch.has(session.id);
 
+                  const status = spotsStatus(session.spotsRemaining, session.maxCapacity);
+                  const pillClass = spotsPillClasses(status);
+                  const pillText = spotsLabel(session.spotsRemaining, session.maxCapacity);
+
                   return (
                     <div
                       key={session.id}
@@ -430,29 +506,23 @@ export default function ClientBookPage() {
                           : ''
                       }`}
                     >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className="font-semibold text-foreground">
-                            {formatTime(session.startTime)} – {formatTime(session.endTime)}
+                            {formatTime(session.startTime)}
                           </span>
-                          {booked && (
+                          {booked ? (
                             <span className="ppl-badge ppl-badge-active">Booked ✓</span>
-                          )}
-                          {full && !booked && (
-                            <span className="text-xs font-bold text-red-400 bg-red-400/10 px-2 py-0.5 rounded-full">
-                              Full
+                          ) : (
+                            <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${pillClass}`}>
+                              {pillText}
                             </span>
                           )}
                         </div>
-                        <p className="text-sm text-muted">
+                        <p className="text-sm text-muted truncate">
                           {SESSION_TYPE_LABELS[session.sessionType] || session.title}
                           {session.room && <span> · {session.room.name}</span>}
                           {session.coach && <span> · {session.coach.fullName}</span>}
-                        </p>
-                        <p className="text-xs text-muted mt-1">
-                          {full
-                            ? 'No spots available'
-                            : `${session.spotsRemaining} spot${session.spotsRemaining !== 1 ? 's' : ''} open`}
                         </p>
                       </div>
 

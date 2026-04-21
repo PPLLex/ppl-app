@@ -12,7 +12,9 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "backfill:rooms": "tsx scripts/backfill-default-rooms.ts",
+    "backfill:rooms:dry": "tsx scripts/backfill-default-rooms.ts --dry-run"
   },
   "keywords": [],
   "author": "",

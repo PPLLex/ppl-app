@@ -5,7 +5,7 @@ import { api, ClientListItem } from '@/lib/api';
 
 const AGE_GROUP_LABELS: Record<string, string> = {
   college: 'College',
-  ms_hs: '13+ (MS/HS)',
+  ms_hs: '13+ (Middle School, High School, College, and Pro)',
   youth: 'Youth',
 };
 

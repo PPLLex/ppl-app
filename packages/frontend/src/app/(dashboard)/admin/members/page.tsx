@@ -6,7 +6,7 @@ import { api, ClientListItem, Location } from '@/lib/api';
 
 const AGE_GROUP_LABELS: Record<string, string> = {
   college: 'College',
-  ms_hs: '13+ (MS/HS)',
+  ms_hs: '13+ (Middle School, High School, College, and Pro)',
   youth: 'Youth',
 };
 
@@ -86,7 +86,7 @@ export default function AdminMembersPage() {
         >
           <option value="">All Ages</option>
           <option value="college">College</option>
-          <option value="ms_hs">13+ (MS/HS)</option>
+          <option value="ms_hs">13+ (MS / HS / College / Pro)</option>
           <option value="youth">Youth</option>
         </select>
         <select

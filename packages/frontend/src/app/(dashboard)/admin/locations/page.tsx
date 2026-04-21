@@ -265,7 +265,7 @@ function LocationModal({
         </div>
         {!location && (
           <p className="text-xs text-muted mb-3">
-            A <strong>13+</strong> and <strong>Youth</strong> calendar will be created automatically.
+            A <strong>13+ (Middle School, High School, College, and Pro)</strong> and <strong>Youth</strong> calendar will be created automatically.
           </p>
         )}
         {error && (

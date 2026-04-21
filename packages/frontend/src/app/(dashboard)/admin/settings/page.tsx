@@ -659,7 +659,7 @@ function PlanSettings() {
 
   const AGE_GROUP_LABELS: Record<string, string> = {
     college: 'College',
-    ms_hs: '13+ (MS/HS)',
+    ms_hs: '13+ (Middle School, High School, College, and Pro)',
     youth: 'Youth',
   };
 
@@ -860,7 +860,7 @@ function PlanModal({
                 className="ppl-input"
               >
                 <option value="college">College</option>
-                <option value="ms_hs">13+ (MS/HS)</option>
+                <option value="ms_hs">13+ (MS / HS / College / Pro)</option>
                 <option value="youth">Youth</option>
               </select>
             </div>

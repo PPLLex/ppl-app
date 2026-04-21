@@ -1,8 +1,18 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { api, SessionWithAvailability, Location, Room, CreateSessionData, RecurringSeriesData } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  roomBucket,
+  roomChipLabel,
+  filterSessionsByRoom,
+  spotsStatus,
+  spotsLabelShort,
+  spotsPillClasses,
+  type RoomFilter,
+  type RoomBucket,
+} from '@/lib/rooms';
 
 const SESSION_TYPE_LABELS: Record<string, string> = {
   COLLEGE_PITCHING: 'College Pitching',
@@ -60,6 +70,9 @@ export default function AdminSchedulePage() {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; session: SessionWithAvailability } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Admins default to seeing both calendars; the chips let them narrow.
+  const [roomFilter, setRoomFilter] = useState<RoomFilter>('all');
+
   // Load locations
   useEffect(() => {
     api.getLocations().then((res) => {
@@ -105,14 +118,27 @@ export default function AdminSchedulePage() {
     return d;
   });
 
-  // Group sessions by day
+  // Apply the room filter before grouping so the calendar and counts stay
+  // consistent with what's visible.
+  const visibleSessions = useMemo(
+    () => filterSessionsByRoom(sessions, roomFilter),
+    [sessions, roomFilter]
+  );
+
+  const presentBuckets = useMemo(() => {
+    const buckets = new Set<RoomBucket>();
+    for (const s of sessions) buckets.add(roomBucket(s.room));
+    return buckets;
+  }, [sessions]);
+
+  // Group (filtered) sessions by day
   const sessionsByDay = weekDays.map((day) => {
     const dayStart = new Date(day);
     dayStart.setHours(0, 0, 0, 0);
     const dayEnd = new Date(day);
     dayEnd.setHours(23, 59, 59, 999);
 
-    return sessions.filter((s) => {
+    return visibleSessions.filter((s) => {
       const start = new Date(s.startTime);
       return start >= dayStart && start <= dayEnd;
     });
@@ -234,6 +260,30 @@ export default function AdminSchedulePage() {
             Today
           </button>
         </div>
+
+        {/* Room filter chips */}
+        {(presentBuckets.has('teen') || presentBuckets.has('youth')) && (
+          <div className="flex gap-2 ml-auto">
+            {(['all', 'teen', 'youth'] as const).map((f) => {
+              const active = roomFilter === f;
+              const label = f === 'all' ? 'All rooms' : roomChipLabel(f);
+              return (
+                <button
+                  key={f}
+                  onClick={() => setRoomFilter(f)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                    active
+                      ? 'ppl-gradient text-white shadow-sm'
+                      : 'bg-surface border border-border text-muted hover:text-foreground'
+                  }`}
+                  aria-pressed={active}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Weekly Calendar Grid */}
@@ -274,45 +324,55 @@ export default function AdminSchedulePage() {
               ) : (
                 daySessions
                   .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
-                  .map((session) => (
-                    <div
-                      key={session.id}
-                      onClick={() => setRosterSessionId(session.id)}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        setContextMenu({ x: e.clientX, y: e.clientY, session });
-                      }}
-                      className={`p-2 rounded-lg border text-xs cursor-pointer transition-all hover:scale-[1.02] relative group ${
-                        SESSION_TYPE_COLORS[session.sessionType] || 'bg-surface border-border'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-1">
-                        <p className="font-semibold truncate flex-1">{session.title}</p>
-                        {session.recurringGroupId && (
-                          <span title="Part of recurring series" className="opacity-60 flex-shrink-0">🔄</span>
-                        )}
-                      </div>
-                      <p className="opacity-80">
-                        {formatTime(session.startTime)} - {formatTime(session.endTime)}
-                      </p>
-                      {session.room && <p className="opacity-70">{session.room.name}</p>}
-                      <p className="opacity-70 mt-1">
-                        {session.currentEnrolled}/{session.maxCapacity} booked
-                      </p>
-                      {/* Quick action dots (visible on hover) */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
+                  .map((session) => {
+                    const status = spotsStatus(session.spotsRemaining, session.maxCapacity);
+                    const pill = spotsPillClasses(status);
+                    const pillText = spotsLabelShort(session.spotsRemaining, session.maxCapacity);
+                    return (
+                      <div
+                        key={session.id}
+                        onClick={() => setRosterSessionId(session.id)}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
                           setContextMenu({ x: e.clientX, y: e.clientY, session });
                         }}
-                        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+                        className="p-2 rounded-lg border border-border bg-surface text-xs cursor-pointer transition-all hover:border-border-light hover:bg-surface-hover relative group"
                       >
-                        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                        </svg>
-                      </button>
-                    </div>
-                  ))
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <span className="font-semibold text-foreground">
+                            {formatTime(session.startTime)}
+                          </span>
+                          <span
+                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${pill}`}
+                            title={`${session.currentEnrolled}/${session.maxCapacity} booked`}
+                          >
+                            {pillText}
+                          </span>
+                        </div>
+                        <p className="text-foreground/90 truncate">
+                          {session.title}
+                          {session.recurringGroupId && (
+                            <span title="Part of recurring series" className="opacity-60 ml-1">🔄</span>
+                          )}
+                        </p>
+                        {session.room && (
+                          <p className="text-muted truncate">{session.room.name}</p>
+                        )}
+                        {/* Quick action dots (visible on hover) */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setContextMenu({ x: e.clientX, y: e.clientY, session });
+                          }}
+                          className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 bg-surface rounded"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                          </svg>
+                        </button>
+                      </div>
+                    );
+                  })
               )}
             </div>
           ))}
