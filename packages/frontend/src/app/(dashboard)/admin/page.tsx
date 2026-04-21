@@ -121,40 +121,40 @@ export default function AdminDashboard() {
       {/* ── Top Metric Cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {/* Active Members */}
-        <Link href="/admin/members" className="ppl-card hover:border-ppl-dark-green/50 transition-colors group">
+        <Link href="/admin/members" className="ppl-card hover:border-primary/50 transition-colors group">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted">Active Members</p>
-            <svg className="w-4 h-4 text-muted group-hover:text-ppl-light-green transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-4 h-4 text-muted group-hover:text-accent transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           </div>
-          <p className="text-3xl font-bold mt-2 text-ppl-light-green">{membership.active}</p>
+          <p className="text-3xl font-bold mt-2 text-accent">{membership.active}</p>
           {membership.newSignups7d > 0 && (
-            <p className="text-xs text-ppl-light-green mt-1">+{membership.newSignups7d} this week</p>
+            <p className="text-xs text-accent mt-1">+{membership.newSignups7d} this week</p>
           )}
         </Link>
 
         {/* MRR */}
-        <Link href="/admin/revenue" className="ppl-card hover:border-ppl-dark-green/50 transition-colors group">
+        <Link href="/admin/revenue" className="ppl-card hover:border-primary/50 transition-colors group">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted">Monthly Revenue</p>
-            <svg className="w-4 h-4 text-muted group-hover:text-ppl-light-green transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-4 h-4 text-muted group-hover:text-accent transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <p className="text-3xl font-bold mt-2 text-ppl-light-green">{formatPrice(revenue.mrr)}</p>
+          <p className="text-3xl font-bold mt-2 text-accent">{formatPrice(revenue.mrr)}</p>
           {revenue.revenueChange !== 0 && (
-            <p className={`text-xs mt-1 ${revenue.revenueChange > 0 ? 'text-ppl-light-green' : 'text-red-400'}`}>
+            <p className={`text-xs mt-1 ${revenue.revenueChange > 0 ? 'text-accent' : 'text-red-400'}`}>
               {revenue.revenueChange > 0 ? '↑' : '↓'} {Math.abs(revenue.revenueChange)}% vs prev 30d
             </p>
           )}
         </Link>
 
         {/* Today's Sessions */}
-        <Link href="/admin/checkin" className="ppl-card hover:border-ppl-dark-green/50 transition-colors group">
+        <Link href="/admin/checkin" className="ppl-card hover:border-primary/50 transition-colors group">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted">Today&apos;s Sessions</p>
-            <svg className="w-4 h-4 text-muted group-hover:text-ppl-light-green transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-4 h-4 text-muted group-hover:text-accent transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           </div>
@@ -172,7 +172,7 @@ export default function AdminDashboard() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
           </div>
-          <p className={`text-3xl font-bold mt-2 ${utilizationRate >= 70 ? 'text-ppl-light-green' : utilizationRate >= 40 ? 'text-amber-400' : 'text-red-400'}`}>
+          <p className={`text-3xl font-bold mt-2 ${utilizationRate >= 70 ? 'text-accent' : utilizationRate >= 40 ? 'text-amber-400' : 'text-red-400'}`}>
             {utilizationRate}%
           </p>
           <div className="h-2 bg-surface rounded-full overflow-hidden mt-2">
@@ -192,7 +192,7 @@ export default function AdminDashboard() {
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-foreground">Today&apos;s Schedule</h3>
             <div className="flex items-center gap-3">
-              <Link href="/admin/checkin" className="text-xs text-ppl-light-green hover:underline">
+              <Link href="/admin/checkin" className="text-xs text-accent hover:underline">
                 Check In →
               </Link>
               <Link href="/admin/schedule" className="text-xs text-muted hover:text-foreground">
@@ -203,14 +203,14 @@ export default function AdminDashboard() {
           {today.sessions.length > 0 ? (
             <div className="space-y-2">
               {today.sessions.map((s: DashboardTodaySession) => (
-                <div key={s.id} className={`flex items-center justify-between p-3 rounded-lg ${s.isActive ? 'bg-ppl-dark-green/10 border border-ppl-dark-green/30' : 'bg-surface'}`}>
+                <div key={s.id} className={`flex items-center justify-between p-3 rounded-lg ${s.isActive ? 'bg-primary/10 border border-primary/30' : 'bg-surface'}`}>
                   <div className="flex items-center gap-3 min-w-0">
                     {/* Time column */}
                     <div className="w-16 flex-shrink-0 text-center">
                       <p className="text-sm font-medium text-foreground">{formatTime(s.startTime)}</p>
                       {s.isActive && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-ppl-light-green uppercase">
-                          <span className="w-1.5 h-1.5 rounded-full bg-ppl-light-green animate-pulse" />
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-accent uppercase">
+                          <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
                           Live
                         </span>
                       )}
@@ -231,7 +231,7 @@ export default function AdminDashboard() {
                   <div className="flex items-center gap-3 flex-shrink-0">
                     <div className="flex items-center gap-2 text-xs">
                       {s.checkedIn > 0 && (
-                        <span className="flex items-center gap-1 text-ppl-light-green">
+                        <span className="flex items-center gap-1 text-accent">
                           <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
                           {s.checkedIn}
                         </span>
@@ -296,7 +296,7 @@ export default function AdminDashboard() {
               </div>
             ) : (
               <div className="text-center py-3">
-                <p className="text-sm text-ppl-light-green font-medium">All clear!</p>
+                <p className="text-sm text-accent font-medium">All clear!</p>
               </div>
             )}
           </div>
@@ -317,7 +317,7 @@ export default function AdminDashboard() {
                         style={{ height: `${Math.max(height, 4)}%` }}
                       />
                     </div>
-                    <span className={`text-[10px] ${isToday ? 'text-ppl-light-green font-bold' : 'text-muted'}`}>
+                    <span className={`text-[10px] ${isToday ? 'text-accent font-bold' : 'text-muted'}`}>
                       {d.day}
                     </span>
                   </div>
@@ -364,14 +364,14 @@ export default function AdminDashboard() {
                 </Link>
               ))}
               {atRiskMembers.length > 5 && (
-                <Link href="/admin/members" className="block text-center text-xs text-ppl-light-green hover:underline py-1">
+                <Link href="/admin/members" className="block text-center text-xs text-accent hover:underline py-1">
                   View all {atRiskMembers.length} at-risk members
                 </Link>
               )}
             </div>
           ) : (
             <div className="text-center py-4">
-              <p className="text-sm text-ppl-light-green font-medium">Everyone&apos;s been training!</p>
+              <p className="text-sm text-accent font-medium">Everyone&apos;s been training!</p>
             </div>
           )}
         </div>

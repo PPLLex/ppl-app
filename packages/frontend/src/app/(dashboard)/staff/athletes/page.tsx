@@ -102,7 +102,7 @@ export default function StaffAthletesPage() {
                 onClick={() => selectClient(client)}
                 className={`ppl-card flex items-center gap-4 cursor-pointer transition-colors ${
                   selectedClient?.id === client.id
-                    ? 'border-ppl-dark-green/50 bg-ppl-dark-green/5'
+                    ? 'border-primary/50 bg-primary/5'
                     : 'hover:border-border/60'
                 }`}
               >
@@ -166,7 +166,7 @@ export default function StaffAthletesPage() {
               <div className="bg-background rounded-lg p-3 text-center">
                 {selectedClient.membership ? (
                   <>
-                    <p className="text-lg font-bold text-ppl-light-green">
+                    <p className="text-lg font-bold text-accent">
                       ${(selectedClient.membership.plan.priceCents / 100).toFixed(0)}
                     </p>
                     <p className="text-xs text-muted">/week</p>

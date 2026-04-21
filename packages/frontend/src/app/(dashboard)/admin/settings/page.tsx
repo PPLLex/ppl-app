@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api, Location, MembershipPlan, StaffMember, User, SessionTypeConfig, SessionTypeConfigInput, OrgSettings } from '@/lib/api';
+import { useTheme } from '@/contexts/ThemeContext';
 
 type SettingsTab = 'general' | 'plans' | 'staff' | 'integrations';
 
@@ -30,7 +31,7 @@ export default function AdminSettingsPage() {
             onClick={() => setActiveTab(tab.key)}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
               activeTab === tab.key
-                ? 'bg-ppl-dark-green/20 text-ppl-light-green'
+                ? 'bg-primary/20 text-accent'
                 : 'text-muted hover:text-foreground'
             }`}
           >
@@ -49,6 +50,7 @@ export default function AdminSettingsPage() {
 
 /* ─── General Settings ─── */
 function GeneralSettings() {
+  const { updateTheme } = useTheme();
   const [locations, setLocations] = useState<Location[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [defaults, setDefaults] = useState({
@@ -114,6 +116,8 @@ function GeneralSettings() {
         primaryColor: branding.primaryColor,
         accentColor: branding.accentColor,
       });
+      // Update live theme instantly
+      updateTheme({ primaryColor: branding.primaryColor, accentColor: branding.accentColor });
       setBrandMsg('Saved!');
       setTimeout(() => setBrandMsg(''), 2000);
     } catch (err) {
@@ -292,12 +296,45 @@ function GeneralSettings() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3 mt-4">
+        {/* Swap Colors + Live Preview */}
+        <div className="mt-4 flex items-center gap-3 flex-wrap">
+          <button
+            type="button"
+            onClick={() => {
+              const swapped = {
+                ...branding,
+                primaryColor: branding.accentColor,
+                accentColor: branding.primaryColor,
+              };
+              setBranding(swapped);
+              // Live-preview the swap immediately
+              updateTheme({ primaryColor: swapped.primaryColor, accentColor: swapped.accentColor });
+            }}
+            className="ppl-btn ppl-btn-secondary text-sm"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+            </svg>
+            Swap Colors
+          </button>
+          <div className="flex items-center gap-2 text-xs text-muted">
+            <span>Preview:</span>
+            <div className="flex gap-1">
+              <span className="inline-block w-5 h-5 rounded" style={{ background: branding.primaryColor }} title="Primary" />
+              <span className="inline-block w-5 h-5 rounded" style={{ background: branding.accentColor }} title="Accent" />
+            </div>
+            <span className="inline-block h-5 px-2 rounded text-white text-[11px] leading-5 font-medium" style={{ background: `linear-gradient(135deg, ${branding.primaryColor}, ${branding.accentColor})` }}>
+              Button
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 mt-3">
           <button onClick={handleBrandSave} disabled={brandSaving} className="ppl-btn ppl-btn-primary text-sm">
             {brandSaving ? 'Saving...' : brandMsg || 'Save Branding'}
           </button>
           {brandMsg && !brandSaving && (
-            <span className={`text-xs ${brandMsg.includes('Error') || brandMsg.includes('failed') ? 'text-red-400' : 'text-ppl-light-green'}`}>
+            <span className={`text-xs ${brandMsg.includes('Error') || brandMsg.includes('failed') ? 'text-red-400' : 'text-accent'}`}>
               {brandMsg}
             </span>
           )}
@@ -367,7 +404,7 @@ function GeneralSettings() {
             {defaultsSaving ? 'Saving...' : defaultsMsg || 'Save Defaults'}
           </button>
           {defaultsMsg && !defaultsSaving && (
-            <span className={`text-xs ${defaultsMsg.includes('Error') ? 'text-red-400' : 'text-ppl-light-green'}`}>
+            <span className={`text-xs ${defaultsMsg.includes('Error') ? 'text-red-400' : 'text-accent'}`}>
               {defaultsMsg}
             </span>
           )}
@@ -387,7 +424,7 @@ function GeneralSettings() {
             <h2 className="text-lg font-bold text-foreground">Locations</h2>
             <p className="text-sm text-muted">Quick view of your facilities</p>
           </div>
-          <a href="/admin/locations" className="text-sm text-ppl-light-green hover:underline">
+          <a href="/admin/locations" className="text-sm text-accent hover:underline">
             Manage Locations &rarr;
           </a>
         </div>
@@ -522,7 +559,7 @@ function SessionTypeConfigPanel({ locations }: { locations: Location[] }) {
                   onClick={() => updateConfig(idx, 'isActive', !cfg.isActive)}
                   className={`text-xs px-2 py-1 rounded-md font-medium ${
                     cfg.isActive
-                      ? 'bg-ppl-dark-green/20 text-ppl-light-green'
+                      ? 'bg-primary/20 text-accent'
                       : 'bg-red-500/10 text-red-400'
                   }`}
                 >
@@ -588,7 +625,7 @@ function SessionTypeConfigPanel({ locations }: { locations: Location[] }) {
         </button>
       )}
       {saveMsg && !hasChanges && (
-        <p className="text-xs text-ppl-light-green mt-2">{saveMsg}</p>
+        <p className="text-xs text-accent mt-2">{saveMsg}</p>
       )}
     </div>
   );
@@ -647,7 +684,7 @@ function PlanSettings() {
         <div
           className={`mb-4 p-3 rounded-lg text-sm ${
             message.type === 'success'
-              ? 'bg-ppl-dark-green/10 border border-ppl-dark-green/20 text-ppl-light-green'
+              ? 'bg-primary/10 border border-primary/20 text-accent'
               : 'bg-danger/10 border border-danger/20 text-danger'
           }`}
         >
@@ -687,7 +724,7 @@ function PlanSettings() {
                 </div>
                 <div className="flex items-center gap-4 ml-4">
                   <div className="text-right">
-                    <p className="text-lg font-bold text-ppl-light-green">
+                    <p className="text-lg font-bold text-accent">
                       ${(plan.priceCents / 100).toFixed(0)}
                     </p>
                     <p className="text-xs text-muted">/{plan.billingCycle}</p>
@@ -1043,7 +1080,7 @@ function StaffSettings() {
         <div
           className={`mb-4 p-3 rounded-lg text-sm ${
             message.type === 'success'
-              ? 'bg-ppl-dark-green/10 border border-ppl-dark-green/20 text-ppl-light-green'
+              ? 'bg-primary/10 border border-primary/20 text-accent'
               : 'bg-danger/10 border border-danger/20 text-danger'
           }`}
         >
@@ -1122,9 +1159,9 @@ function StaffSettings() {
                                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                                     currentRole === role
                                       ? role === 'OWNER'
-                                        ? 'bg-ppl-dark-green text-white'
+                                        ? 'bg-primary text-white'
                                         : role === 'COORDINATOR'
-                                        ? 'bg-ppl-light-green/20 text-ppl-light-green ring-1 ring-ppl-light-green/30'
+                                        ? 'bg-accent/20 text-accent ring-1 ring-accent/30'
                                         : 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/30'
                                       : 'bg-background text-muted hover:bg-surface/50'
                                   }`}
@@ -1344,9 +1381,9 @@ function InviteStaffModal({
                             className={`px-2 py-1 rounded text-[11px] font-medium transition-colors ${
                               currentRole === role
                                 ? role === 'OWNER'
-                                  ? 'bg-ppl-dark-green text-white'
+                                  ? 'bg-primary text-white'
                                   : role === 'COORDINATOR'
-                                  ? 'bg-ppl-light-green/20 text-ppl-light-green ring-1 ring-ppl-light-green/30'
+                                  ? 'bg-accent/20 text-accent ring-1 ring-accent/30'
                                   : 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/30'
                                 : 'bg-background text-muted hover:bg-surface/50'
                             }`}
@@ -1474,7 +1511,7 @@ function IntegrationSettings() {
               <h3 className="font-semibold text-foreground">{integration.name}</h3>
               <p className="text-sm text-muted">{integration.description}</p>
               {h.message && (
-                <p className={`text-xs mt-0.5 ${h.status === 'connected' ? 'text-ppl-light-green' : 'text-red-400'}`}>
+                <p className={`text-xs mt-0.5 ${h.status === 'connected' ? 'text-accent' : 'text-red-400'}`}>
                   {h.message}
                 </p>
               )}
@@ -1558,7 +1595,7 @@ function KioskSetupPanel({ locations }: { locations: Location[] }) {
     <div className="ppl-card">
       <div className="flex items-center justify-between mb-1">
         <h2 className="text-lg font-bold text-foreground">Self-Service Kiosk</h2>
-        <span className="ppl-badge bg-ppl-dark-green/10 text-ppl-light-green border border-ppl-dark-green/20 text-xs">New</span>
+        <span className="ppl-badge bg-primary/10 text-accent border border-primary/20 text-xs">New</span>
       </div>
       <p className="text-sm text-muted mb-4">
         Set up a tablet at your facility for athletes to check themselves in. Each location gets its own PIN.
@@ -1574,7 +1611,7 @@ function KioskSetupPanel({ locations }: { locations: Location[] }) {
                   href={`${appDomain}/kiosk`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs text-ppl-light-green hover:underline"
+                  className="text-xs text-accent hover:underline"
                 >
                   Open Kiosk &rarr;
                 </a>
@@ -1614,7 +1651,7 @@ function KioskSetupPanel({ locations }: { locations: Location[] }) {
             </div>
             {pins[loc.id] && (
               <p className="text-xs text-muted mt-2">
-                Kiosk URL: <code className="text-foreground bg-surface px-1 rounded">{appDomain}/kiosk</code> — enter PIN <code className="text-ppl-light-green bg-surface px-1 rounded">{pins[loc.id]}</code>
+                Kiosk URL: <code className="text-foreground bg-surface px-1 rounded">{appDomain}/kiosk</code> — enter PIN <code className="text-accent bg-surface px-1 rounded">{pins[loc.id]}</code>
               </p>
             )}
           </div>
@@ -1624,7 +1661,7 @@ function KioskSetupPanel({ locations }: { locations: Location[] }) {
       <div className="mt-4 p-3 bg-surface rounded-lg">
         <p className="text-xs text-muted">
           <strong className="text-foreground">Setup guide:</strong> Open{' '}
-          <code className="text-ppl-light-green">{appDomain}/kiosk</code> on a tablet browser, enter the
+          <code className="text-accent">{appDomain}/kiosk</code> on a tablet browser, enter the
           location PIN, then use the browser&apos;s fullscreen mode (or &quot;Add to Home Screen&quot; on
           iPad) for the best experience. The kiosk auto-refreshes and doesn&apos;t require login.
         </p>

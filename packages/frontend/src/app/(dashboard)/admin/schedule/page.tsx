@@ -13,7 +13,7 @@ const SESSION_TYPE_LABELS: Record<string, string> = {
 };
 
 const SESSION_TYPE_COLORS: Record<string, string> = {
-  COLLEGE_PITCHING: 'bg-ppl-dark-green/20 border-ppl-dark-green text-ppl-light-green',
+  COLLEGE_PITCHING: 'bg-primary/20 border-primary text-accent',
   MS_HS_PITCHING: 'bg-blue-500/20 border-blue-500 text-blue-400',
   YOUTH_PITCHING: 'bg-amber-500/20 border-amber-500 text-amber-400',
   PRIVATE_LESSON: 'bg-purple-500/20 border-purple-500 text-purple-400',
@@ -164,7 +164,7 @@ export default function AdminSchedulePage() {
           onClick={() => setActiveTab('calendar')}
           className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'calendar'
-              ? 'border-ppl-light-green text-ppl-light-green'
+              ? 'border-accent text-accent'
               : 'border-transparent text-muted hover:text-foreground'
           }`}
         >
@@ -174,7 +174,7 @@ export default function AdminSchedulePage() {
           onClick={() => setActiveTab('templates')}
           className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'templates'
-              ? 'border-ppl-light-green text-ppl-light-green'
+              ? 'border-accent text-accent'
               : 'border-transparent text-muted hover:text-foreground'
           }`}
         >
@@ -245,13 +245,13 @@ export default function AdminSchedulePage() {
               <div
                 key={i}
                 className={`p-3 text-center border-r border-border last:border-r-0 ${
-                  isToday ? 'bg-ppl-dark-green/10' : ''
+                  isToday ? 'bg-primary/10' : ''
                 }`}
               >
                 <p className="text-xs text-muted uppercase">{dayName}</p>
                 <p
                   className={`text-lg font-bold mt-0.5 ${
-                    isToday ? 'text-ppl-light-green' : 'text-foreground'
+                    isToday ? 'text-accent' : 'text-foreground'
                   }`}
                 >
                   {dayNum}
@@ -524,7 +524,7 @@ function ScheduleTemplatesView({
       {message && (
         <div className={`mb-4 p-3 rounded-lg text-sm ${
           message.type === 'success'
-            ? 'bg-ppl-dark-green/10 border border-ppl-dark-green/20 text-ppl-light-green'
+            ? 'bg-primary/10 border border-primary/20 text-accent'
             : 'bg-danger/10 border border-danger/20 text-danger'
         }`}>
           {message.text}
@@ -1062,7 +1062,7 @@ function CreateSessionModal({
                 onClick={() => setIsRecurring(false)}
                 className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
                   !isRecurring
-                    ? 'bg-ppl-dark-green text-white'
+                    ? 'bg-primary text-white'
                     : 'bg-background text-muted hover:text-foreground'
                 }`}
               >
@@ -1073,7 +1073,7 @@ function CreateSessionModal({
                 onClick={() => setIsRecurring(true)}
                 className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
                   isRecurring
-                    ? 'bg-ppl-dark-green text-white'
+                    ? 'bg-primary text-white'
                     : 'bg-background text-muted hover:text-foreground'
                 }`}
               >
@@ -1107,7 +1107,7 @@ function CreateSessionModal({
                       onClick={() => toggleDay(idx)}
                       className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
                         recurringDays.includes(idx)
-                          ? 'bg-ppl-dark-green text-white ring-1 ring-ppl-light-green/30'
+                          ? 'bg-primary text-white ring-1 ring-accent/30'
                           : 'bg-background text-muted hover:text-foreground hover:bg-surface/50'
                       }`}
                     >
@@ -1116,7 +1116,7 @@ function CreateSessionModal({
                   ))}
                 </div>
                 {recurringDays.length > 0 && (
-                  <p className="text-xs text-ppl-light-green mt-1.5">
+                  <p className="text-xs text-accent mt-1.5">
                     Every {recurringDays.map((d) => DAY_NAMES[d]).join(', ')}
                   </p>
                 )}
@@ -1149,8 +1149,8 @@ function CreateSessionModal({
 
           {/* Summary preview */}
           {isRecurring && estimatedCount > 0 && (
-            <div className="bg-ppl-dark-green/10 border border-ppl-dark-green/20 rounded-lg p-3">
-              <p className="text-sm text-ppl-light-green font-medium">
+            <div className="bg-primary/10 border border-primary/20 rounded-lg p-3">
+              <p className="text-sm text-accent font-medium">
                 This will create {estimatedCount} session{estimatedCount !== 1 ? 's' : ''}
               </p>
               <p className="text-xs text-muted mt-0.5">
@@ -1392,7 +1392,7 @@ function RosterModal({ sessionId, onClose }: { sessionId: string; onClose: () =>
                       </div>
                     )}
                     {violationForm.clientId && (
-                      <p className="text-xs text-ppl-light-green mt-0.5">Selected: {violationForm.clientName}</p>
+                      <p className="text-xs text-accent mt-0.5">Selected: {violationForm.clientName}</p>
                     )}
                   </div>
                   <div>
@@ -1456,7 +1456,7 @@ function RosterModal({ sessionId, onClose }: { sessionId: string; onClose: () =>
                       <div className="flex items-center gap-2">
                         <span className={`text-xs font-medium ${
                           v.status === 'PENDING' ? 'text-amber-400' :
-                          v.status === 'PAID' ? 'text-ppl-light-green' : 'text-muted'
+                          v.status === 'PAID' ? 'text-accent' : 'text-muted'
                         }`}>
                           {v.status}
                         </span>
@@ -1707,7 +1707,7 @@ function SeriesDetailModal({
         {message && (
           <div className={`mx-6 mt-4 p-3 rounded-lg text-sm ${
             message.type === 'success'
-              ? 'bg-ppl-dark-green/10 border border-ppl-dark-green/20 text-ppl-light-green'
+              ? 'bg-primary/10 border border-primary/20 text-accent'
               : 'bg-danger/10 border border-danger/20 text-danger'
           }`}>
             {message.text}
@@ -1806,7 +1806,7 @@ function SeriesDetailModal({
                   >
                     <div className="flex items-center gap-3">
                       <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                        !s.isActive ? 'bg-muted' : isPast ? 'bg-muted' : 'bg-ppl-light-green'
+                        !s.isActive ? 'bg-muted' : isPast ? 'bg-muted' : 'bg-accent'
                       }`} />
                       <div>
                         <p className={`text-sm font-medium ${isPast || !s.isActive ? 'text-muted' : 'text-foreground'}`}>

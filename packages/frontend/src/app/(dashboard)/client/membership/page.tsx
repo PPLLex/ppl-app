@@ -130,7 +130,7 @@ export default function ClientMembershipPage() {
         <div
           className={`mb-4 p-3 rounded-lg text-sm ${
             message.type === 'success'
-              ? 'bg-ppl-dark-green/10 border border-ppl-dark-green/20 text-ppl-light-green'
+              ? 'bg-primary/10 border border-primary/20 text-accent'
               : 'bg-danger/10 border border-danger/20 text-danger'
           }`}
         >
@@ -167,7 +167,7 @@ export default function ClientMembershipPage() {
 
             <div className="grid grid-cols-3 gap-4 p-3 bg-surface rounded-lg">
               <div className="text-center">
-                <p className="text-2xl font-bold text-ppl-light-green">
+                <p className="text-2xl font-bold text-accent">
                   {formatPrice(membership.plan.priceCents)}
                 </p>
                 <p className="text-xs text-muted">per week</p>
@@ -227,13 +227,13 @@ export default function ClientMembershipPage() {
                     <span className="text-xs text-muted">
                       {credits.used} of {credits.total} used
                     </span>
-                    <span className="text-xs text-ppl-light-green font-medium">
+                    <span className="text-xs text-accent font-medium">
                       {credits.remaining} remaining
                     </span>
                   </div>
                 </div>
                 <div className="text-center min-w-[60px]">
-                  <p className="text-3xl font-bold text-ppl-light-green">{credits.remaining}</p>
+                  <p className="text-3xl font-bold text-accent">{credits.remaining}</p>
                   <p className="text-xs text-muted">left</p>
                 </div>
               </div>
@@ -365,7 +365,7 @@ export default function ClientMembershipPage() {
                           )}
                         </div>
                         <div className="text-right ml-4">
-                          <p className="text-2xl font-bold text-ppl-light-green">
+                          <p className="text-2xl font-bold text-accent">
                             {formatPrice(plan.priceCents)}
                           </p>
                           <p className="text-xs text-muted">/week</p>

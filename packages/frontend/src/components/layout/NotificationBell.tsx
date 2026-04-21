@@ -92,7 +92,7 @@ export default function NotificationBell() {
           />
         </svg>
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 w-4.5 h-4.5 min-w-[18px] rounded-full bg-ppl-light-green text-background text-[10px] font-bold flex items-center justify-center">
+          <span className="absolute -top-0.5 -right-0.5 w-4.5 h-4.5 min-w-[18px] rounded-full bg-accent text-background text-[10px] font-bold flex items-center justify-center">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -107,7 +107,7 @@ export default function NotificationBell() {
             {unreadCount > 0 && (
               <button
                 onClick={handleMarkAllRead}
-                className="text-xs text-ppl-light-green hover:underline"
+                className="text-xs text-accent hover:underline"
               >
                 Mark all read
               </button>
@@ -126,7 +126,7 @@ export default function NotificationBell() {
                       if (isUnread) handleMarkRead(notif.id);
                     }}
                     className={`w-full px-4 py-3 text-left border-b border-border/50 transition hover:bg-background ${
-                      isUnread ? 'bg-ppl-dark-green/5' : ''
+                      isUnread ? 'bg-primary/5' : ''
                     }`}
                   >
                     <div className="flex gap-3">
@@ -139,7 +139,7 @@ export default function NotificationBell() {
                             {notif.title}
                           </p>
                           {isUnread && (
-                            <span className="w-2 h-2 rounded-full bg-ppl-light-green flex-shrink-0 mt-1.5" />
+                            <span className="w-2 h-2 rounded-full bg-accent flex-shrink-0 mt-1.5" />
                           )}
                         </div>
                         <p className="text-xs text-muted mt-0.5 line-clamp-2">{notif.body}</p>

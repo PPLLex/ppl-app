@@ -59,7 +59,7 @@ export default function SchoolsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {schools.map((school) => (
-            <Link key={school.id} href={`/admin/schools/${school.id}`} className="ppl-card hover:border-ppl-light-green/30 transition-colors">
+            <Link key={school.id} href={`/admin/schools/${school.id}`} className="ppl-card hover:border-accent/30 transition-colors">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
                   {school.brandLogoUrl ? (

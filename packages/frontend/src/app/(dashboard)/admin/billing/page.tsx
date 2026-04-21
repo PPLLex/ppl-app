@@ -203,7 +203,7 @@ export default function AdminBillingPage() {
         <div
           className={`mb-4 p-3 rounded-lg text-sm ${
             message.type === 'success'
-              ? 'bg-ppl-dark-green/10 border border-ppl-dark-green/20 text-ppl-light-green'
+              ? 'bg-primary/10 border border-primary/20 text-accent'
               : 'bg-danger/10 border border-danger/20 text-danger'
           }`}
         >
@@ -245,9 +245,9 @@ export default function AdminBillingPage() {
           ) : stats ? (
             <>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <StatCard label="Active Members" value={stats.activeMemberships} color="text-ppl-light-green" />
+                <StatCard label="Active Members" value={stats.activeMemberships} color="text-accent" />
                 <StatCard label="Past Due" value={stats.pastDueMemberships} color="text-danger" />
-                <StatCard label="Total Revenue" value={formatPrice(stats.totalRevenueCents)} color="text-ppl-light-green" />
+                <StatCard label="Total Revenue" value={formatPrice(stats.totalRevenueCents)} color="text-accent" />
                 <StatCard label="Cancelled" value={stats.cancelledMemberships} color="text-muted" />
               </div>
 
@@ -281,14 +281,14 @@ export default function AdminBillingPage() {
                   <div className="space-y-2">
                     <div className="flex justify-between items-center p-2 bg-surface rounded-lg">
                       <span className="text-sm text-foreground">Est. Weekly Revenue</span>
-                      <span className="text-sm font-bold text-ppl-light-green">
+                      <span className="text-sm font-bold text-accent">
                         {/* rough estimate based on active members */}
                         —
                       </span>
                     </div>
                     <div className="flex justify-between items-center p-2 bg-surface rounded-lg">
                       <span className="text-sm text-foreground">Collection Rate</span>
-                      <span className="text-sm font-bold text-ppl-light-green">
+                      <span className="text-sm font-bold text-accent">
                         {stats.activeMemberships + stats.pastDueMemberships > 0
                           ? `${Math.round((stats.activeMemberships / (stats.activeMemberships + stats.pastDueMemberships)) * 100)}%`
                           : '—'}
@@ -352,7 +352,7 @@ export default function AdminBillingPage() {
                     <p className="text-xs text-muted">{m.client.email}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-lg font-bold text-ppl-light-green">
+                    <p className="text-lg font-bold text-accent">
                       ${(m.plan.priceCents / 100).toFixed(0)}
                     </p>
                     <p className="text-xs text-muted">/week</p>
@@ -370,7 +370,7 @@ export default function AdminBillingPage() {
           {pastDue.length === 0 ? (
             <div className="ppl-card text-center py-12">
               <div className="text-4xl mb-3">&#10003;</div>
-              <p className="text-ppl-light-green font-semibold text-lg">All payments current!</p>
+              <p className="text-accent font-semibold text-lg">All payments current!</p>
               <p className="text-muted text-sm mt-1">No past-due accounts right now. The daily auto-retry runs every morning at 9 AM.</p>
             </div>
           ) : (
@@ -411,7 +411,7 @@ export default function AdminBillingPage() {
                       onClick={() => setSortPastDue(s)}
                       className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
                         sortPastDue === s
-                          ? 'bg-ppl-dark-green/30 text-ppl-light-green'
+                          ? 'bg-primary/30 text-accent'
                           : 'text-muted hover:text-foreground'
                       }`}
                     >

@@ -140,7 +140,7 @@ export default function StaffNotesPage() {
             </div>
           )}
           {successMsg && (
-            <div className="mb-4 p-3 rounded-lg bg-ppl-dark-green/10 border border-ppl-dark-green/20 text-ppl-dark-green text-sm">
+            <div className="mb-4 p-3 rounded-lg bg-primary/10 border border-primary/20 text-primary text-sm">
               {successMsg}
             </div>
           )}
@@ -152,7 +152,7 @@ export default function StaffNotesPage() {
                 Athlete
               </label>
               {selectedAthleteId ? (
-                <div className="flex items-center justify-between p-3 rounded-lg border border-ppl-dark-green bg-ppl-dark-green/10">
+                <div className="flex items-center justify-between p-3 rounded-lg border border-primary bg-primary/10">
                   <span className="font-medium text-foreground">{selectedAthleteName}</span>
                   <button
                     type="button"
@@ -243,7 +243,7 @@ export default function StaffNotesPage() {
 
           {loadingNotes ? (
             <div className="flex items-center justify-center py-10">
-              <div className="w-8 h-8 border-2 border-ppl-dark-green border-t-transparent rounded-full animate-spin" />
+              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             </div>
           ) : recentNotes.length === 0 ? (
             <p className="text-sm text-muted text-center py-10">
@@ -264,7 +264,7 @@ export default function StaffNotesPage() {
                       {formatDate(note.sessionDate)}
                     </span>
                   </div>
-                  <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-ppl-dark-green/10 text-ppl-dark-green mb-2">
+                  <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary mb-2">
                     {formatCategory(note.trainingCategory)}
                   </span>
                   <p className="text-sm text-muted leading-relaxed">

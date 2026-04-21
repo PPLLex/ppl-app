@@ -252,7 +252,7 @@ export default function SchoolDetailPage() {
     <div>
       {/* Header */}
       <div className="mb-6">
-        <Link href="/admin/schools" className="text-sm text-muted hover:text-ppl-light-green transition-colors">
+        <Link href="/admin/schools" className="text-sm text-muted hover:text-accent transition-colors">
           ← Back to Partner Schools
         </Link>
         <div className="flex items-center gap-4 mt-2">
@@ -372,7 +372,7 @@ export default function SchoolDetailPage() {
             <h3 className="font-semibold text-foreground mb-3">Financials</h3>
             <div className="grid grid-cols-2 gap-4">
               <div className="p-3 bg-surface rounded-lg text-center">
-                <p className="text-xl font-bold text-ppl-light-green">
+                <p className="text-xl font-bold text-accent">
                   {formatMoney(school.invoices.filter((i) => i.status === 'PAID').reduce((sum, i) => sum + i.paidCents, 0))}
                 </p>
                 <p className="text-xs text-muted">Collected</p>
@@ -484,7 +484,7 @@ export default function SchoolDetailPage() {
                         type="checkbox"
                         checked={coachPerms[key]}
                         onChange={(e) => setCoachPerms({ ...coachPerms, [key]: e.target.checked })}
-                        className="rounded border-border text-ppl-light-green focus:ring-ppl-light-green"
+                        className="rounded border-border text-accent focus:ring-accent"
                       />
                       {label}
                     </label>
@@ -790,7 +790,7 @@ function SchoolBrandingCard({ school, onUpdated }: { school: SchoolTeamDetail; o
             {uploading ? 'Uploading...' : school.brandLogoUrl ? 'Change Logo' : 'Upload Logo'}
           </label>
           <p className="text-[10px] text-muted mt-1">PNG, JPG, WebP, SVG, or GIF. Max 2MB.</p>
-          {msg && <p className={`text-xs mt-1 ${msg.includes('fail') || msg.includes('must') ? 'text-red-400' : 'text-ppl-light-green'}`}>{msg}</p>}
+          {msg && <p className={`text-xs mt-1 ${msg.includes('fail') || msg.includes('must') ? 'text-red-400' : 'text-accent'}`}>{msg}</p>}
         </div>
       </div>
       {school.brandColors && (

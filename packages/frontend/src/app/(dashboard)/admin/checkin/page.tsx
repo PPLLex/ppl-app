@@ -132,7 +132,7 @@ export default function StaffCheckinPage() {
         <div
           className={`mb-4 p-3 rounded-lg text-sm transition-all ${
             message.type === 'success'
-              ? 'bg-ppl-dark-green/10 border border-ppl-dark-green/20 text-ppl-light-green'
+              ? 'bg-primary/10 border border-primary/20 text-accent'
               : 'bg-danger/10 border border-danger/20 text-danger'
           }`}
         >
@@ -177,7 +177,7 @@ export default function StaffCheckinPage() {
                       isSelected
                         ? 'ppl-gradient text-white shadow-lg'
                         : session.isActive
-                        ? 'bg-ppl-dark-green/10 border border-ppl-dark-green/30 text-foreground hover:bg-ppl-dark-green/20'
+                        ? 'bg-primary/10 border border-primary/30 text-foreground hover:bg-primary/20'
                         : session.isPast
                         ? 'bg-surface/50 border border-border/50 text-muted'
                         : 'bg-surface border border-border text-foreground hover:border-border-light'
@@ -188,7 +188,7 @@ export default function StaffCheckinPage() {
                         {formatTime(session.startTime)}
                       </span>
                       {session.isActive && !isSelected && (
-                        <span className="text-xs font-bold text-ppl-light-green animate-pulse">LIVE</span>
+                        <span className="text-xs font-bold text-accent animate-pulse">LIVE</span>
                       )}
                       {session.isActive && isSelected && (
                         <span className="text-xs font-bold text-white/80 animate-pulse">LIVE</span>
@@ -244,8 +244,8 @@ export default function StaffCheckinPage() {
 
                 {/* Stats bar */}
                 <div className="grid grid-cols-3 gap-3 mb-4">
-                  <div className="bg-ppl-dark-green/10 border border-ppl-dark-green/20 rounded-xl p-3 text-center">
-                    <p className="text-2xl font-bold text-ppl-light-green">{activeSession.stats.checkedIn}</p>
+                  <div className="bg-primary/10 border border-primary/20 rounded-xl p-3 text-center">
+                    <p className="text-2xl font-bold text-accent">{activeSession.stats.checkedIn}</p>
                     <p className="text-xs text-muted">Checked In</p>
                   </div>
                   <div className="bg-surface border border-border rounded-xl p-3 text-center">
@@ -332,7 +332,7 @@ function RosterRow({
     <div
       className={`flex items-center justify-between p-3 rounded-xl transition-all ${
         isCheckedIn
-          ? 'bg-ppl-dark-green/10 border border-ppl-dark-green/20'
+          ? 'bg-primary/10 border border-primary/20'
           : isNoShow
           ? 'bg-danger/5 border border-danger/15'
           : 'bg-surface border border-border'
@@ -343,14 +343,14 @@ function RosterRow({
         <div
           className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
             isCheckedIn
-              ? 'bg-ppl-light-green/20'
+              ? 'bg-accent/20'
               : isNoShow
               ? 'bg-danger/20'
               : 'bg-surface-hover'
           }`}
         >
           {isCheckedIn ? (
-            <svg className="w-5 h-5 text-ppl-light-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <svg className="w-5 h-5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           ) : isNoShow ? (
@@ -395,7 +395,7 @@ function RosterRow({
           </>
         )}
         {isCheckedIn && (
-          <span className="text-xs font-medium text-ppl-light-green px-2 py-1 rounded-full bg-ppl-light-green/10">
+          <span className="text-xs font-medium text-accent px-2 py-1 rounded-full bg-accent/10">
             Checked In
           </span>
         )}

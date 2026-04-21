@@ -62,7 +62,7 @@ export default function StripeCheckout({
               </p>
             </div>
             <div className="text-right">
-              <p className="text-2xl font-bold text-ppl-light-green">
+              <p className="text-2xl font-bold text-accent">
                 ${(priceCents / 100).toFixed(0)}
               </p>
               <p className="text-xs text-muted">/week</p>

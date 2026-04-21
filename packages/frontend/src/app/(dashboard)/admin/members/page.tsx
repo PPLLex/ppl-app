@@ -119,7 +119,7 @@ export default function AdminMembersPage() {
           {clients.map((client) => (
             <div
               key={client.id}
-              className="ppl-card flex items-center justify-between cursor-pointer hover:border-ppl-dark-green/50 transition-colors"
+              className="ppl-card flex items-center justify-between cursor-pointer hover:border-primary/50 transition-colors"
               onClick={() => setSelectedClient(selectedClient?.id === client.id ? null : client)}
             >
               <div className="flex items-center gap-4 flex-1">
@@ -135,7 +135,7 @@ export default function AdminMembersPage() {
                 {/* Info */}
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <Link href={`/admin/members/${client.id}`} className="font-semibold text-foreground hover:text-ppl-light-green transition-colors" onClick={(e) => e.stopPropagation()}>{client.fullName}</Link>
+                    <Link href={`/admin/members/${client.id}`} className="font-semibold text-foreground hover:text-accent transition-colors" onClick={(e) => e.stopPropagation()}>{client.fullName}</Link>
                     {client.membership ? (
                       <span
                         className={`ppl-badge ${
@@ -166,7 +166,7 @@ export default function AdminMembersPage() {
               {/* Right side */}
               <div className="text-right">
                 {client.membership && (
-                  <p className="text-sm font-semibold text-ppl-light-green">
+                  <p className="text-sm font-semibold text-accent">
                     {client.membership.plan.name}
                   </p>
                 )}
@@ -241,7 +241,7 @@ function ClientDetailPanel({
           <div className="bg-background rounded-lg p-3 text-center">
             {client.membership ? (
               <>
-                <p className="text-lg font-bold text-ppl-light-green">
+                <p className="text-lg font-bold text-accent">
                   ${(client.membership.plan.priceCents / 100).toFixed(0)}
                 </p>
                 <p className="text-xs text-muted">/week</p>

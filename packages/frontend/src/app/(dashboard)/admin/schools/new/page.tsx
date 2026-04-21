@@ -85,7 +85,7 @@ export default function NewSchoolPage() {
   return (
     <div>
       <div className="mb-6">
-        <Link href="/admin/schools" className="text-sm text-muted hover:text-ppl-light-green transition-colors">
+        <Link href="/admin/schools" className="text-sm text-muted hover:text-accent transition-colors">
           ← Back to Partner Schools
         </Link>
         <h1 className="text-2xl font-bold text-foreground mt-2">New Partnership</h1>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -120,6 +121,7 @@ const clientNav: NavItem[] = [
 
 export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
   const { user, logout } = useAuth();
+  const { branding } = useTheme();
   const pathname = usePathname();
 
   if (!user) return null;
@@ -156,12 +158,18 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
         <div className="p-5 border-b border-border">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full ppl-gradient flex items-center justify-center">
-                <span className="text-white text-lg font-bold">P</span>
-              </div>
+              {branding.logoData ? (
+                <img src={branding.logoData} alt={branding.businessName} className="w-10 h-10 rounded-full object-cover" />
+              ) : (
+                <div className="w-10 h-10 rounded-full ppl-gradient flex items-center justify-center">
+                  <span className="text-white text-lg font-bold">{branding.businessName.charAt(0)}</span>
+                </div>
+              )}
               <div>
-                <h2 className="font-bold text-foreground text-sm leading-tight">Pitching</h2>
-                <h2 className="font-bold text-foreground text-sm leading-tight">Performance Lab</h2>
+                <h2 className="font-bold text-foreground text-sm leading-tight">{branding.businessName}</h2>
+                {branding.tagline && (
+                  <p className="text-xs text-muted leading-tight">{branding.tagline}</p>
+                )}
               </div>
             </div>
             {/* Mobile close button */}
@@ -187,7 +195,7 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
                 onClick={handleNavClick}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                   isActive
-                    ? 'bg-ppl-dark-green/15 text-ppl-light-green'
+                    ? 'bg-primary/15 text-accent'
                     : 'text-muted hover:text-foreground hover:bg-surface-hover'
                 }`}
               >
@@ -204,7 +212,7 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
             <p className="text-sm font-medium text-foreground truncate">{user.fullName}</p>
             <p className="text-xs text-muted truncate">{user.email}</p>
             {user.homeLocation && (
-              <p className="text-xs text-ppl-dark-green mt-0.5">{user.homeLocation.name}</p>
+              <p className="text-xs text-primary mt-0.5">{user.homeLocation.name}</p>
             )}
           </div>
           <button

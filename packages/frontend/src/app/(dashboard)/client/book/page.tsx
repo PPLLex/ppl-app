@@ -216,7 +216,7 @@ export default function ClientBookPage() {
 
       {/* ── MY WEEK CARD ── */}
       {myWeek?.membership && (
-        <div className="mb-6 rounded-2xl bg-gradient-to-br from-ppl-dark-green/10 to-ppl-dark-green/5 border border-ppl-dark-green/20 p-4">
+        <div className="mb-6 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-base font-semibold text-foreground">My Week</h2>
             {myWeek.credits ? (
@@ -227,7 +227,7 @@ export default function ClientBookPage() {
                     className={`w-3 h-3 rounded-full ${
                       i < myWeek.credits!.used
                         ? 'bg-muted/30'
-                        : 'bg-ppl-light-green'
+                        : 'bg-accent'
                     }`}
                   />
                 ))}
@@ -236,7 +236,7 @@ export default function ClientBookPage() {
                 </span>
               </div>
             ) : (
-              <span className="text-xs font-medium text-ppl-light-green px-2 py-0.5 rounded-full bg-ppl-light-green/10">
+              <span className="text-xs font-medium text-accent px-2 py-0.5 rounded-full bg-accent/10">
                 Unlimited
               </span>
             )}
@@ -282,7 +282,7 @@ export default function ClientBookPage() {
         <div
           className={`mb-4 p-3 rounded-lg text-sm ${
             message.type === 'success'
-              ? 'bg-ppl-dark-green/10 border border-ppl-dark-green/20 text-ppl-light-green'
+              ? 'bg-primary/10 border border-primary/20 text-accent'
               : 'bg-danger/10 border border-danger/20 text-danger'
           }`}
         >
@@ -367,7 +367,7 @@ export default function ClientBookPage() {
                   : isPast
                   ? 'bg-surface text-muted/50 cursor-not-allowed'
                   : isToday
-                  ? 'bg-ppl-dark-green/10 border border-ppl-dark-green text-foreground hover:bg-ppl-dark-green/20'
+                  ? 'bg-primary/10 border border-primary text-foreground hover:bg-primary/20'
                   : 'bg-surface border border-border text-foreground hover:border-border-light hover:bg-surface-hover'
               }`}
             >
@@ -376,7 +376,7 @@ export default function ClientBookPage() {
               </p>
               <p className="text-xl font-bold mt-0.5">{day.getDate()}</p>
               {sessionCount > 0 && !isPast && (
-                <p className={`text-xs mt-1 ${isSelected ? 'text-white/80' : 'text-ppl-light-green'}`}>
+                <p className={`text-xs mt-1 ${isSelected ? 'text-white/80' : 'text-accent'}`}>
                   {sessionCount} session{sessionCount !== 1 ? 's' : ''}
                 </p>
               )}
@@ -424,9 +424,9 @@ export default function ClientBookPage() {
                       key={session.id}
                       className={`ppl-card flex items-center justify-between transition-all ${
                         booked
-                          ? 'border-ppl-dark-green'
+                          ? 'border-primary'
                           : isSelectedForBatch
-                          ? 'border-ppl-light-green bg-ppl-dark-green/5'
+                          ? 'border-accent bg-primary/5'
                           : ''
                       }`}
                     >
@@ -480,7 +480,7 @@ export default function ClientBookPage() {
                             className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
                               isSelectedForBatch
                                 ? 'ppl-gradient text-white shadow-md'
-                                : 'border-2 border-border hover:border-ppl-light-green'
+                                : 'border-2 border-border hover:border-accent'
                             }`}
                           >
                             {isSelectedForBatch && (

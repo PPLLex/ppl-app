@@ -45,7 +45,7 @@ export default function ClientProgramsPage() {
 
   const statusColors: Record<string, string> = {
     DRAFT: 'bg-gray-500/10 text-gray-500',
-    ACTIVE: 'bg-ppl-dark-green/10 text-ppl-dark-green',
+    ACTIVE: 'bg-primary/10 text-primary',
     COMPLETED: 'bg-green-500/10 text-green-600',
     ARCHIVED: 'bg-gray-400/10 text-gray-400',
   };
@@ -53,7 +53,7 @@ export default function ClientProgramsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <div className="w-10 h-10 border-2 border-ppl-dark-green border-t-transparent rounded-full animate-spin" />
+        <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -135,7 +135,7 @@ export default function ClientProgramsPage() {
                                     </span>
                                   )}
                                   {ex.intensity && (
-                                    <span className="text-xs text-ppl-dark-green font-medium">
+                                    <span className="text-xs text-primary font-medium">
                                       {ex.intensity}
                                     </span>
                                   )}
@@ -202,7 +202,7 @@ export default function ClientProgramsPage() {
             <button
               key={program.id}
               onClick={() => loadProgramDetail(program.id)}
-              className="ppl-card text-left hover:border-ppl-dark-green/30 transition-colors"
+              className="ppl-card text-left hover:border-primary/30 transition-colors"
             >
               <div className="flex items-start justify-between">
                 <div>

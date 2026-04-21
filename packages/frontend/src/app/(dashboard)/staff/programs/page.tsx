@@ -189,7 +189,7 @@ export default function StaffProgramsPage() {
               <p className="text-sm text-muted">
                 For {selectedProgram.athlete?.fullName}
                 <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
-                  selectedProgram.status === 'ACTIVE' ? 'bg-ppl-dark-green/10 text-ppl-dark-green' :
+                  selectedProgram.status === 'ACTIVE' ? 'bg-primary/10 text-primary' :
                   selectedProgram.status === 'DRAFT' ? 'bg-yellow-500/10 text-yellow-600' :
                   'bg-gray-500/10 text-gray-500'
                 }`}>{selectedProgram.status}</span>
@@ -221,7 +221,7 @@ export default function StaffProgramsPage() {
                     <button
                       key={d}
                       onClick={() => handleAddDay(week.id, d)}
-                      className="text-xs px-2 py-1 rounded border border-border text-muted hover:text-foreground hover:border-ppl-dark-green"
+                      className="text-xs px-2 py-1 rounded border border-border text-muted hover:text-foreground hover:border-primary"
                       title={`Add ${['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][d]}`}
                     >
                       +{['', 'M', 'T', 'W', 'Th', 'F', 'Sa', 'Su'][d]}
@@ -252,7 +252,7 @@ export default function StaffProgramsPage() {
                         {ex.exercise?.name || ex.customName}
                       </span>
                       {ex.sets && <span className="text-xs text-muted">{ex.sets}Ã{ex.reps || '?'}</span>}
-                      {ex.intensity && <span className="text-xs text-ppl-dark-green">{ex.intensity}</span>}
+                      {ex.intensity && <span className="text-xs text-primary">{ex.intensity}</span>}
                     </div>
                   ))}
 
@@ -345,7 +345,7 @@ export default function StaffProgramsPage() {
         <div className="p-3 rounded-lg bg-danger/10 border border-danger/20 text-danger text-sm">{error}</div>
       )}
       {success && (
-        <div className="p-3 rounded-lg bg-ppl-dark-green/10 border border-ppl-dark-green/20 text-ppl-dark-green text-sm">{success}</div>
+        <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 text-primary text-sm">{success}</div>
       )}
 
       {/* Create program form */}
@@ -404,7 +404,7 @@ export default function StaffProgramsPage() {
               key={a.id}
               onClick={() => { setNewAthleteId(a.id); loadAthletePrograms(a.id); }}
               className={`text-left px-4 py-3 rounded-lg border transition-colors ${
-                newAthleteId === a.id ? 'border-ppl-dark-green bg-ppl-dark-green/10' : 'border-border hover:border-border-light'
+                newAthleteId === a.id ? 'border-primary bg-primary/10' : 'border-border hover:border-border-light'
               }`}
             >
               <span className="text-sm font-medium text-foreground">{a.fullName}</span>
@@ -418,21 +418,21 @@ export default function StaffProgramsPage() {
         <div>
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
-              <div className="w-8 h-8 border-2 border-ppl-dark-green border-t-transparent rounded-full animate-spin" />
+              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             </div>
           ) : programs.length === 0 ? (
             <p className="text-sm text-muted text-center py-4">No programs for this athlete yet.</p>
           ) : (
             <div className="space-y-3">
               {programs.map((p) => (
-                <button key={p.id} onClick={() => loadDetail(p.id)} className="w-full ppl-card text-left hover:border-ppl-dark-green/30 transition-colors">
+                <button key={p.id} onClick={() => loadDetail(p.id)} className="w-full ppl-card text-left hover:border-primary/30 transition-colors">
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="font-semibold text-foreground">{p.title}</h3>
                       {p.description && <p className="text-sm text-muted mt-0.5 line-clamp-1">{p.description}</p>}
                     </div>
                     <span className={`text-xs px-2 py-1 rounded-full ${
-                      p.status === 'ACTIVE' ? 'bg-ppl-dark-green/10 text-ppl-dark-green' :
+                      p.status === 'ACTIVE' ? 'bg-primary/10 text-primary' :
                       p.status === 'DRAFT' ? 'bg-yellow-500/10 text-yellow-600' :
                       'bg-gray-500/10 text-gray-500'
                     }`}>{p.status}</span>

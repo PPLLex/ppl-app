@@ -247,8 +247,8 @@ function JoinFlow() {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="w-full max-w-md text-center">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-ppl-dark-green/20 mb-6">
-            <svg className="w-10 h-10 text-ppl-light-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary/20 mb-6">
+            <svg className="w-10 h-10 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           </div>
@@ -307,7 +307,7 @@ function JoinFlow() {
             <span
               key={label}
               className={`text-xs font-medium transition-colors ${
-                i + 1 <= step ? 'text-ppl-light-green' : 'text-muted'
+                i + 1 <= step ? 'text-accent' : 'text-muted'
               }`}
             >
               {label}
@@ -447,7 +447,7 @@ function JoinFlow() {
                       onClick={() => setLocationId(loc.id)}
                       className={`w-full text-left p-3 rounded-lg border transition-all ${
                         locationId === loc.id
-                          ? 'border-ppl-dark-green bg-ppl-dark-green/10'
+                          ? 'border-primary bg-primary/10'
                           : 'border-border hover:border-border-light'
                       }`}
                     >
@@ -475,7 +475,7 @@ function JoinFlow() {
                       }}
                       className={`w-full text-left p-3 rounded-lg border transition-all ${
                         ageGroup === group.value
-                          ? 'border-ppl-dark-green bg-ppl-dark-green/10'
+                          ? 'border-primary bg-primary/10'
                           : 'border-border hover:border-border-light'
                       }`}
                     >
@@ -528,7 +528,7 @@ function JoinFlow() {
                       onClick={() => handleSelectPlan(plan)}
                       className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
                         selected
-                          ? 'border-ppl-light-green bg-ppl-dark-green/10'
+                          ? 'border-accent bg-primary/10'
                           : 'border-border hover:border-border-light'
                       }`}
                     >
@@ -545,7 +545,7 @@ function JoinFlow() {
                           )}
                         </div>
                         <div className="text-right ml-4 shrink-0">
-                          <span className="text-2xl font-bold text-ppl-light-green">
+                          <span className="text-2xl font-bold text-accent">
                             ${(plan.priceCents / 100).toFixed(0)}
                           </span>
                           <span className="block text-xs text-muted">
@@ -554,7 +554,7 @@ function JoinFlow() {
                         </div>
                       </div>
                       {selected && (
-                        <div className="mt-2 flex items-center gap-1.5 text-ppl-light-green text-xs font-medium">
+                        <div className="mt-2 flex items-center gap-1.5 text-accent text-xs font-medium">
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                           </svg>
@@ -598,7 +598,7 @@ function JoinFlow() {
           {/* Step 4 shows waiting message inside card while modal overlays */}
           {step === 4 && (
             <div className="text-center py-6">
-              <div className="animate-spin w-8 h-8 border-2 border-ppl-light-green border-t-transparent rounded-full mx-auto mb-3" />
+              <div className="animate-spin w-8 h-8 border-2 border-accent border-t-transparent rounded-full mx-auto mb-3" />
               <p className="text-muted text-sm">Complete your payment in the window above...</p>
               <button
                 type="button"
@@ -615,7 +615,7 @@ function JoinFlow() {
             <div className="mt-6 text-center">
               <p className="text-sm text-muted">
                 Already have an account?{' '}
-                <Link href="/login" className="text-ppl-light-green hover:text-ppl-dark-green transition-colors">
+                <Link href="/login" className="text-accent hover:text-primary transition-colors">
                   Sign in
                 </Link>
               </p>

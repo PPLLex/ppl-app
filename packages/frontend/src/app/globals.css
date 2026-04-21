@@ -1,15 +1,22 @@
 @import "tailwindcss";
 
 /* ============================================================
-   PPL BRAND THEME
+   PPL BRAND THEME — Dynamic Color System
+   ============================================================
+   Colors are driven by CSS custom properties set at runtime
+   by ThemeProvider. The @theme block registers them with
+   Tailwind v4 so utilities like bg-primary, text-accent, etc.
+   work everywhere.
    ============================================================ */
 
 @theme inline {
-  /* PPL Colors */
-  --color-ppl-black: #000000;
-  --color-ppl-dark-green: #5E9E50;
-  --color-ppl-light-green: #95C83C;
-  --color-ppl-white: #FFFFFF;
+  /* Dynamic brand colors — overridden at runtime by ThemeProvider */
+  --color-primary: #5E9E50;
+  --color-accent: #95C83C;
+
+  /* Legacy aliases so old code still works during migration */
+  --color-ppl-dark-green: var(--color-primary);
+  --color-ppl-light-green: var(--color-accent);
 
   /* Semantic colors */
   --color-background: #0A0A0A;
@@ -21,7 +28,7 @@
   --color-muted: #888888;
   --color-danger: #EF4444;
   --color-warning: #F59E0B;
-  --color-success: #5E9E50;
+  --color-success: var(--color-primary);
 
   /* Fonts */
   --font-sans: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
@@ -67,11 +74,11 @@ html {
    ============================================================ */
 
 .ppl-gradient {
-  background: linear-gradient(135deg, var(--color-ppl-dark-green), var(--color-ppl-light-green));
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
 }
 
 .ppl-gradient-text {
-  background: linear-gradient(135deg, var(--color-ppl-dark-green), var(--color-ppl-light-green));
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -105,7 +112,7 @@ html {
 }
 
 .ppl-btn-primary {
-  background: linear-gradient(135deg, var(--color-ppl-dark-green), var(--color-ppl-light-green));
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
   color: white;
 }
 
@@ -147,8 +154,8 @@ html {
 }
 
 .ppl-input:focus {
-  border-color: var(--color-ppl-dark-green);
-  box-shadow: 0 0 0 2px rgba(94, 158, 80, 0.2);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb, 94 158 80), 0.2);
 }
 
 .ppl-input::placeholder {
@@ -165,8 +172,8 @@ html {
 }
 
 .ppl-badge-active {
-  background: rgba(94, 158, 80, 0.15);
-  color: var(--color-ppl-light-green);
+  background: rgba(var(--color-primary-rgb, 94 158 80), 0.15);
+  color: var(--color-accent);
 }
 
 .ppl-badge-warning {

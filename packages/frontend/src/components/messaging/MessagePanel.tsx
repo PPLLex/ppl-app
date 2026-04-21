@@ -136,7 +136,7 @@ export default function MessagePanel({ conversationFilter }: MessagePanelProps) 
             <h3 className="font-bold text-foreground text-sm">Messages</h3>
             <button
               onClick={() => setShowNewConv(!showNewConv)}
-              className="w-7 h-7 rounded-md bg-ppl-dark-green/20 text-ppl-light-green flex items-center justify-center text-lg hover:bg-ppl-dark-green/30 transition"
+              className="w-7 h-7 rounded-md bg-primary/20 text-accent flex items-center justify-center text-lg hover:bg-primary/30 transition"
             >
               +
             </button>
@@ -189,7 +189,7 @@ export default function MessagePanel({ conversationFilter }: MessagePanelProps) 
                 key={conv.id}
                 onClick={() => setSelectedConvId(conv.id)}
                 className={`w-full px-3 py-3 text-left border-b border-border/50 transition ${
-                  isSelected ? 'bg-ppl-dark-green/10' : 'hover:bg-surface'
+                  isSelected ? 'bg-primary/10' : 'hover:bg-surface'
                 }`}
               >
                 <div className="flex items-start gap-2">
@@ -206,7 +206,7 @@ export default function MessagePanel({ conversationFilter }: MessagePanelProps) 
                         {others.map((p) => p.fullName).join(', ') || 'Unknown'}
                       </p>
                       {conv.unreadCount > 0 && (
-                        <span className="w-5 h-5 rounded-full bg-ppl-light-green text-background text-xs flex items-center justify-center font-bold flex-shrink-0">
+                        <span className="w-5 h-5 rounded-full bg-accent text-background text-xs flex items-center justify-center font-bold flex-shrink-0">
                           {conv.unreadCount}
                         </span>
                       )}
@@ -229,7 +229,7 @@ export default function MessagePanel({ conversationFilter }: MessagePanelProps) 
               <p className="text-sm text-muted">No conversations yet</p>
               <button
                 onClick={() => setShowNewConv(true)}
-                className="text-sm text-ppl-light-green hover:underline mt-1"
+                className="text-sm text-accent hover:underline mt-1"
               >
                 Start a conversation
               </button>
@@ -271,12 +271,12 @@ export default function MessagePanel({ conversationFilter }: MessagePanelProps) 
                     <div
                       className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${
                         isMe
-                          ? 'bg-ppl-dark-green text-white rounded-br-md'
+                          ? 'bg-primary text-white rounded-br-md'
                           : 'bg-surface text-foreground rounded-bl-md'
                       }`}
                     >
                       {!isMe && (
-                        <p className="text-xs font-semibold text-ppl-light-green mb-0.5">
+                        <p className="text-xs font-semibold text-accent mb-0.5">
                           {msg.senderName}
                         </p>
                       )}

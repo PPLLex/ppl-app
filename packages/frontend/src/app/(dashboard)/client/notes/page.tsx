@@ -138,7 +138,7 @@ export default function ClientNotesPage() {
                     <span className="text-sm font-medium text-foreground">{r.email}</span>
                     {r.name && <span className="text-xs text-muted ml-2">({r.name})</span>}
                     {r.relation && (
-                      <span className="text-xs px-1.5 py-0.5 rounded-full bg-ppl-dark-green/10 text-ppl-dark-green ml-2">
+                      <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary ml-2">
                         {r.relation}
                       </span>
                     )}
@@ -194,7 +194,7 @@ export default function ClientNotesPage() {
         <button
           onClick={() => setFilter('')}
           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-            !filter ? 'bg-ppl-dark-green text-white' : 'bg-surface border border-border text-muted hover:text-foreground'
+            !filter ? 'bg-primary text-white' : 'bg-surface border border-border text-muted hover:text-foreground'
           }`}
         >
           All
@@ -204,7 +204,7 @@ export default function ClientNotesPage() {
             key={cat}
             onClick={() => setFilter(cat)}
             className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-              filter === cat ? 'bg-ppl-dark-green text-white' : 'bg-surface border border-border text-muted hover:text-foreground'
+              filter === cat ? 'bg-primary text-white' : 'bg-surface border border-border text-muted hover:text-foreground'
             }`}
           >
             {formatCategory(cat)}
@@ -215,7 +215,7 @@ export default function ClientNotesPage() {
       {/* Notes Timeline */}
       {isLoading ? (
         <div className="flex items-center justify-center py-16">
-          <div className="w-10 h-10 border-2 border-ppl-dark-green border-t-transparent rounded-full animate-spin" />
+          <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       ) : notes.length === 0 ? (
         <div className="ppl-card text-center py-12">
@@ -229,11 +229,11 @@ export default function ClientNotesPage() {
           {Object.entries(groupedNotes).map(([date, dayNotes]) => (
             <div key={date}>
               <h3 className="text-sm font-semibold text-muted uppercase tracking-wide mb-3">{date}</h3>
-              <div className="space-y-3 relative pl-6 border-l-2 border-ppl-dark-green/20">
+              <div className="space-y-3 relative pl-6 border-l-2 border-primary/20">
                 {dayNotes.map((note) => (
                   <div key={note.id} className="relative">
                     {/* Timeline dot */}
-                    <div className="absolute -left-[31px] top-3 w-3 h-3 rounded-full bg-ppl-dark-green border-2 border-background" />
+                    <div className="absolute -left-[31px] top-3 w-3 h-3 rounded-full bg-primary border-2 border-background" />
 
                     <div className="ppl-card">
                       <div className="flex items-start justify-between mb-2">
@@ -241,7 +241,7 @@ export default function ClientNotesPage() {
                           <span className="text-sm font-semibold text-foreground">
                             Coach {note.coach.fullName}
                           </span>
-                          <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-ppl-dark-green/10 text-ppl-dark-green ml-2">
+                          <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary ml-2">
                             {formatCategory(note.trainingCategory)}
                           </span>
                         </div>

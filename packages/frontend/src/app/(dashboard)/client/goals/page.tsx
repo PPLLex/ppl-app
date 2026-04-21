@@ -134,7 +134,7 @@ export default function ClientGoalsPage() {
                     onClick={() => setType('SHORT_TERM')}
                     className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${
                       type === 'SHORT_TERM'
-                        ? 'border-ppl-dark-green bg-ppl-dark-green/10 text-ppl-dark-green'
+                        ? 'border-primary bg-primary/10 text-primary'
                         : 'border-border text-muted hover:text-foreground'
                     }`}
                   >
@@ -145,7 +145,7 @@ export default function ClientGoalsPage() {
                     onClick={() => setType('LONG_TERM')}
                     className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${
                       type === 'LONG_TERM'
-                        ? 'border-ppl-dark-green bg-ppl-dark-green/10 text-ppl-dark-green'
+                        ? 'border-primary bg-primary/10 text-primary'
                         : 'border-border text-muted hover:text-foreground'
                     }`}
                   >
@@ -195,7 +195,7 @@ export default function ClientGoalsPage() {
             onClick={() => setFilter(tab.value)}
             className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
               filter === tab.value
-                ? 'bg-ppl-dark-green text-white'
+                ? 'bg-primary text-white'
                 : 'bg-surface border border-border text-muted hover:text-foreground'
             }`}
           >
@@ -207,7 +207,7 @@ export default function ClientGoalsPage() {
       {/* Goals List */}
       {isLoading ? (
         <div className="flex items-center justify-center py-16">
-          <div className="w-10 h-10 border-2 border-ppl-dark-green border-t-transparent rounded-full animate-spin" />
+          <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       ) : goals.length === 0 ? (
         <div className="ppl-card text-center py-12">
@@ -240,7 +240,7 @@ export default function ClientGoalsPage() {
                   )}
                 </div>
                 <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                  goal.status === 'ACTIVE' ? 'bg-ppl-dark-green/10 text-ppl-dark-green' :
+                  goal.status === 'ACTIVE' ? 'bg-primary/10 text-primary' :
                   goal.status === 'COMPLETED' ? 'bg-green-500/10 text-green-600' :
                   'bg-gray-500/10 text-gray-500'
                 }`}>
@@ -268,7 +268,7 @@ export default function ClientGoalsPage() {
                         onClick={() => handleUpdateProgress(goal.id, p)}
                         className={`text-xs px-2 py-1 rounded border transition-colors ${
                           goal.progress >= p
-                            ? 'border-ppl-dark-green bg-ppl-dark-green/10 text-ppl-dark-green'
+                            ? 'border-primary bg-primary/10 text-primary'
                             : 'border-border text-muted hover:text-foreground'
                         }`}
                       >

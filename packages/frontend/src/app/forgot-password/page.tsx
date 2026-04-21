@@ -40,8 +40,8 @@ export default function ForgotPasswordPage() {
 
         {submitted ? (
           <div className="ppl-card text-center">
-            <div className="w-12 h-12 rounded-full bg-ppl-dark-green/20 mx-auto mb-3 flex items-center justify-center">
-              <svg className="w-6 h-6 text-ppl-light-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <div className="w-12 h-12 rounded-full bg-primary/20 mx-auto mb-3 flex items-center justify-center">
+              <svg className="w-6 h-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
@@ -49,7 +49,7 @@ export default function ForgotPasswordPage() {
             <p className="text-sm text-muted mb-4">
               If an account exists for {email}, you&apos;ll receive a password reset link shortly.
             </p>
-            <Link href="/login" className="text-sm text-ppl-light-green hover:underline">
+            <Link href="/login" className="text-sm text-accent hover:underline">
               Back to login
             </Link>
           </div>
@@ -81,7 +81,7 @@ export default function ForgotPasswordPage() {
             </button>
             <p className="text-center text-sm text-muted">
               Remember your password?{' '}
-              <Link href="/login" className="text-ppl-light-green hover:underline">
+              <Link href="/login" className="text-accent hover:underline">
                 Log in
               </Link>
             </p>

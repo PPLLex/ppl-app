@@ -99,15 +99,15 @@ export default function OutsideCoachDashboardPage() {
             <button
               key={a.linkId}
               onClick={() => viewAthleteReports(a)}
-              className={`w-full text-left ppl-card transition-all hover:border-ppl-dark-green/30 ${
+              className={`w-full text-left ppl-card transition-all hover:border-primary/30 ${
                 selectedAthlete?.linkId === a.linkId
-                  ? 'border-ppl-dark-green/50 bg-ppl-dark-green/5'
+                  ? 'border-primary/50 bg-primary/5'
                   : ''
               }`}
             >
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-full bg-ppl-dark-green/10 flex items-center justify-center shrink-0">
-                  <span className="text-ppl-light-green font-bold text-lg">
+                <div className="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <span className="text-accent font-bold text-lg">
                     {a.athlete.firstName.charAt(0)}
                   </span>
                 </div>
@@ -160,7 +160,7 @@ export default function OutsideCoachDashboardPage() {
                     </h2>
                     <div className="flex items-center gap-3 mt-1">
                       {report.athlete.ageGroup && (
-                        <span className="text-xs bg-ppl-dark-green/10 text-ppl-light-green px-2 py-0.5 rounded">
+                        <span className="text-xs bg-primary/10 text-accent px-2 py-0.5 rounded">
                           {report.athlete.ageGroup}
                         </span>
                       )}

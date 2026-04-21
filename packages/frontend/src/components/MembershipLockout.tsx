@@ -41,7 +41,7 @@ export default function MembershipLockout({ message }: { message: string }) {
 
         <p className="text-xs text-muted mt-6">
           Need help? Contact us at{' '}
-          <a href="mailto:info@pitchingperformancelab.com" className="text-ppl-light-green hover:text-ppl-dark-green">
+          <a href="mailto:info@pitchingperformancelab.com" className="text-accent hover:text-primary">
             info@pitchingperformancelab.com
           </a>
         </p>

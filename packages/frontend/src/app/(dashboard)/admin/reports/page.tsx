@@ -38,7 +38,7 @@ export default function AdminReportsPage() {
               onClick={() => setPeriod(p.key)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                 period === p.key
-                  ? 'bg-ppl-dark-green/20 text-ppl-light-green'
+                  ? 'bg-primary/20 text-accent'
                   : 'text-muted hover:text-foreground'
               }`}
             >
@@ -56,7 +56,7 @@ export default function AdminReportsPage() {
             onClick={() => setActiveTab(tab.key)}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
               activeTab === tab.key
-                ? 'bg-ppl-dark-green/20 text-ppl-light-green'
+                ? 'bg-primary/20 text-accent'
                 : 'text-muted hover:text-foreground'
             }`}
           >
@@ -77,7 +77,7 @@ function StatCard({ label, value, sub, accent }: { label: string; value: string;
   return (
     <div className="ppl-card">
       <p className="text-xs text-muted font-medium">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${accent ? 'text-ppl-light-green' : 'text-foreground'}`}>
+      <p className={`text-2xl font-bold mt-1 ${accent ? 'text-accent' : 'text-foreground'}`}>
         {value}
       </p>
       {sub && <p className="text-xs text-muted mt-0.5">{sub}</p>}
@@ -101,7 +101,7 @@ function BarChart({ data, labelKey, valueKey, maxHeight = 120 }: {
           <div key={i} className="flex-1 flex flex-col items-center gap-1">
             <span className="text-xs text-muted">{item[valueKey]}</span>
             <div
-              className="w-full rounded-t-md bg-ppl-dark-green/60 hover:bg-ppl-light-green/60 transition min-h-[2px]"
+              className="w-full rounded-t-md bg-primary/60 hover:bg-accent/60 transition min-h-[2px]"
               style={{ height: Math.max(height, 2) }}
             />
             <span className="text-xs text-muted truncate w-full text-center">{item[labelKey]}</span>
@@ -156,7 +156,7 @@ function RevenueReport({ period }: { period: Period }) {
                     <p className="text-sm font-medium text-foreground">{item.plan}</p>
                     <p className="text-xs text-muted">{item.members} member{item.members !== 1 ? 's' : ''}</p>
                   </div>
-                  <p className="text-sm font-bold text-ppl-light-green">${item.revenue.toLocaleString()}/wk</p>
+                  <p className="text-sm font-bold text-accent">${item.revenue.toLocaleString()}/wk</p>
                 </div>
               ))}
             </div>
@@ -240,7 +240,7 @@ function BookingsReport({ period }: { period: Period }) {
                       <span className="text-sm font-medium text-foreground">{item.count}</span>
                     </div>
                     <div className="h-2 bg-surface rounded-full overflow-hidden">
-                      <div className="h-full bg-ppl-dark-green rounded-full" style={{ width: `${pct}%` }} />
+                      <div className="h-full bg-primary rounded-full" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                 );

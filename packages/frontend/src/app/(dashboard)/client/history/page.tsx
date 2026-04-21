@@ -63,7 +63,7 @@ export default function ClientBookingHistoryPage() {
             onClick={() => { setFilter(f.key); setPage(1); }}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
               filter === f.key
-                ? 'bg-ppl-dark-green/20 text-ppl-light-green'
+                ? 'bg-primary/20 text-accent'
                 : 'text-muted hover:text-foreground'
             }`}
           >
@@ -154,7 +154,7 @@ export default function ClientBookingHistoryPage() {
       ) : (
         <div className="ppl-card text-center py-12">
           <p className="text-muted">No bookings found</p>
-          <a href="/client/book" className="text-sm text-ppl-light-green hover:underline mt-2 inline-block">
+          <a href="/client/book" className="text-sm text-accent hover:underline mt-2 inline-block">
             Book a session &rarr;
           </a>
         </div>
