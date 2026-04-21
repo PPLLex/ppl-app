@@ -417,47 +417,82 @@ function CreateSessionModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const [formData, setFormData] = useState({
-    title: '',
-    sessionType: 'MS_HS_PITCHING',
-    startTime: '',
-    durationMinutes: 60,
-    maxCapacity: 8,
-    roomId: '',
-    recurringCount: 1,
+  const [sessionType, setSessionType] = useState('MS_HS_PITCHING');
+  const [title, setTitle] = useState('');
+  const [roomId, setRoomId] = useState('');
+  const [time, setTime] = useState('15:00');
+  const [durationMinutes, setDurationMinutes] = useState(60);
+  const [maxCapacity, setMaxCapacity] = useState(8);
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [singleDate, setSingleDate] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [recurringDays, setRecurringDays] = useState<number[]>([]);
+  const [recurringStartDate, setRecurringStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [recurringEndDate, setRecurringEndDate] = useState(() => {
+    const d = new Date(); d.setMonth(d.getMonth() + 3);
+    return d.toISOString().slice(0, 10);
   });
   const [rooms, setRooms] = useState<{ id: string; name: string }[]>([]);
+  const [locationId, setLocationId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const DAY_NAMES_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
   useEffect(() => {
-    // Load rooms for the staff member's location
     api.getLocations().then((res) => {
       if (res.data && res.data.length > 0) {
         const loc = res.data[0];
+        setLocationId(loc.id);
         if (loc.rooms) setRooms(loc.rooms);
       }
     });
   }, []);
 
+  const toggleDay = (day: number) => {
+    setRecurringDays((prev) => prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort());
+  };
+
+  const estimatedCount = (() => {
+    if (!isRecurring) return 1;
+    if (recurringDays.length === 0) return 0;
+    let count = 0;
+    const current = new Date(recurringStartDate);
+    const end = new Date(recurringEndDate); end.setHours(23, 59, 59);
+    const now = new Date();
+    const [h, m] = time.split(':').map(Number);
+    while (current <= end && count < 500) {
+      if (recurringDays.includes(current.getDay())) {
+        const sd = new Date(current); sd.setHours(h, m);
+        if (sd > now) count++;
+      }
+      current.setDate(current.getDate() + 1);
+    }
+    return count;
+  })();
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isRecurring && recurringDays.length === 0) { setError('Select at least one day'); return; }
     setIsSubmitting(true);
     setError('');
     try {
-      const startTime = new Date(formData.startTime);
-      const endTime = new Date(startTime);
-      endTime.setMinutes(endTime.getMinutes() + formData.durationMinutes);
-
       await api.createSession({
-        title: formData.title || SESSION_TYPE_LABELS[formData.sessionType],
-        sessionType: formData.sessionType,
-        startTime: startTime.toISOString(),
-        endTime: endTime.toISOString(),
-        maxCapacity: formData.maxCapacity,
-        roomId: formData.roomId || undefined,
-        recurringCount: formData.recurringCount,
-      } as any);
+        locationId,
+        roomId: roomId || undefined,
+        title: title || SESSION_TYPE_LABELS[sessionType],
+        sessionType,
+        startDate: isRecurring ? recurringStartDate : singleDate,
+        time,
+        durationMinutes,
+        maxCapacity,
+        isRecurring,
+        recurringDays: isRecurring ? recurringDays : undefined,
+        recurringEndDate: isRecurring ? recurringEndDate : undefined,
+      });
       onCreated();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create session');
@@ -475,27 +510,19 @@ function CreateSessionModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-      <div className="ppl-card w-full max-w-md">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="ppl-card w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-foreground">Add Session</h2>
-          <button onClick={onClose} className="text-muted hover:text-foreground text-xl">
-            &times;
-          </button>
+          <button onClick={onClose} className="text-muted hover:text-foreground text-xl">&times;</button>
         </div>
         {error && (
-          <div className="mb-3 p-2 bg-danger/10 border border-danger/20 rounded-lg text-sm text-danger">
-            {error}
-          </div>
+          <div className="mb-3 p-2 bg-danger/10 border border-danger/20 rounded-lg text-sm text-danger">{error}</div>
         )}
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
             <label className="text-xs font-medium text-muted block mb-1">Session Type</label>
-            <select
-              value={formData.sessionType}
-              onChange={(e) => setFormData({ ...formData, sessionType: e.target.value })}
-              className="ppl-input"
-            >
+            <select value={sessionType} onChange={(e) => setSessionType(e.target.value)} className="ppl-input">
               {Object.entries(SESSION_TYPE_LABELS).map(([key, label]) => (
                 <option key={key} value={key}>{label}</option>
               ))}
@@ -503,78 +530,84 @@ function CreateSessionModal({
           </div>
           <div>
             <label className="text-xs font-medium text-muted block mb-1">Title (optional)</label>
-            <input
-              type="text"
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="ppl-input"
-              placeholder="Auto-generated from type"
-            />
+            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="ppl-input" placeholder="Auto-generated from type" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium text-muted block mb-1">Date & Time</label>
-              <input
-                type="datetime-local"
-                value={formData.startTime}
-                onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                className="ppl-input"
-                required
-              />
+              <label className="text-xs font-medium text-muted block mb-1">Time</label>
+              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="ppl-input" required />
             </div>
             <div>
               <label className="text-xs font-medium text-muted block mb-1">Room</label>
-              <select
-                value={formData.roomId}
-                onChange={(e) => setFormData({ ...formData, roomId: e.target.value })}
-                className="ppl-input"
-              >
+              <select value={roomId} onChange={(e) => setRoomId(e.target.value)} className="ppl-input">
                 <option value="">No room</option>
-                {rooms.map((room) => (
-                  <option key={room.id} value={room.id}>{room.name}</option>
-                ))}
+                {rooms.map((room) => (<option key={room.id} value={room.id}>{room.name}</option>))}
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium text-muted block mb-1">Duration</label>
-              <select
-                value={formData.durationMinutes}
-                onChange={(e) => setFormData({ ...formData, durationMinutes: parseInt(e.target.value) })}
-                className="ppl-input"
-              >
+              <select value={durationMinutes} onChange={(e) => setDurationMinutes(parseInt(e.target.value))} className="ppl-input">
                 <option value={30}>30 min</option>
+                <option value={45}>45 min</option>
                 <option value={60}>1 hour</option>
                 <option value={90}>1.5 hours</option>
                 <option value={120}>2 hours</option>
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium text-muted block mb-1">Capacity</label>
-              <input
-                type="number"
-                value={formData.maxCapacity}
-                onChange={(e) => setFormData({ ...formData, maxCapacity: parseInt(e.target.value) || 1 })}
-                className="ppl-input"
-                min={1}
-                max={50}
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted block mb-1">Repeat Weeks</label>
-              <input
-                type="number"
-                value={formData.recurringCount}
-                onChange={(e) => setFormData({ ...formData, recurringCount: parseInt(e.target.value) || 1 })}
-                className="ppl-input"
-                min={1}
-                max={52}
-              />
+              <label className="text-xs font-medium text-muted block mb-1">Max Athletes</label>
+              <input type="number" value={maxCapacity} onChange={(e) => setMaxCapacity(parseInt(e.target.value) || 8)} className="ppl-input" min={1} max={50} />
             </div>
           </div>
-          <button type="submit" disabled={isSubmitting} className="ppl-btn ppl-btn-primary w-full justify-center mt-2">
-            {isSubmitting ? 'Creating...' : formData.recurringCount > 1 ? `Create ${formData.recurringCount} Sessions` : 'Create Session'}
+
+          {/* Schedule Type Toggle */}
+          <div>
+            <label className="text-xs font-medium text-muted block mb-1.5">Schedule Type</label>
+            <div className="flex rounded-lg overflow-hidden border border-border">
+              <button type="button" onClick={() => setIsRecurring(false)} className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${!isRecurring ? 'bg-ppl-dark-green text-white' : 'bg-background text-muted hover:text-foreground'}`}>One-Time</button>
+              <button type="button" onClick={() => setIsRecurring(true)} className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${isRecurring ? 'bg-ppl-dark-green text-white' : 'bg-background text-muted hover:text-foreground'}`}>Recurring</button>
+            </div>
+          </div>
+
+          {!isRecurring ? (
+            <div>
+              <label className="text-xs font-medium text-muted block mb-1">Date</label>
+              <input type="date" value={singleDate} onChange={(e) => setSingleDate(e.target.value)} className="ppl-input" required />
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className="text-xs font-medium text-muted block mb-1.5">Days of the Week</label>
+                <div className="flex gap-1">
+                  {DAY_NAMES_SHORT.map((day, idx) => (
+                    <button key={day} type="button" onClick={() => toggleDay(idx)} className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${recurringDays.includes(idx) ? 'bg-ppl-dark-green text-white ring-1 ring-ppl-light-green/30' : 'bg-background text-muted hover:text-foreground'}`}>{day}</button>
+                  ))}
+                </div>
+                {recurringDays.length > 0 && <p className="text-xs text-ppl-light-green mt-1">Every {recurringDays.map((d) => DAY_NAMES[d]).join(', ')}</p>}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted block mb-1">Start Date</label>
+                  <input type="date" value={recurringStartDate} onChange={(e) => setRecurringStartDate(e.target.value)} className="ppl-input" required />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted block mb-1">End Date</label>
+                  <input type="date" value={recurringEndDate} onChange={(e) => setRecurringEndDate(e.target.value)} className="ppl-input" required />
+                </div>
+              </div>
+            </>
+          )}
+
+          {isRecurring && estimatedCount > 0 && (
+            <div className="bg-ppl-dark-green/10 border border-ppl-dark-green/20 rounded-lg p-2">
+              <p className="text-sm text-ppl-light-green font-medium">Will create {estimatedCount} session{estimatedCount !== 1 ? 's' : ''}</p>
+            </div>
+          )}
+
+          <button type="submit" disabled={isSubmitting || (isRecurring && estimatedCount === 0)} className="ppl-btn ppl-btn-primary w-full justify-center mt-2">
+            {isSubmitting ? 'Creating...' : isRecurring ? `Create ${estimatedCount} Sessions` : 'Create Session'}
           </button>
         </form>
       </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { api, SessionWithAvailability, Booking } from '@/lib/api';
+import { api, SessionWithAvailability, Booking, MyWeekData, BookingWithCancelInfo } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 
 const SESSION_TYPE_LABELS: Record<string, string> = {
@@ -10,15 +10,23 @@ const SESSION_TYPE_LABELS: Record<string, string> = {
   YOUTH_PITCHING: 'Youth Pitching',
 };
 
+type BookingMode = 'single' | 'plan-week';
+
 export default function ClientBookPage() {
   const { user } = useAuth();
+
+  // Core data
   const [sessions, setSessions] = useState<SessionWithAvailability[]>([]);
-  const [myBookings, setMyBookings] = useState<Booking[]>([]);
+  const [myWeek, setMyWeek] = useState<MyWeekData | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [selectedSession, setSelectedSession] = useState<SessionWithAvailability | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [bookingInProgress, setBookingInProgress] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Adaptive booking mode
+  const [bookingMode, setBookingMode] = useState<BookingMode>('single');
+  const [selectedForBatch, setSelectedForBatch] = useState<Set<string>>(new Set());
+  const [showModeChoice, setShowModeChoice] = useState(false);
 
   // Current week starting Monday
   const [weekStart, setWeekStart] = useState(() => {
@@ -30,7 +38,12 @@ export default function ClientBookPage() {
 
   const locationId = user?.homeLocation?.id;
 
-  // Load sessions and bookings
+  // Determine membership type for adaptive UX
+  const sessionsPerWeek = myWeek?.membership?.sessionsPerWeek ?? null;
+  const isUnlimited = myWeek?.membership?.isUnlimited ?? false;
+  const canMultiBook = sessionsPerWeek === null || (sessionsPerWeek !== null && sessionsPerWeek >= 2);
+
+  // Load all data
   const loadData = useCallback(async () => {
     if (!locationId) return;
     setIsLoading(true);
@@ -39,17 +52,17 @@ export default function ClientBookPage() {
     weekEnd.setDate(weekEnd.getDate() + 7);
 
     try {
-      const [sessionsRes, bookingsRes] = await Promise.all([
+      const [sessionsRes, weekRes] = await Promise.all([
         api.getSessions({
           locationId,
           start: weekStart.toISOString(),
           end: weekEnd.toISOString(),
         }),
-        api.getUpcomingBookings({ upcoming: true }),
+        api.getMyWeek(),
       ]);
 
       if (sessionsRes.data) setSessions(sessionsRes.data);
-      if (bookingsRes.data) setMyBookings(bookingsRes.data);
+      if (weekRes.data) setMyWeek(weekRes.data);
     } catch (err) {
       console.error('Failed to load data:', err);
     } finally {
@@ -76,9 +89,9 @@ export default function ClientBookPage() {
       })
     : [];
 
-  // Check if client is already booked for a session
+  // Check if client is already booked
   const isBooked = (sessionId: string) =>
-    myBookings.some((b) => b.sessionId === sessionId && b.status === 'CONFIRMED');
+    myWeek?.bookings.some((b) => b.sessionId === sessionId && b.status === 'CONFIRMED') ?? false;
 
   // Check if registration is still open
   const isRegistrationOpen = (session: SessionWithAvailability) => {
@@ -87,19 +100,24 @@ export default function ClientBookPage() {
     return new Date() < cutoff;
   };
 
-  // Count sessions per day for the date picker
-  const sessionsCountByDay = weekDays.map((day) => {
-    return sessions.filter((s) => new Date(s.startTime).toDateString() === day.toDateString()).length;
-  });
+  // Check if cancellation is still allowed (4hr cutoff)
+  const canCancelBooking = (booking: BookingWithCancelInfo) => {
+    return booking.canCancel;
+  };
+
+  // Sessions per day count
+  const sessionsCountByDay = weekDays.map((day) =>
+    sessions.filter((s) => new Date(s.startTime).toDateString() === day.toDateString()).length
+  );
+
+  // ── BOOKING HANDLERS ──
 
   const handleBook = async (session: SessionWithAvailability) => {
     setMessage(null);
     setBookingInProgress(true);
-
     try {
       const res = await api.bookSession(session.id);
       setMessage({ type: 'success', text: res.message || 'Session booked!' });
-      setSelectedSession(null);
       await loadData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Booking failed';
@@ -109,11 +127,31 @@ export default function ClientBookPage() {
     }
   };
 
-  const handleCancel = async (booking: Booking) => {
+  const handleBatchBook = async () => {
+    if (selectedForBatch.size === 0) return;
     setMessage(null);
-
+    setBookingInProgress(true);
     try {
-      const res = await api.cancelBooking(booking.id);
+      const res = await api.batchBookSessions(Array.from(selectedForBatch));
+      setMessage({
+        type: 'success',
+        text: res.message || `${selectedForBatch.size} session(s) booked!`,
+      });
+      setSelectedForBatch(new Set());
+      setBookingMode('single');
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Booking failed';
+      setMessage({ type: 'error', text: msg });
+    } finally {
+      setBookingInProgress(false);
+    }
+  };
+
+  const handleCancel = async (bookingId: string) => {
+    setMessage(null);
+    try {
+      const res = await api.cancelBooking(bookingId);
       setMessage({
         type: 'success',
         text: res.message || 'Session cancelled. Your credit has been restored.',
@@ -125,9 +163,30 @@ export default function ClientBookPage() {
     }
   };
 
+  const toggleBatchSelect = (sessionId: string) => {
+    setSelectedForBatch((prev) => {
+      const next = new Set(prev);
+      if (next.has(sessionId)) {
+        next.delete(sessionId);
+      } else {
+        // Check credit limits for limited plans
+        if (myWeek?.credits && next.size >= myWeek.credits.remaining) {
+          setMessage({
+            type: 'error',
+            text: `You only have ${myWeek.credits.remaining} credit(s) left this week.`,
+          });
+          return prev;
+        }
+        next.add(sessionId);
+      }
+      return next;
+    });
+  };
+
   const navigateWeek = (direction: number) => {
     setSelectedDate(null);
-    setSelectedSession(null);
+    setSelectedForBatch(new Set());
+    setMessage(null);
     setWeekStart((prev) => {
       const d = new Date(prev);
       d.setDate(d.getDate() + direction * 7);
@@ -138,15 +197,85 @@ export default function ClientBookPage() {
   const formatTime = (iso: string) =>
     new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
+  const formatDay = (iso: string) =>
+    new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+  // ── RENDER ──
+
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl mx-auto pb-24">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-foreground">Book a Session</h1>
         <p className="text-muted text-sm mt-1">
-          {user?.homeLocation ? `Showing sessions at ${user.homeLocation.name}` : 'Select a date to see available sessions'}
+          {user?.homeLocation
+            ? `${SESSION_TYPE_LABELS[sessions[0]?.sessionType] || 'Sessions'} at ${user.homeLocation.name}`
+            : 'Select a date to see available sessions'}
         </p>
       </div>
+
+      {/* ── MY WEEK CARD ── */}
+      {myWeek?.membership && (
+        <div className="mb-6 rounded-2xl bg-gradient-to-br from-ppl-dark-green/10 to-ppl-dark-green/5 border border-ppl-dark-green/20 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-semibold text-foreground">My Week</h2>
+            {myWeek.credits ? (
+              <div className="flex items-center gap-1.5">
+                {Array.from({ length: myWeek.credits.total }, (_, i) => (
+                  <div
+                    key={i}
+                    className={`w-3 h-3 rounded-full ${
+                      i < myWeek.credits!.used
+                        ? 'bg-muted/30'
+                        : 'bg-ppl-light-green'
+                    }`}
+                  />
+                ))}
+                <span className="text-xs text-muted ml-1.5">
+                  {myWeek.credits.remaining} left
+                </span>
+              </div>
+            ) : (
+              <span className="text-xs font-medium text-ppl-light-green px-2 py-0.5 rounded-full bg-ppl-light-green/10">
+                Unlimited
+              </span>
+            )}
+          </div>
+
+          {myWeek.bookings.length === 0 ? (
+            <p className="text-sm text-muted">No sessions booked this week yet. Pick a day below to get started!</p>
+          ) : (
+            <div className="space-y-2">
+              {myWeek.bookings.map((booking) => (
+                <div
+                  key={booking.id}
+                  className="flex items-center justify-between bg-surface/60 rounded-xl px-3 py-2.5"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {formatDay(booking.session.startTime)} at {formatTime(booking.session.startTime)}
+                    </p>
+                    <p className="text-xs text-muted truncate">
+                      {booking.session.room?.name || ''}
+                      {booking.session.coach ? ` · ${booking.session.coach.fullName}` : ''}
+                    </p>
+                  </div>
+                  {canCancelBooking(booking) ? (
+                    <button
+                      onClick={() => handleCancel(booking.id)}
+                      className="ml-2 text-xs text-danger hover:text-danger/80 font-medium px-2 py-1 rounded-lg hover:bg-danger/10 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  ) : (
+                    <span className="ml-2 text-xs text-muted/50">Locked</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Status message */}
       {message && (
@@ -161,21 +290,62 @@ export default function ClientBookPage() {
         </div>
       )}
 
+      {/* ── BOOKING MODE SELECTOR (only for 2x+/unlimited) ── */}
+      {canMultiBook && !showModeChoice && myWeek?.membership && (
+        <div className="mb-4 flex gap-2">
+          <button
+            onClick={() => {
+              setBookingMode('single');
+              setSelectedForBatch(new Set());
+            }}
+            className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all ${
+              bookingMode === 'single'
+                ? 'ppl-gradient text-white shadow-md'
+                : 'bg-surface border border-border text-muted hover:text-foreground hover:border-border-light'
+            }`}
+          >
+            Book a Session
+          </button>
+          <button
+            onClick={() => setBookingMode('plan-week')}
+            className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all ${
+              bookingMode === 'plan-week'
+                ? 'ppl-gradient text-white shadow-md'
+                : 'bg-surface border border-border text-muted hover:text-foreground hover:border-border-light'
+            }`}
+          >
+            Plan My Week
+          </button>
+        </div>
+      )}
+
+      {/* Plan My Week instructions */}
+      {bookingMode === 'plan-week' && (
+        <div className="mb-4 p-3 rounded-lg bg-surface border border-border text-sm text-muted">
+          Tap sessions across any day to select them, then confirm all at once.
+          {myWeek?.credits && (
+            <span className="font-medium text-foreground">
+              {' '}You have {myWeek.credits.remaining} credit{myWeek.credits.remaining !== 1 ? 's' : ''} to use.
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Week Navigation */}
       <div className="flex items-center justify-between mb-4">
         <button onClick={() => navigateWeek(-1)} className="ppl-btn ppl-btn-secondary px-3">
-          &larr; Prev
+          ← Prev
         </button>
         <span className="text-sm font-medium text-foreground">
-          {weekStart.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} &ndash;{' '}
+          {weekStart.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} –{' '}
           {weekDays[6].toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
         </span>
         <button onClick={() => navigateWeek(1)} className="ppl-btn ppl-btn-secondary px-3">
-          Next &rarr;
+          Next →
         </button>
       </div>
 
-      {/* Calendly-style Date Picker */}
+      {/* ── DATE PICKER ── */}
       <div className="grid grid-cols-7 gap-2 mb-6">
         {weekDays.map((day, i) => {
           const isToday = day.toDateString() === new Date().toDateString();
@@ -188,7 +358,7 @@ export default function ClientBookPage() {
               key={i}
               onClick={() => {
                 setSelectedDate(day);
-                setSelectedSession(null);
+                setMessage(null);
               }}
               disabled={isPast}
               className={`p-3 rounded-xl text-center transition-all ${
@@ -215,7 +385,7 @@ export default function ClientBookPage() {
         })}
       </div>
 
-      {/* Available Sessions for Selected Date */}
+      {/* ── SESSIONS LIST ── */}
       {selectedDate && (
         <div>
           <h2 className="text-lg font-semibold text-foreground mb-3">
@@ -244,52 +414,87 @@ export default function ClientBookPage() {
                   const booked = isBooked(session.id);
                   const regOpen = isRegistrationOpen(session);
                   const full = session.spotsRemaining <= 0;
-                  const myBooking = myBookings.find(
+                  const myBooking = myWeek?.bookings.find(
                     (b) => b.sessionId === session.id && b.status === 'CONFIRMED'
                   );
+                  const isSelectedForBatch = selectedForBatch.has(session.id);
 
                   return (
                     <div
                       key={session.id}
                       className={`ppl-card flex items-center justify-between transition-all ${
-                        booked ? 'border-ppl-dark-green' : ''
+                        booked
+                          ? 'border-ppl-dark-green'
+                          : isSelectedForBatch
+                          ? 'border-ppl-light-green bg-ppl-dark-green/5'
+                          : ''
                       }`}
                     >
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="font-semibold text-foreground">
-                            {formatTime(session.startTime)} - {formatTime(session.endTime)}
+                            {formatTime(session.startTime)} – {formatTime(session.endTime)}
                           </span>
-                          {booked && <span className="ppl-badge ppl-badge-active">Booked</span>}
-                          {full && !booked && <span className="ppl-badge ppl-badge-danger">Full</span>}
+                          {booked && (
+                            <span className="ppl-badge ppl-badge-active">Booked ✓</span>
+                          )}
+                          {full && !booked && (
+                            <span className="text-xs font-bold text-red-400 bg-red-400/10 px-2 py-0.5 rounded-full">
+                              Full
+                            </span>
+                          )}
                         </div>
                         <p className="text-sm text-muted">
                           {SESSION_TYPE_LABELS[session.sessionType] || session.title}
-                          {session.room && <span> &middot; {session.room.name}</span>}
-                          {session.coach && <span> &middot; {session.coach.fullName}</span>}
+                          {session.room && <span> · {session.room.name}</span>}
+                          {session.coach && <span> · {session.coach.fullName}</span>}
                         </p>
                         <p className="text-xs text-muted mt-1">
-                          {session.spotsRemaining} of {session.maxCapacity} spots remaining
+                          {full
+                            ? 'No spots available'
+                            : `${session.spotsRemaining} spot${session.spotsRemaining !== 1 ? 's' : ''} open`}
                         </p>
                       </div>
 
-                      <div>
+                      <div className="ml-3">
                         {booked && myBooking ? (
-                          <button
-                            onClick={() => handleCancel(myBooking)}
-                            className="ppl-btn ppl-btn-danger text-xs"
-                          >
-                            Cancel
-                          </button>
+                          // Already booked — show cancel only if within cutoff window
+                          canCancelBooking(myBooking) ? (
+                            <button
+                              onClick={() => handleCancel(myBooking.id)}
+                              className="text-xs text-danger font-medium px-3 py-1.5 rounded-lg border border-danger/30 hover:bg-danger/10 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          ) : null /* Cancel button disappears after cutoff */
                         ) : full ? (
-                          <span className="text-xs text-red-400 font-medium">Full</span>
+                          // Session is full — just show "Full" text
+                          <span className="text-xs text-red-400/70 font-medium">Full</span>
                         ) : !regOpen ? (
+                          // Registration closed
                           <span className="text-xs text-muted">Closed</span>
+                        ) : bookingMode === 'plan-week' ? (
+                          // Plan My Week mode — toggle selection
+                          <button
+                            onClick={() => toggleBatchSelect(session.id)}
+                            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                              isSelectedForBatch
+                                ? 'ppl-gradient text-white shadow-md'
+                                : 'border-2 border-border hover:border-ppl-light-green'
+                            }`}
+                          >
+                            {isSelectedForBatch && (
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </button>
                         ) : (
+                          // Single book mode
                           <button
                             onClick={() => handleBook(session)}
                             disabled={bookingInProgress}
-                            className="ppl-btn ppl-btn-primary"
+                            className="ppl-btn ppl-btn-primary text-sm"
                           >
                             {bookingInProgress ? 'Booking...' : 'Book'}
                           </button>
@@ -303,37 +508,38 @@ export default function ClientBookPage() {
         </div>
       )}
 
-      {/* My Upcoming Bookings */}
-      {myBookings.filter((b) => b.status === 'CONFIRMED').length > 0 && (
-        <div className="mt-8">
-          <h2 className="text-lg font-semibold text-foreground mb-3">My Upcoming Sessions</h2>
-          <div className="space-y-2">
-            {myBookings
-              .filter((b) => b.status === 'CONFIRMED')
-              .map((booking) => (
-                <div key={booking.id} className="ppl-card flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-foreground text-sm">
-                      {booking.session.title || SESSION_TYPE_LABELS[booking.session.sessionType]}
-                    </p>
-                    <p className="text-xs text-muted">
-                      {new Date(booking.session.startTime).toLocaleDateString('en-US', {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                      })}{' '}
-                      at {formatTime(booking.session.startTime)}
-                      {booking.session.room && <span> &middot; {booking.session.room.name}</span>}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => handleCancel(booking)}
-                    className="ppl-btn ppl-btn-secondary text-xs text-danger border-danger/30 hover:bg-danger/10"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ))}
+      {/* ── BATCH CONFIRM BAR (fixed at bottom) ── */}
+      {bookingMode === 'plan-week' && selectedForBatch.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-surface/95 backdrop-blur-sm border-t border-border p-4 z-50">
+          <div className="max-w-2xl mx-auto flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                {selectedForBatch.size} session{selectedForBatch.size !== 1 ? 's' : ''} selected
+              </p>
+              {myWeek?.credits && (
+                <p className="text-xs text-muted">
+                  {myWeek.credits.remaining - selectedForBatch.size} credit{(myWeek.credits.remaining - selectedForBatch.size) !== 1 ? 's' : ''} will remain
+                </p>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setSelectedForBatch(new Set());
+                  setBookingMode('single');
+                }}
+                className="ppl-btn ppl-btn-secondary text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBatchBook}
+                disabled={bookingInProgress}
+                className="ppl-btn ppl-btn-primary text-sm"
+              >
+                {bookingInProgress ? 'Booking...' : `Confirm ${selectedForBatch.size} Session${selectedForBatch.size !== 1 ? 's' : ''}`}
+              </button>
+            </div>
           </div>
         </div>
       )}

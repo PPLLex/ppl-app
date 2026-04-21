@@ -113,6 +113,20 @@ router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
 });
 
 /**
+ * GET /api/locations/timezone-from-zip/:zip
+ * Public: look up timezone from US zip code
+ * NOTE: Must be defined BEFORE /:id to avoid route conflicts
+ */
+router.get('/timezone-from-zip/:zip', (req: Request, res: Response) => {
+  const zip = param(req, 'zip');
+  if (!zip || zip.length < 3) {
+    res.json({ success: true, data: { timezone: 'America/Chicago' } });
+    return;
+  }
+  res.json({ success: true, data: { timezone: timezoneFromZip(zip) } });
+});
+
+/**
  * GET /api/locations/:id
  */
 router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
@@ -133,19 +147,6 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   } catch (error) {
     next(error);
   }
-});
-
-/**
- * GET /api/locations/timezone-from-zip/:zip
- * Public: look up timezone from US zip code
- */
-router.get('/timezone-from-zip/:zip', (req: Request, res: Response) => {
-  const zip = param(req, 'zip');
-  if (!zip || zip.length < 3) {
-    res.json({ success: true, data: { timezone: 'America/Chicago' } });
-    return;
-  }
-  res.json({ success: true, data: { timezone: timezoneFromZip(zip) } });
 });
 
 /**
@@ -201,7 +202,7 @@ router.post('/', authenticate, requireAdmin, async (req: Request, res: Response,
 router.put('/:id', authenticate, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = param(req, 'id');
-    const { name, address, phone, timezone, zip, operatingHours, isActive } = req.body;
+    const { name, address, phone, timezone, zip, operatingHours, isActive, kioskPin } = req.body;
 
     // If zip is provided, auto-detect timezone
     const resolvedTimezone = zip ? timezoneFromZip(zip) : timezone;
@@ -215,6 +216,35 @@ router.put('/:id', authenticate, requireAdmin, async (req: Request, res: Respons
         ...(resolvedTimezone !== undefined && { timezone: resolvedTimezone }),
         ...(operatingHours !== undefined && { operatingHours }),
         ...(isActive !== undefined && { isActive }),
+        ...(kioskPin !== undefined && { kioskPin: kioskPin || null }),
+      },
+    });
+
+    res.json({ success: true, data: location });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PATCH /api/locations/:id
+ * Admin-only: partial update a location (same as PUT)
+ */
+router.patch('/:id', authenticate, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = param(req, 'id');
+    const { name, address, phone, timezone, kioskPin, operatingHours, isActive } = req.body;
+
+    const location = await prisma.location.update({
+      where: { id },
+      data: {
+        ...(name !== undefined && { name }),
+        ...(address !== undefined && { address }),
+        ...(phone !== undefined && { phone }),
+        ...(timezone !== undefined && { timezone }),
+        ...(operatingHours !== undefined && { operatingHours }),
+        ...(isActive !== undefined && { isActive }),
+        ...(kioskPin !== undefined && { kioskPin: kioskPin || null }),
       },
     });
 

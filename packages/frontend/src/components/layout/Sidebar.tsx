@@ -83,6 +83,7 @@ const Icons = {
 
 const adminNav: NavItem[] = [
   { label: 'Dashboard', href: '/admin', icon: <Icons.Home /> },
+  { label: 'Check In', href: '/admin/checkin', icon: <Icons.Shield /> },
   { label: 'Schedule', href: '/admin/schedule', icon: <Icons.Calendar /> },
   { label: 'Members', href: '/admin/members', icon: <Icons.Users /> },
   { label: 'Revenue', href: '/admin/revenue', icon: <Icons.Chart /> },
@@ -96,6 +97,7 @@ const adminNav: NavItem[] = [
 
 const staffNav: NavItem[] = [
   { label: 'Dashboard', href: '/staff', icon: <Icons.Home /> },
+  { label: 'Check In', href: '/admin/checkin', icon: <Icons.Shield /> },
   { label: 'Schedule', href: '/staff/schedule', icon: <Icons.Calendar /> },
   { label: 'Athletes', href: '/staff/athletes', icon: <Icons.Users /> },
   { label: 'Session Notes', href: '/staff/notes', icon: <Icons.Pencil /> },
@@ -110,6 +112,7 @@ const clientNav: NavItem[] = [
   { label: 'Training Notes', href: '/client/notes', icon: <Icons.Pencil /> },
   { label: 'My Goals', href: '/client/goals', icon: <Icons.Target /> },
   { label: 'My Programs', href: '/client/programs', icon: <Icons.Dumbbell /> },
+  { label: 'Coach View', href: '/client/coaches', icon: <Icons.Users /> },
   { label: 'Membership', href: '/client/membership', icon: <Icons.CreditCard /> },
   { label: 'Messages', href: '/client/messages', icon: <Icons.Chat /> },
   { label: 'My Account', href: '/client/account', icon: <Icons.Settings /> },

@@ -241,13 +241,14 @@ router.delete('/:id', authenticate, async (req: Request, res: Response, next: Ne
       throw ApiError.badRequest('This booking is not in a cancellable state');
     }
 
-    // Check cancellation cutoff (1 hour before by default)
+    // Check cancellation cutoff (4 hours before by default)
     const cutoffTime = new Date(booking.session.startTime);
     cutoffTime.setHours(cutoffTime.getHours() - booking.session.cancellationCutoffHours);
 
     if (new Date() > cutoffTime && user.role === Role.CLIENT) {
-      throw ApiError.badRequest(
-        `Cancellation window has closed. You can cancel up to ${booking.session.cancellationCutoffHours} hour(s) before the session.`
+      throw ApiError.forbidden(
+        'Cancellation window has closed. Sessions cannot be cancelled within ' +
+        `${booking.session.cancellationCutoffHours} hours of the start time.`
       );
     }
 
@@ -356,6 +357,308 @@ router.delete('/:id', authenticate, async (req: Request, res: Response, next: Ne
       success: true,
       message: `Session cancelled.${creditRestored ? ' Your credit has been restored to your account.' : ''}`,
       data: { creditRestored },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/bookings/my-week
+ * Client: get current week's bookings + credit balance + membership info for My Week card.
+ */
+router.get('/my-week', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = req.user!;
+
+    // Get active membership with plan details
+    const membership = await prisma.clientMembership.findFirst({
+      where: { clientId: user.userId, status: 'ACTIVE' },
+      include: { plan: true },
+    });
+
+    if (!membership) {
+      return res.json({
+        success: true,
+        data: {
+          membership: null,
+          bookings: [],
+          credits: null,
+        },
+      });
+    }
+
+    // Get this week's bookings
+    const weekStart = getWeekStart(new Date(), membership.billingDay);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+
+    const bookings = await prisma.booking.findMany({
+      where: {
+        clientId: user.userId,
+        status: 'CONFIRMED',
+        session: {
+          startTime: { gte: weekStart, lt: weekEnd },
+        },
+      },
+      include: {
+        session: {
+          include: {
+            room: { select: { id: true, name: true } },
+            coach: { select: { id: true, fullName: true } },
+          },
+        },
+      },
+      orderBy: { session: { startTime: 'asc' } },
+    });
+
+    // Get credit balance (for limited plans)
+    let credits = null;
+    if (membership.plan.sessionsPerWeek !== null) {
+      const weeklyCredit = await prisma.weeklyCredit.findFirst({
+        where: {
+          clientId: user.userId,
+          membershipId: membership.id,
+          weekStartDate: weekStart,
+        },
+      });
+
+      credits = {
+        total: membership.plan.sessionsPerWeek,
+        used: weeklyCredit?.creditsUsed || 0,
+        remaining: membership.plan.sessionsPerWeek - (weeklyCredit?.creditsUsed || 0),
+      };
+    }
+
+    // Cancellation cutoff info for each booking
+    const bookingsWithCancelInfo = bookings.map((b) => {
+      const cutoffTime = new Date(b.session.startTime);
+      cutoffTime.setHours(cutoffTime.getHours() - b.session.cancellationCutoffHours);
+      const canCancel = new Date() < cutoffTime;
+
+      return {
+        ...b,
+        canCancel,
+        cancellationCutoff: cutoffTime.toISOString(),
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        membership: {
+          planName: membership.plan.name,
+          ageGroup: membership.plan.ageGroup,
+          sessionsPerWeek: membership.plan.sessionsPerWeek,
+          isUnlimited: membership.plan.sessionsPerWeek === null,
+          billingDay: membership.billingDay,
+        },
+        bookings: bookingsWithCancelInfo,
+        credits,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/bookings/batch
+ * Client: book multiple sessions at once ("Plan my week" mode).
+ * Validates credits for all sessions before booking any.
+ */
+router.post('/batch', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = req.user!;
+    const { sessionIds } = req.body;
+
+    if (!sessionIds || !Array.isArray(sessionIds) || sessionIds.length === 0) {
+      throw ApiError.badRequest('At least one session ID is required');
+    }
+
+    if (sessionIds.length > 7) {
+      throw ApiError.badRequest('Cannot book more than 7 sessions at once');
+    }
+
+    // Get active membership
+    const membership = await prisma.clientMembership.findFirst({
+      where: { clientId: user.userId, status: 'ACTIVE' },
+      include: { plan: true },
+    });
+
+    if (!membership) {
+      throw ApiError.forbidden('You need an active membership to book sessions.');
+    }
+
+    // Check credits up front for limited plans
+    let creditsAvailable = Infinity;
+    let weeklyCredit: { id: string; creditsTotal: number; creditsUsed: number } | null = null;
+
+    if (membership.plan.sessionsPerWeek !== null) {
+      const weekStart = getWeekStart(new Date(), membership.billingDay);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 7);
+
+      const existing = await prisma.weeklyCredit.findFirst({
+        where: {
+          clientId: user.userId,
+          membershipId: membership.id,
+          weekStartDate: weekStart,
+        },
+      });
+
+      if (!existing) {
+        weeklyCredit = await prisma.weeklyCredit.create({
+          data: {
+            clientId: user.userId,
+            membershipId: membership.id,
+            creditsTotal: membership.plan.sessionsPerWeek,
+            creditsUsed: 0,
+            weekStartDate: weekStart,
+            weekEndDate: weekEnd,
+          },
+        });
+      } else {
+        weeklyCredit = existing;
+      }
+
+      creditsAvailable = weeklyCredit.creditsTotal - weeklyCredit.creditsUsed;
+
+      if (sessionIds.length > creditsAvailable) {
+        throw ApiError.badRequest(
+          `You only have ${creditsAvailable} credit(s) remaining this week, but tried to book ${sessionIds.length} session(s).`
+        );
+      }
+    }
+
+    // Validate all sessions exist and are bookable
+    const sessions = await prisma.session.findMany({
+      where: { id: { in: sessionIds }, isActive: true },
+      include: {
+        room: { select: { id: true, name: true } },
+        coach: { select: { id: true, fullName: true } },
+        _count: { select: { bookings: { where: { status: { in: ['CONFIRMED', 'COMPLETED'] } } } } },
+      },
+    });
+
+    if (sessions.length !== sessionIds.length) {
+      throw ApiError.notFound('One or more sessions not found or unavailable');
+    }
+
+    const errors: string[] = [];
+    for (const session of sessions) {
+      // Location check
+      if (user.role === Role.CLIENT && user.homeLocationId !== session.locationId) {
+        errors.push(`${session.title}: wrong location`);
+        continue;
+      }
+      // Cutoff check
+      const cutoff = new Date(session.startTime);
+      cutoff.setHours(cutoff.getHours() - session.registrationCutoffHours);
+      if (new Date() > cutoff) {
+        errors.push(`${session.title}: registration closed`);
+        continue;
+      }
+      // Capacity check
+      if (session._count.bookings >= session.maxCapacity) {
+        errors.push(`${session.title}: full`);
+      }
+    }
+
+    if (errors.length > 0) {
+      throw ApiError.badRequest(`Cannot book all sessions: ${errors.join('; ')}`);
+    }
+
+    // Check for existing bookings
+    const existingBookings = await prisma.booking.findMany({
+      where: {
+        clientId: user.userId,
+        sessionId: { in: sessionIds },
+        status: 'CONFIRMED',
+      },
+    });
+    const alreadyBooked = new Set(existingBookings.map((b) => b.sessionId));
+    const newSessionIds = sessionIds.filter((id: string) => !alreadyBooked.has(id));
+
+    if (newSessionIds.length === 0) {
+      throw ApiError.conflict('You are already booked for all selected sessions');
+    }
+
+    // Book all sessions in a transaction
+    const creditsPerSession = membership.plan.sessionsPerWeek !== null ? 1 : 0;
+    const results = await prisma.$transaction(async (tx) => {
+      const booked = [];
+
+      for (const sessionId of newSessionIds) {
+        const booking = await tx.booking.upsert({
+          where: { clientId_sessionId: { clientId: user.userId, sessionId } },
+          create: {
+            clientId: user.userId,
+            sessionId,
+            status: 'CONFIRMED',
+            creditsUsed: creditsPerSession,
+          },
+          update: {
+            status: 'CONFIRMED',
+            creditsUsed: creditsPerSession,
+            cancelledAt: null,
+            cancellationReason: null,
+          },
+        });
+
+        await tx.session.update({
+          where: { id: sessionId },
+          data: { currentEnrolled: { increment: 1 } },
+        });
+
+        booked.push(booking);
+      }
+
+      // Deduct all credits at once
+      if (weeklyCredit && creditsPerSession > 0) {
+        await tx.weeklyCredit.update({
+          where: { id: weeklyCredit.id },
+          data: { creditsUsed: { increment: newSessionIds.length } },
+        });
+
+        // Log credit transactions
+        for (const sessionId of newSessionIds) {
+          const session = sessions.find((s) => s.id === sessionId)!;
+          await tx.creditTransaction.create({
+            data: {
+              clientId: user.userId,
+              transactionType: 'usage',
+              amount: -1,
+              notes: `Booked: ${session.title} on ${session.startTime.toLocaleDateString()}`,
+            },
+          });
+        }
+      }
+
+      return booked;
+    });
+
+    // Send batch confirmation notification
+    const sessionTitles = newSessionIds.map((id: string) => {
+      const s = sessions.find((s) => s.id === id)!;
+      const day = s.startTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      const time = s.startTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      return `${s.title} (${day} at ${time})`;
+    });
+
+    await notify({
+      userId: user.userId,
+      type: NotificationType.BOOKING_CONFIRMED,
+      title: `${results.length} Session${results.length > 1 ? 's' : ''} Booked!`,
+      body: `You're booked for: ${sessionTitles.join(', ')}`,
+      channels: [NotificationChannel.EMAIL, NotificationChannel.SMS],
+      metadata: { bookingIds: results.map((b) => b.id), sessionIds: newSessionIds },
+    });
+
+    res.status(201).json({
+      success: true,
+      data: results,
+      message: `${results.length} session${results.length > 1 ? 's' : ''} booked successfully!`,
     });
   } catch (error) {
     next(error);

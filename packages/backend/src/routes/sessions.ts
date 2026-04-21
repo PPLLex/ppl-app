@@ -45,7 +45,25 @@ router.get('/', authenticate, async (req: Request, res: Response, next: NextFunc
     if (end) {
       where.endTime = { ...(where.endTime as object || {}), lte: new Date(end as string) };
     }
-    if (type) {
+
+    // Age-group filtering: clients only see sessions matching their membership age group
+    if (user.role === Role.CLIENT && !type) {
+      const membership = await prisma.clientMembership.findFirst({
+        where: { clientId: user.userId, status: 'ACTIVE', locationId: filterLocationId },
+        include: { plan: true },
+      });
+      if (membership) {
+        const ageGroupToSessionType: Record<string, SessionType> = {
+          college: SessionType.COLLEGE_PITCHING,
+          ms_hs: SessionType.MS_HS_PITCHING,
+          youth: SessionType.YOUTH_PITCHING,
+        };
+        const mapped = ageGroupToSessionType[membership.plan.ageGroup];
+        if (mapped) {
+          where.sessionType = mapped;
+        }
+      }
+    } else if (type) {
       where.sessionType = type as SessionType;
     }
 
@@ -76,6 +94,94 @@ router.get('/', authenticate, async (req: Request, res: Response, next: NextFunc
       coach: s.coach,
       recurringGroupId: s.recurringGroupId,
     }));
+
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/sessions/today
+ * Staff/Admin: get all sessions for today at the user's location, with roster and check-in status.
+ * Designed for the front-desk check-in tablet.
+ */
+router.get('/today', authenticate, requireStaffOrAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = req.user!;
+    const locationId = (req.query.locationId as string) || user.homeLocationId;
+
+    if (!locationId) {
+      throw ApiError.badRequest('Location ID is required');
+    }
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    const sessions = await prisma.session.findMany({
+      where: {
+        locationId,
+        isActive: true,
+        startTime: { gte: todayStart, lte: todayEnd },
+      },
+      include: {
+        room: { select: { id: true, name: true } },
+        coach: { select: { id: true, fullName: true } },
+        bookings: {
+          where: { status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW'] } },
+          include: {
+            client: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                phone: true,
+                clientProfile: { select: { ageGroup: true } },
+              },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+        _count: {
+          select: {
+            bookings: { where: { status: { in: ['CONFIRMED', 'COMPLETED'] } } },
+          },
+        },
+      },
+      orderBy: { startTime: 'asc' },
+    });
+
+    const data = sessions.map((s) => {
+      const now = new Date();
+      const isActive = now >= s.startTime && now <= s.endTime;
+      const isPast = now > s.endTime;
+      const checkedIn = s.bookings.filter((b) => b.status === 'COMPLETED').length;
+      const noShows = s.bookings.filter((b) => b.status === 'NO_SHOW').length;
+      const pending = s.bookings.filter((b) => b.status === 'CONFIRMED').length;
+
+      return {
+        id: s.id,
+        title: s.title,
+        sessionType: s.sessionType,
+        startTime: s.startTime.toISOString(),
+        endTime: s.endTime.toISOString(),
+        maxCapacity: s.maxCapacity,
+        room: s.room,
+        coach: s.coach,
+        isActive,
+        isPast,
+        stats: { checkedIn, noShows, pending, total: s.bookings.length },
+        roster: s.bookings.map((b) => ({
+          bookingId: b.id,
+          clientId: b.client.id,
+          clientName: b.client.fullName,
+          phone: b.client.phone,
+          status: b.status,
+        })),
+      };
+    });
 
     res.json({ success: true, data });
   } catch (error) {
@@ -148,14 +254,28 @@ router.post('/', authenticate, requireStaffOrAdmin, async (req: Request, res: Re
       maxCapacity,
       registrationCutoffHours,
       cancellationCutoffHours,
+      // Legacy fields (still supported)
       recurringRule,
       recurringCount,
+      // New recurring fields
+      isRecurring,
+      recurringDays,     // number[] — days of week (0=Sun, 1=Mon, ..., 6=Sat)
+      recurringEndDate,  // ISO date string — last date to generate sessions
+      startDate,         // ISO date string — date for one-time or start of recurring
+      time,              // "HH:MM" — session start time
+      durationMinutes,   // number — session length in minutes
     } = req.body;
 
     const user = req.user!;
 
-    if (!locationId || !title || !sessionType || !startTime || !endTime) {
-      throw ApiError.badRequest('Location, title, session type, start time, and end time are required');
+    // Support both old format (startTime/endTime) and new format (startDate + time + durationMinutes)
+    const useNewFormat = startDate && time && durationMinutes;
+
+    if (!useNewFormat && (!startTime || !endTime)) {
+      throw ApiError.badRequest('Either startDate+time+durationMinutes or startTime+endTime are required');
+    }
+    if (!locationId || !sessionType) {
+      throw ApiError.badRequest('Location and session type are required');
     }
 
     // Validate session type
@@ -174,36 +294,111 @@ router.post('/', authenticate, requireStaffOrAdmin, async (req: Request, res: Re
       }
     }
 
-    const sessionsToCreate = [];
-    const recurringGroupId = recurringRule ? randomUUID() : null;
-    const start = new Date(startTime);
-    const end = new Date(endTime);
-    const count = recurringCount || 1;
+    // Auto-set title based on session type if not provided
+    const sessionTitle = title || sessionType.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
 
-    // Generate recurring sessions (weekly by default)
-    for (let i = 0; i < count; i++) {
-      const sessionStart = new Date(start);
-      const sessionEnd = new Date(end);
-      sessionStart.setDate(sessionStart.getDate() + i * 7);
-      sessionEnd.setDate(sessionEnd.getDate() + i * 7);
+    const sessionsToCreate: Array<Record<string, unknown>> = [];
+    const recurringGroupId = (isRecurring || recurringRule) ? randomUUID() : null;
 
-      sessionsToCreate.push({
-        locationId,
-        roomId: roomId || null,
-        coachId: user.userId,
-        title,
-        sessionType: sessionType as SessionType,
-        startTime: sessionStart,
-        endTime: sessionEnd,
-        maxCapacity: maxCapacity || 8,
-        registrationCutoffHours: registrationCutoffHours ?? 2,
-        cancellationCutoffHours: cancellationCutoffHours ?? 1,
-        recurringRule: recurringRule || null,
-        recurringGroupId,
-      });
+    if (useNewFormat) {
+      // NEW FORMAT: date + time + duration + optional recurring
+      const [hours, minutes] = time.split(':').map(Number);
+      const duration = durationMinutes || 60;
+
+      if (isRecurring && recurringDays && recurringDays.length > 0 && recurringEndDate) {
+        // RECURRING: generate sessions for each selected day of week until end date
+        const endDateLimit = new Date(recurringEndDate);
+        endDateLimit.setHours(23, 59, 59, 999);
+        const currentDate = new Date(startDate);
+        currentDate.setHours(0, 0, 0, 0);
+
+        // Cap at 365 days to prevent accidental huge generation
+        const maxEndDate = new Date(currentDate);
+        maxEndDate.setFullYear(maxEndDate.getFullYear() + 1);
+        const effectiveEnd = endDateLimit < maxEndDate ? endDateLimit : maxEndDate;
+
+        while (currentDate <= effectiveEnd) {
+          const dayOfWeek = currentDate.getDay();
+          if (recurringDays.includes(dayOfWeek)) {
+            const sessionStart = new Date(currentDate);
+            sessionStart.setHours(hours, minutes, 0, 0);
+            const sessionEnd = new Date(sessionStart);
+            sessionEnd.setMinutes(sessionEnd.getMinutes() + duration);
+
+            // Only create future sessions
+            if (sessionStart > new Date()) {
+              sessionsToCreate.push({
+                locationId,
+                roomId: roomId || null,
+                coachId: user.userId,
+                title: sessionTitle,
+                sessionType: sessionType as SessionType,
+                startTime: sessionStart,
+                endTime: sessionEnd,
+                maxCapacity: maxCapacity || 8,
+                registrationCutoffHours: registrationCutoffHours ?? 2,
+                cancellationCutoffHours: cancellationCutoffHours ?? 1,
+                recurringRule: `days:${recurringDays.join(',')}|until:${recurringEndDate}`,
+                recurringGroupId,
+              });
+            }
+          }
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        if (sessionsToCreate.length === 0) {
+          throw ApiError.badRequest('No sessions would be created — check your date range and selected days');
+        }
+      } else {
+        // ONE-TIME: single session on the selected date
+        const sessionStart = new Date(startDate);
+        sessionStart.setHours(hours, minutes, 0, 0);
+        const sessionEnd = new Date(sessionStart);
+        sessionEnd.setMinutes(sessionEnd.getMinutes() + duration);
+
+        sessionsToCreate.push({
+          locationId,
+          roomId: roomId || null,
+          coachId: user.userId,
+          title: sessionTitle,
+          sessionType: sessionType as SessionType,
+          startTime: sessionStart,
+          endTime: sessionEnd,
+          maxCapacity: maxCapacity || 8,
+          registrationCutoffHours: registrationCutoffHours ?? 2,
+          cancellationCutoffHours: cancellationCutoffHours ?? 1,
+          recurringRule: null,
+          recurringGroupId: null,
+        });
+      }
+    } else {
+      // LEGACY FORMAT: startTime/endTime with optional recurringCount
+      const start = new Date(startTime);
+      const end = new Date(endTime);
+      const count = recurringCount || 1;
+      for (let i = 0; i < count; i++) {
+        const sessionStart = new Date(start);
+        const sessionEnd = new Date(end);
+        sessionStart.setDate(sessionStart.getDate() + i * 7);
+        sessionEnd.setDate(sessionEnd.getDate() + i * 7);
+        sessionsToCreate.push({
+          locationId,
+          roomId: roomId || null,
+          coachId: user.userId,
+          title: sessionTitle,
+          sessionType: sessionType as SessionType,
+          startTime: sessionStart,
+          endTime: sessionEnd,
+          maxCapacity: maxCapacity || 8,
+          registrationCutoffHours: registrationCutoffHours ?? 2,
+          cancellationCutoffHours: cancellationCutoffHours ?? 1,
+          recurringRule: recurringRule || null,
+          recurringGroupId,
+        });
+      }
     }
 
-    const created = await prisma.session.createMany({ data: sessionsToCreate });
+    const created = await prisma.session.createMany({ data: sessionsToCreate as any });
 
     // Audit log
     await createAuditLog({
@@ -212,24 +407,27 @@ router.post('/', authenticate, requireStaffOrAdmin, async (req: Request, res: Re
       action: 'session.created',
       resourceType: 'session',
       changes: {
-        title,
+        title: sessionTitle,
         sessionType,
-        startTime,
-        endTime,
         count: sessionsToCreate.length,
         recurringGroupId,
+        isRecurring: !!isRecurring,
+        recurringDays: recurringDays || null,
+        recurringEndDate: recurringEndDate || null,
       },
     });
 
     // Notify admins if a staff member made the change
     if (user.role === Role.STAFF) {
       const staffUser = await prisma.user.findUnique({ where: { id: user.userId }, select: { fullName: true } });
+      const firstSession = sessionsToCreate[0];
+      const firstStart = firstSession.startTime as Date;
       await notifyAdminsOfScheduleChange(
         user.userId,
         staffUser?.fullName || 'Staff',
         'created',
-        title,
-        `${sessionsToCreate.length} session(s) starting ${start.toLocaleDateString()} at ${start.toLocaleTimeString()}`
+        sessionTitle,
+        `${sessionsToCreate.length} session(s) starting ${firstStart.toLocaleDateString()} at ${firstStart.toLocaleTimeString()}`
       );
     }
 
@@ -391,6 +589,477 @@ router.delete('/:id', authenticate, requireStaffOrAdmin, async (req: Request, re
     res.json({
       success: true,
       message: `Session cancelled. ${cancelledBookings.count} booking(s) were automatically cancelled.`,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================
+// RECURRING SERIES MANAGEMENT
+// ============================================================
+
+/**
+ * GET /api/sessions/series/:groupId
+ * Staff/Admin: view all sessions in a recurring group.
+ * Shows past, current, and future sessions grouped together.
+ */
+router.get('/series/:groupId', authenticate, requireStaffOrAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const groupId = param(req, 'groupId');
+
+    const sessions = await prisma.session.findMany({
+      where: { recurringGroupId: groupId },
+      include: {
+        room: { select: { id: true, name: true } },
+        coach: { select: { id: true, fullName: true } },
+        _count: { select: { bookings: { where: { status: { in: ['CONFIRMED', 'COMPLETED'] } } } } },
+      },
+      orderBy: { startTime: 'asc' },
+    });
+
+    if (sessions.length === 0) {
+      throw ApiError.notFound('No sessions found for this recurring group');
+    }
+
+    const now = new Date();
+    const data = sessions.map((s) => ({
+      id: s.id,
+      locationId: s.locationId,
+      title: s.title,
+      sessionType: s.sessionType,
+      startTime: s.startTime.toISOString(),
+      endTime: s.endTime.toISOString(),
+      maxCapacity: s.maxCapacity,
+      currentEnrolled: s._count.bookings,
+      spotsRemaining: s.maxCapacity - s._count.bookings,
+      room: s.room,
+      coach: s.coach,
+      isActive: s.isActive,
+      isPast: s.startTime < now,
+      recurringGroupId: s.recurringGroupId,
+      recurringRule: s.recurringRule,
+    }));
+
+    const first = sessions[0];
+    const activeSessions = sessions.filter(s => s.isActive);
+    const futureSessions = activeSessions.filter(s => s.startTime > now);
+
+    res.json({
+      success: true,
+      data: {
+        groupId,
+        title: first.title,
+        sessionType: first.sessionType,
+        locationId: first.locationId,
+        recurringRule: first.recurringRule,
+        totalSessions: sessions.length,
+        activeSessions: activeSessions.length,
+        futureSessions: futureSessions.length,
+        firstDate: sessions[0].startTime.toISOString(),
+        lastDate: sessions[sessions.length - 1].startTime.toISOString(),
+        sessions: data,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PUT /api/sessions/series/:groupId
+ * Staff/Admin: edit all FUTURE sessions in a recurring series.
+ * Only modifies sessions that haven't happened yet.
+ * Body: { title?, roomId?, coachId?, maxCapacity?, sessionType?,
+ *         registrationCutoffHours?, cancellationCutoffHours?, time?, durationMinutes? }
+ */
+router.put('/series/:groupId', authenticate, requireStaffOrAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const groupId = param(req, 'groupId');
+    const user = req.user!;
+
+    // Get the series sessions
+    const sessions = await prisma.session.findMany({
+      where: { recurringGroupId: groupId, isActive: true },
+      orderBy: { startTime: 'asc' },
+    });
+
+    if (sessions.length === 0) {
+      throw ApiError.notFound('No active sessions found for this recurring group');
+    }
+
+    // Staff location check
+    if (user.role === Role.STAFF) {
+      const staffLoc = await prisma.staffLocation.findUnique({
+        where: { staffId_locationId: { staffId: user.userId, locationId: sessions[0].locationId } },
+      });
+      if (!staffLoc) throw ApiError.forbidden('You can only edit sessions at your assigned locations');
+    }
+
+    const {
+      title, roomId, coachId, sessionType, maxCapacity,
+      registrationCutoffHours, cancellationCutoffHours,
+      time, durationMinutes,
+    } = req.body;
+
+    const now = new Date();
+    const futureSessionIds = sessions.filter(s => s.startTime > now).map(s => s.id);
+
+    if (futureSessionIds.length === 0) {
+      throw ApiError.badRequest('No future sessions to update — all sessions in this series are in the past');
+    }
+
+    // Build update data
+    const updateData: Record<string, unknown> = {};
+    if (title !== undefined) updateData.title = title;
+    if (roomId !== undefined) updateData.roomId = roomId || null;
+    if (coachId !== undefined) updateData.coachId = coachId || null;
+    if (sessionType !== undefined) updateData.sessionType = sessionType;
+    if (maxCapacity !== undefined) updateData.maxCapacity = maxCapacity;
+    if (registrationCutoffHours !== undefined) updateData.registrationCutoffHours = registrationCutoffHours;
+    if (cancellationCutoffHours !== undefined) updateData.cancellationCutoffHours = cancellationCutoffHours;
+
+    // If time or duration changes, update each session individually to preserve dates
+    if (time || durationMinutes) {
+      const [newHours, newMinutes] = time ? time.split(':').map(Number) : [null, null];
+      const newDuration = durationMinutes || null;
+
+      for (const session of sessions.filter(s => s.startTime > now)) {
+        const newStart = new Date(session.startTime);
+        if (newHours !== null && newMinutes !== null) {
+          newStart.setHours(newHours, newMinutes, 0, 0);
+        }
+        const dur = newDuration || ((session.endTime.getTime() - session.startTime.getTime()) / 60000);
+        const newEnd = new Date(newStart);
+        newEnd.setMinutes(newEnd.getMinutes() + dur);
+
+        await prisma.session.update({
+          where: { id: session.id },
+          data: {
+            ...updateData,
+            startTime: newStart,
+            endTime: newEnd,
+          },
+        });
+      }
+    } else if (Object.keys(updateData).length > 0) {
+      // Bulk update if no time changes
+      await prisma.session.updateMany({
+        where: { id: { in: futureSessionIds } },
+        data: updateData as any,
+      });
+    }
+
+    await createAuditLog({
+      userId: user.userId,
+      locationId: sessions[0].locationId,
+      action: 'session.series_updated',
+      resourceType: 'session',
+      changes: {
+        recurringGroupId: groupId,
+        sessionsUpdated: futureSessionIds.length,
+        ...updateData,
+        ...(time && { time }),
+        ...(durationMinutes && { durationMinutes }),
+      },
+    });
+
+    if (user.role === Role.STAFF) {
+      const staffUser = await prisma.user.findUnique({ where: { id: user.userId }, select: { fullName: true } });
+      await notifyAdminsOfScheduleChange(
+        user.userId,
+        staffUser?.fullName || 'Staff',
+        'updated series',
+        sessions[0].title,
+        `${futureSessionIds.length} future session(s) updated`
+      );
+    }
+
+    res.json({
+      success: true,
+      data: { updated: futureSessionIds.length, groupId },
+      message: `${futureSessionIds.length} future session(s) updated in series`,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * DELETE /api/sessions/series/:groupId
+ * Staff/Admin: cancel all FUTURE sessions in a recurring series.
+ * Past sessions are untouched. All confirmed bookings on cancelled sessions are auto-cancelled.
+ * Query: ?fromDate=ISO — only cancel sessions from this date forward (optional)
+ */
+router.delete('/series/:groupId', authenticate, requireStaffOrAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const groupId = param(req, 'groupId');
+    const user = req.user!;
+    const fromDate = req.query.fromDate ? new Date(req.query.fromDate as string) : new Date();
+
+    const sessions = await prisma.session.findMany({
+      where: {
+        recurringGroupId: groupId,
+        isActive: true,
+        startTime: { gt: fromDate },
+      },
+      include: {
+        _count: { select: { bookings: { where: { status: 'CONFIRMED' } } } },
+      },
+    });
+
+    if (sessions.length === 0) {
+      return res.json({ success: true, data: { cancelled: 0 }, message: 'No future sessions to cancel' });
+    }
+
+    // Staff location check
+    if (user.role === Role.STAFF) {
+      const staffLoc = await prisma.staffLocation.findUnique({
+        where: { staffId_locationId: { staffId: user.userId, locationId: sessions[0].locationId } },
+      });
+      if (!staffLoc) throw ApiError.forbidden('You can only cancel sessions at your assigned locations');
+    }
+
+    const sessionIds = sessions.map(s => s.id);
+
+    // Soft delete all future sessions in the series
+    await prisma.session.updateMany({
+      where: { id: { in: sessionIds } },
+      data: { isActive: false },
+    });
+
+    // Cancel all confirmed bookings on those sessions
+    const cancelledBookings = await prisma.booking.updateMany({
+      where: {
+        sessionId: { in: sessionIds },
+        status: 'CONFIRMED',
+      },
+      data: {
+        status: 'CANCELLED',
+        cancelledAt: new Date(),
+        cancellationReason: 'Recurring series cancelled by staff/admin',
+      },
+    });
+
+    const totalBookingsAffected = sessions.reduce((sum, s) => sum + s._count.bookings, 0);
+
+    await createAuditLog({
+      userId: user.userId,
+      locationId: sessions[0].locationId,
+      action: 'session.series_deleted',
+      resourceType: 'session',
+      changes: {
+        recurringGroupId: groupId,
+        sessionsCancelled: sessionIds.length,
+        bookingsCancelled: cancelledBookings.count,
+      },
+    });
+
+    if (user.role === Role.STAFF) {
+      const staffUser = await prisma.user.findUnique({ where: { id: user.userId }, select: { fullName: true } });
+      await notifyAdminsOfScheduleChange(
+        user.userId,
+        staffUser?.fullName || 'Staff',
+        'cancelled series',
+        sessions[0].title,
+        `${sessionIds.length} session(s) cancelled. ${cancelledBookings.count} booking(s) affected.`
+      );
+    }
+
+    res.json({
+      success: true,
+      data: {
+        cancelled: sessionIds.length,
+        bookingsAffected: cancelledBookings.count,
+        groupId,
+      },
+      message: `${sessionIds.length} session(s) cancelled. ${cancelledBookings.count} booking(s) were automatically cancelled.`,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/sessions/series/:groupId/extend
+ * Admin: extend a recurring series by generating more sessions beyond the current end date.
+ * Body: { newEndDate: ISO string, additionalWeeks?: number }
+ */
+router.post('/series/:groupId/extend', authenticate, requireStaffOrAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const groupId = param(req, 'groupId');
+    const user = req.user!;
+    if (user.role !== Role.ADMIN) throw ApiError.forbidden('Only admins can extend recurring series');
+
+    const { newEndDate, additionalWeeks } = req.body;
+
+    // Get existing sessions in this group to determine the pattern
+    const existingSessions = await prisma.session.findMany({
+      where: { recurringGroupId: groupId },
+      orderBy: { startTime: 'asc' },
+    });
+
+    if (existingSessions.length === 0) {
+      throw ApiError.notFound('No sessions found for this recurring group');
+    }
+
+    const first = existingSessions[0];
+    const last = existingSessions[existingSessions.length - 1];
+
+    // Determine the recurring days from existing sessions
+    const daySet = new Set(existingSessions.map(s => s.startTime.getDay()));
+    const recurringDays = Array.from(daySet).sort();
+
+    // Calculate duration from first session
+    const durationMinutes = (first.endTime.getTime() - first.startTime.getTime()) / 60000;
+    const startHour = first.startTime.getHours();
+    const startMinute = first.startTime.getMinutes();
+
+    // Determine the end date
+    let endDateLimit: Date;
+    if (newEndDate) {
+      endDateLimit = new Date(newEndDate);
+    } else if (additionalWeeks) {
+      endDateLimit = new Date(last.startTime);
+      endDateLimit.setDate(endDateLimit.getDate() + additionalWeeks * 7);
+    } else {
+      throw ApiError.badRequest('Either newEndDate or additionalWeeks is required');
+    }
+    endDateLimit.setHours(23, 59, 59, 999);
+
+    // Start generating from the day after the last existing session
+    const currentDate = new Date(last.startTime);
+    currentDate.setDate(currentDate.getDate() + 1);
+    currentDate.setHours(0, 0, 0, 0);
+
+    const sessionsToCreate: Array<Record<string, unknown>> = [];
+    const now = new Date();
+
+    while (currentDate <= endDateLimit) {
+      const dayOfWeek = currentDate.getDay();
+      if (recurringDays.includes(dayOfWeek)) {
+        const sessionStart = new Date(currentDate);
+        sessionStart.setHours(startHour, startMinute, 0, 0);
+        const sessionEnd = new Date(sessionStart);
+        sessionEnd.setMinutes(sessionEnd.getMinutes() + durationMinutes);
+
+        if (sessionStart > now) {
+          // Check for duplicate
+          const exists = await prisma.session.findFirst({
+            where: {
+              locationId: first.locationId,
+              title: first.title,
+              sessionType: first.sessionType,
+              startTime: sessionStart,
+            },
+          });
+
+          if (!exists) {
+            sessionsToCreate.push({
+              locationId: first.locationId,
+              roomId: first.roomId,
+              coachId: first.coachId,
+              title: first.title,
+              sessionType: first.sessionType,
+              startTime: sessionStart,
+              endTime: sessionEnd,
+              maxCapacity: first.maxCapacity,
+              registrationCutoffHours: first.registrationCutoffHours,
+              cancellationCutoffHours: first.cancellationCutoffHours,
+              recurringRule: first.recurringRule,
+              recurringGroupId: groupId,
+            });
+          }
+        }
+      }
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    let created = 0;
+    if (sessionsToCreate.length > 0) {
+      const result = await prisma.session.createMany({ data: sessionsToCreate as any });
+      created = result.count;
+    }
+
+    await createAuditLog({
+      userId: user.userId,
+      locationId: first.locationId,
+      action: 'session.series_extended',
+      resourceType: 'session',
+      changes: {
+        recurringGroupId: groupId,
+        sessionsAdded: created,
+        newEndDate: endDateLimit.toISOString(),
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      data: { created, groupId },
+      message: `${created} new session(s) added to series through ${endDateLimit.toLocaleDateString()}`,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/sessions/conflicts?locationId=&start=&end=
+ * Staff/Admin: check for overlapping sessions at a location within a date range.
+ * Useful before creating sessions to prevent double-booking rooms or coaches.
+ */
+router.get('/conflicts', authenticate, requireStaffOrAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { locationId, start, end, roomId, coachId } = req.query;
+
+    if (!locationId || !start || !end) {
+      throw ApiError.badRequest('locationId, start, and end are required');
+    }
+
+    const startDate = new Date(start as string);
+    const endDate = new Date(end as string);
+
+    const where: Record<string, unknown> = {
+      locationId: locationId as string,
+      isActive: true,
+      OR: [
+        // Session starts during the time window
+        { startTime: { gte: startDate, lt: endDate } },
+        // Session ends during the time window
+        { endTime: { gt: startDate, lte: endDate } },
+        // Session spans the entire time window
+        { AND: [{ startTime: { lte: startDate } }, { endTime: { gte: endDate } }] },
+      ],
+    };
+
+    // Optional: narrow by room or coach
+    if (roomId) where.roomId = roomId as string;
+    if (coachId) where.coachId = coachId as string;
+
+    const conflicting = await prisma.session.findMany({
+      where: where as any,
+      include: {
+        room: { select: { id: true, name: true } },
+        coach: { select: { id: true, fullName: true } },
+      },
+      orderBy: { startTime: 'asc' },
+    });
+
+    res.json({
+      success: true,
+      data: {
+        hasConflicts: conflicting.length > 0,
+        count: conflicting.length,
+        conflicts: conflicting.map(s => ({
+          id: s.id,
+          title: s.title,
+          sessionType: s.sessionType,
+          startTime: s.startTime.toISOString(),
+          endTime: s.endTime.toISOString(),
+          room: s.room,
+          coach: s.coach,
+        })),
+      },
     });
   } catch (error) {
     next(error);
@@ -629,6 +1298,79 @@ router.post('/templates/generate', authenticate, requireStaffOrAdmin, async (req
     res.json({
       data: { created, templatesUsed: templates.length, weeksAhead },
       message: `${created} session(s) generated from ${templates.length} template(s)`,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================
+// STAFF CHECK-IN (continued — bulk check-in)
+// ============================================================
+
+/**
+ * POST /api/sessions/:id/checkin
+ * Staff/Admin: bulk check-in — mark multiple bookings at once.
+ * Body: { bookingIds: string[], status: 'COMPLETED' | 'NO_SHOW' }
+ */
+router.post('/:id/checkin', authenticate, requireStaffOrAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const sessionId = param(req, 'id');
+    const user = req.user!;
+    const { bookingIds, status } = req.body;
+
+    if (!bookingIds || !Array.isArray(bookingIds) || bookingIds.length === 0) {
+      throw ApiError.badRequest('At least one booking ID is required');
+    }
+    if (!status || !['COMPLETED', 'NO_SHOW'].includes(status)) {
+      throw ApiError.badRequest('Status must be COMPLETED or NO_SHOW');
+    }
+
+    // Verify all bookings belong to this session
+    const bookings = await prisma.booking.findMany({
+      where: {
+        id: { in: bookingIds },
+        sessionId,
+      },
+      include: {
+        client: { select: { fullName: true } },
+      },
+    });
+
+    if (bookings.length !== bookingIds.length) {
+      throw ApiError.badRequest('One or more booking IDs are invalid for this session');
+    }
+
+    // Bulk update
+    await prisma.booking.updateMany({
+      where: { id: { in: bookingIds }, sessionId },
+      data: { status },
+    });
+
+    // Get session for audit log
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { locationId: true, title: true },
+    });
+
+    // Audit each
+    for (const booking of bookings) {
+      await createAuditLog({
+        userId: user.userId,
+        locationId: session?.locationId || '',
+        action: `booking.${status.toLowerCase()}`,
+        resourceType: 'booking',
+        resourceId: booking.id,
+        changes: { clientName: booking.client.fullName, status, bulkCheckin: true },
+      });
+    }
+
+    res.json({
+      success: true,
+      data: { updated: bookings.length },
+      message: `${bookings.length} athlete${bookings.length !== 1 ? 's' : ''} marked as ${
+        status === 'COMPLETED' ? 'checked in' : 'no-show'
+      }`,
     });
   } catch (error) {
     next(error);

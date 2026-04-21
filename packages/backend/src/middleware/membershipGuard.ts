@@ -53,6 +53,7 @@ export const membershipGuard = async (req: Request, _res: Response, next: NextFu
       '/api/locations',       // need to see locations for payment setup
       '/api/notifications',   // need to receive payment notifications
       '/api/onboarding',      // need to complete onboarding before having a membership
+      '/api/conversations',   // need to message us about payment issues
     ];
 
     const isAllowed = allowedPaths.some((allowed) => path.startsWith(allowed));

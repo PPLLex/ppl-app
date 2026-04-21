@@ -72,6 +72,72 @@ router.put('/:id/read', async (req: Request, res: Response, next: NextFunction) 
   }
 });
 
+// ============================================================
+// PUSH TOKEN MANAGEMENT
+// ============================================================
+
+/**
+ * POST /api/notifications/push-token
+ * Register or refresh an FCM push token for the current device.
+ */
+router.post('/push-token', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.userId;
+    const { token, deviceInfo } = req.body;
+
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ success: false, message: 'Push token is required' });
+    }
+
+    // Upsert — if this token exists (even for another user), reassign it
+    const existing = await prisma.pushToken.findUnique({ where: { token } });
+
+    if (existing) {
+      // Update: reassign to current user, reactivate if deactivated
+      await prisma.pushToken.update({
+        where: { token },
+        data: { userId, isActive: true, deviceInfo: deviceInfo || existing.deviceInfo },
+      });
+    } else {
+      await prisma.pushToken.create({
+        data: { userId, token, deviceInfo },
+      });
+    }
+
+    res.json({ success: true, message: 'Push token registered' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * DELETE /api/notifications/push-token
+ * Remove an FCM push token (e.g., on logout).
+ */
+router.delete('/push-token', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { token } = req.body;
+
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ success: false, message: 'Push token is required' });
+    }
+
+    // Soft-deactivate rather than hard delete
+    await prisma.pushToken.updateMany({
+      where: { token },
+      data: { isActive: false },
+    });
+
+    res.json({ success: true, message: 'Push token removed' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================
+// READ / MARK NOTIFICATIONS
+// ============================================================
+
 /**
  * PUT /api/notifications/read-all
  * Mark all notifications as read for current user.

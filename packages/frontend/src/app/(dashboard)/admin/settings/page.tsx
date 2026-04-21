@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { api, Location, MembershipPlan, StaffMember, User, SessionTypeConfig, SessionTypeConfigInput } from '@/lib/api';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { api, Location, MembershipPlan, StaffMember, User, SessionTypeConfig, SessionTypeConfigInput, OrgSettings } from '@/lib/api';
 
 type SettingsTab = 'general' | 'plans' | 'staff' | 'integrations';
 
@@ -57,13 +57,44 @@ function GeneralSettings() {
     cancellationCutoffHours: 6,
     sessionDurationMinutes: 60,
   });
-  const [saved, setSaved] = useState(false);
+  const [defaultsSaving, setDefaultsSaving] = useState(false);
+  const [defaultsMsg, setDefaultsMsg] = useState('');
+  const [branding, setBranding] = useState({
+    businessName: 'Pitching Performance Lab',
+    tagline: 'Train like a pro.',
+    logoData: '' as string | null,
+    primaryColor: '#166534',
+    accentColor: '#4ade80',
+  });
+  const [brandSaving, setBrandSaving] = useState(false);
+  const [brandMsg, setBrandMsg] = useState('');
+  const [logoUploading, setLogoUploading] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await api.getLocations();
-        if (res.data) setLocations(res.data);
+        const [locRes, brandRes] = await Promise.all([
+          api.getLocations(),
+          api.getBranding(),
+        ]);
+        if (locRes.data) setLocations(locRes.data);
+        if (brandRes.data) {
+          const s = brandRes.data;
+          setBranding({
+            businessName: s.businessName,
+            tagline: s.tagline,
+            logoData: s.logoData,
+            primaryColor: s.primaryColor,
+            accentColor: s.accentColor,
+          });
+          setDefaults({
+            defaultCapacity: s.defaultCapacity,
+            sessionDurationMinutes: s.sessionDurationMinutes,
+            registrationCutoffHours: s.registrationCutoffHours,
+            cancellationCutoffHours: s.cancellationCutoffHours,
+          });
+        }
       } catch (err) {
         console.error(err);
       } finally {
@@ -73,31 +104,85 @@ function GeneralSettings() {
     load();
   }, []);
 
-  const handleSave = () => {
-    // These would persist to a settings endpoint in production
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const handleBrandSave = async () => {
+    setBrandSaving(true);
+    setBrandMsg('');
+    try {
+      await api.updateBranding({
+        businessName: branding.businessName,
+        tagline: branding.tagline,
+        primaryColor: branding.primaryColor,
+        accentColor: branding.accentColor,
+      });
+      setBrandMsg('Saved!');
+      setTimeout(() => setBrandMsg(''), 2000);
+    } catch (err) {
+      setBrandMsg('Error saving');
+    } finally {
+      setBrandSaving(false);
+    }
+  };
+
+  const handleDefaultsSave = async () => {
+    setDefaultsSaving(true);
+    setDefaultsMsg('');
+    try {
+      await api.updateBranding({
+        defaultCapacity: defaults.defaultCapacity,
+        sessionDurationMinutes: defaults.sessionDurationMinutes,
+        registrationCutoffHours: defaults.registrationCutoffHours,
+        cancellationCutoffHours: defaults.cancellationCutoffHours,
+      } as any);
+      setDefaultsMsg('Saved!');
+      setTimeout(() => setDefaultsMsg(''), 2000);
+    } catch (err) {
+      setDefaultsMsg('Error saving');
+    } finally {
+      setDefaultsSaving(false);
+    }
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setBrandMsg('Logo must be under 2MB');
+      return;
+    }
+    setLogoUploading(true);
+    setBrandMsg('');
+    try {
+      const res = await api.uploadLogo(file);
+      if (res.data) {
+        setBranding((prev) => ({ ...prev, logoData: res.data!.logoData }));
+        setBrandMsg('Logo uploaded!');
+        setTimeout(() => setBrandMsg(''), 2000);
+      }
+    } catch (err) {
+      setBrandMsg('Upload failed');
+    } finally {
+      setLogoUploading(false);
+      if (logoInputRef.current) logoInputRef.current.value = '';
+    }
+  };
+
+  const handleLogoRemove = async () => {
+    setLogoUploading(true);
+    try {
+      await api.removeLogo();
+      setBranding((prev) => ({ ...prev, logoData: null }));
+      setBrandMsg('Logo removed');
+      setTimeout(() => setBrandMsg(''), 2000);
+    } catch (err) {
+      setBrandMsg('Failed to remove logo');
+    } finally {
+      setLogoUploading(false);
+    }
   };
 
   if (isLoading) {
     return <div className="ppl-card animate-pulse h-48" />;
   }
-
-  // Branding state
-  const [branding, setBranding] = useState({
-    businessName: 'Pitching Performance Lab',
-    tagline: 'Train like a pro.',
-    logoUrl: '',
-    primaryColor: '#166534', // ppl-dark-green
-    accentColor: '#4ade80', // ppl-light-green
-  });
-  const [brandSaved, setBrandSaved] = useState(false);
-
-  const handleBrandSave = () => {
-    // These would persist to a settings endpoint in production
-    setBrandSaved(true);
-    setTimeout(() => setBrandSaved(false), 2000);
-  };
 
   return (
     <div className="space-y-6">
@@ -129,19 +214,47 @@ function GeneralSettings() {
             />
           </div>
           <div className="col-span-2">
-            <label className="text-xs font-medium text-muted block mb-1">Logo URL</label>
-            <input
-              type="url"
-              value={branding.logoUrl}
-              onChange={(e) => setBranding({ ...branding, logoUrl: e.target.value })}
-              className="ppl-input"
-              placeholder="https://yourdomain.com/logo.png"
-            />
-            {branding.logoUrl && (
-              <div className="mt-2 p-3 bg-background rounded-lg inline-block">
-                <img src={branding.logoUrl} alt="Logo preview" className="max-h-12 object-contain" />
+            <label className="text-xs font-medium text-muted block mb-1">Logo</label>
+            <div className="flex items-center gap-4">
+              {branding.logoData ? (
+                <div className="relative group">
+                  <div className="w-16 h-16 rounded-lg bg-background border border-border flex items-center justify-center overflow-hidden">
+                    <img src={branding.logoData} alt="Logo" className="max-w-full max-h-full object-contain" />
+                  </div>
+                  <button
+                    onClick={handleLogoRemove}
+                    disabled={logoUploading}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Remove logo"
+                  >
+                    &times;
+                  </button>
+                </div>
+              ) : (
+                <div className="w-16 h-16 rounded-lg bg-background border-2 border-dashed border-border flex items-center justify-center">
+                  <svg className="w-6 h-6 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+                  </svg>
+                </div>
+              )}
+              <div>
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
+                  onChange={handleLogoUpload}
+                  className="hidden"
+                  id="logo-upload"
+                />
+                <label
+                  htmlFor="logo-upload"
+                  className={`ppl-btn ppl-btn-secondary text-xs cursor-pointer inline-block ${logoUploading ? 'opacity-50 pointer-events-none' : ''}`}
+                >
+                  {logoUploading ? 'Uploading...' : branding.logoData ? 'Change Logo' : 'Upload Logo'}
+                </label>
+                <p className="text-[10px] text-muted mt-1">PNG, JPG, WebP, SVG, or GIF. Max 2MB.</p>
               </div>
-            )}
+            </div>
           </div>
           <div>
             <label className="text-xs font-medium text-muted block mb-1">Primary Color</label>
@@ -179,9 +292,16 @@ function GeneralSettings() {
           </div>
         </div>
 
-        <button onClick={handleBrandSave} className="ppl-btn ppl-btn-primary text-sm mt-4">
-          {brandSaved ? 'Saved!' : 'Save Branding'}
-        </button>
+        <div className="flex items-center gap-3 mt-4">
+          <button onClick={handleBrandSave} disabled={brandSaving} className="ppl-btn ppl-btn-primary text-sm">
+            {brandSaving ? 'Saving...' : brandMsg || 'Save Branding'}
+          </button>
+          {brandMsg && !brandSaving && (
+            <span className={`text-xs ${brandMsg.includes('Error') || brandMsg.includes('failed') ? 'text-red-400' : 'text-ppl-light-green'}`}>
+              {brandMsg}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Session Defaults */}
@@ -242,13 +362,23 @@ function GeneralSettings() {
           </div>
         </div>
 
-        <button onClick={handleSave} className="ppl-btn ppl-btn-primary text-sm mt-4">
-          {saved ? 'Saved!' : 'Save Defaults'}
-        </button>
+        <div className="flex items-center gap-3 mt-4">
+          <button onClick={handleDefaultsSave} disabled={defaultsSaving} className="ppl-btn ppl-btn-primary text-sm">
+            {defaultsSaving ? 'Saving...' : defaultsMsg || 'Save Defaults'}
+          </button>
+          {defaultsMsg && !defaultsSaving && (
+            <span className={`text-xs ${defaultsMsg.includes('Error') ? 'text-red-400' : 'text-ppl-light-green'}`}>
+              {defaultsMsg}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Session Type Configs */}
       <SessionTypeConfigPanel locations={locations} />
+
+      {/* Kiosk Setup */}
+      <KioskSetupPanel locations={locations} />
 
       {/* Location Overview */}
       <div className="ppl-card">
@@ -1372,6 +1502,132 @@ function IntegrationSettings() {
           <p>TWILIO_AUTH_TOKEN=...</p>
           <p>TWILIO_FROM_NUMBER=+1...</p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Kiosk Setup Panel ─── */
+function KioskSetupPanel({ locations }: { locations: Location[] }) {
+  const [pins, setPins] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Load current kiosk PINs for each location
+    const initial: Record<string, string> = {};
+    locations.forEach((loc) => {
+      initial[loc.id] = (loc as any).kioskPin || '';
+    });
+    setPins(initial);
+    // Also fetch actual values from API
+    locations.forEach(async (loc) => {
+      try {
+        const res = await api.getLocation(loc.id);
+        if (res.data && (res.data as any).kioskPin) {
+          setPins((prev) => ({ ...prev, [loc.id]: (res.data as any).kioskPin }));
+        }
+      } catch { /* ignore */ }
+    });
+  }, [locations]);
+
+  const handleSavePin = async (locationId: string) => {
+    setSaving(locationId);
+    try {
+      await api.request(`/locations/${locationId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ kioskPin: pins[locationId] || null }),
+      });
+      setSaved(locationId);
+      setTimeout(() => setSaved(null), 2000);
+    } catch (err) {
+      console.error('Failed to save kiosk PIN:', err);
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const generatePin = (locationId: string) => {
+    const newPin = Math.floor(1000 + Math.random() * 9000).toString();
+    setPins((prev) => ({ ...prev, [locationId]: newPin }));
+  };
+
+  const appDomain = typeof window !== 'undefined' ? window.location.origin : 'https://app.pitchingperformancelab.com';
+
+  return (
+    <div className="ppl-card">
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="text-lg font-bold text-foreground">Self-Service Kiosk</h2>
+        <span className="ppl-badge bg-ppl-dark-green/10 text-ppl-light-green border border-ppl-dark-green/20 text-xs">New</span>
+      </div>
+      <p className="text-sm text-muted mb-4">
+        Set up a tablet at your facility for athletes to check themselves in. Each location gets its own PIN.
+      </p>
+
+      <div className="space-y-3">
+        {locations.map((loc) => (
+          <div key={loc.id} className="p-4 bg-background rounded-xl border border-border">
+            <div className="flex items-center justify-between mb-3">
+              <p className="font-semibold text-foreground text-sm">{loc.name}</p>
+              {pins[loc.id] && (
+                <a
+                  href={`${appDomain}/kiosk`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-ppl-light-green hover:underline"
+                >
+                  Open Kiosk &rarr;
+                </a>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex-1">
+                <label className="text-xs text-muted block mb-1">Kiosk PIN</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={pins[loc.id] || ''}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                      setPins((prev) => ({ ...prev, [loc.id]: val }));
+                    }}
+                    className="ppl-input text-lg tracking-[0.3em] text-center font-mono w-32"
+                    placeholder="----"
+                    maxLength={6}
+                  />
+                  <button
+                    onClick={() => generatePin(loc.id)}
+                    className="ppl-btn ppl-btn-secondary text-xs"
+                    title="Generate random PIN"
+                  >
+                    Generate
+                  </button>
+                  <button
+                    onClick={() => handleSavePin(loc.id)}
+                    disabled={saving === loc.id}
+                    className="ppl-btn ppl-btn-primary text-xs"
+                  >
+                    {saving === loc.id ? 'Saving...' : saved === loc.id ? 'Saved!' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            </div>
+            {pins[loc.id] && (
+              <p className="text-xs text-muted mt-2">
+                Kiosk URL: <code className="text-foreground bg-surface px-1 rounded">{appDomain}/kiosk</code> — enter PIN <code className="text-ppl-light-green bg-surface px-1 rounded">{pins[loc.id]}</code>
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 p-3 bg-surface rounded-lg">
+        <p className="text-xs text-muted">
+          <strong className="text-foreground">Setup guide:</strong> Open{' '}
+          <code className="text-ppl-light-green">{appDomain}/kiosk</code> on a tablet browser, enter the
+          location PIN, then use the browser&apos;s fullscreen mode (or &quot;Add to Home Screen&quot; on
+          iPad) for the best experience. The kiosk auto-refreshes and doesn&apos;t require login.
+        </p>
       </div>
     </div>
   );

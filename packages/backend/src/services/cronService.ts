@@ -1,5 +1,6 @@
 import { sendSessionReminders, sendDailyStaffSchedule } from './reminderService';
 import { generateSessionsFromTemplates } from './scheduleGenerator';
+import { runDailyPaymentRetries } from './paymentRetryService';
 
 interface CronJob {
   name: string;
@@ -26,6 +27,19 @@ const jobs: CronJob[] = [
         return sendDailyStaffSchedule();
       }
       return { skipped: true, reason: 'Not morning hours' };
+    },
+    enabled: true,
+  },
+  {
+    name: 'Daily Payment Retry',
+    intervalMs: 60 * 60 * 1000, // Check every hour, only runs once at 9 AM
+    handler: async () => {
+      const hour = new Date().getHours();
+      // Only run at 9 AM — retry all failed payments daily
+      if (hour === 9) {
+        return runDailyPaymentRetries();
+      }
+      return { skipped: true, reason: 'Not 9 AM' };
     },
     enabled: true,
   },

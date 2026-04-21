@@ -406,6 +406,13 @@ router.post(
         throw ApiError.notFound('No active membership to cancel');
       }
 
+      // Block cancellation for PAST_DUE members — must resolve payment first
+      if (membership.status === MembershipStatus.PAST_DUE) {
+        throw ApiError.forbidden(
+          'You cannot cancel while your payment is past due. Please update your payment method first. If you need help, use the "Message Us" button to reach our team.'
+        );
+      }
+
       if (membership.cancelRequestedAt) {
         throw ApiError.conflict('You already have a pending cancellation request.');
       }
@@ -511,7 +518,8 @@ router.get('/', authenticate, requireStaffOrAdmin, async (req: Request, res: Res
 
 /**
  * GET /api/memberships/past-due
- * Admin: list all past-due memberships.
+ * Admin: list all past-due memberships with failure details.
+ * Includes consecutive failures count and how many training weeks it's been going on.
  */
 router.get(
   '/past-due',
@@ -519,21 +527,8 @@ router.get(
   requireAdmin,
   async (_req: Request, res: Response, next: NextFunction) => {
     try {
-      const pastDue = await prisma.clientMembership.findMany({
-        where: { status: MembershipStatus.PAST_DUE },
-        include: {
-          client: { select: { id: true, fullName: true, email: true, phone: true } },
-          plan: true,
-          location: { select: { id: true, name: true } },
-          payments: {
-            where: { status: 'FAILED' },
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-          },
-        },
-        orderBy: { updatedAt: 'desc' },
-      });
-
+      const { getFailedPaymentsDashboard } = await import('../services/paymentRetryService');
+      const pastDue = await getFailedPaymentsDashboard();
       res.json({ success: true, data: pastDue });
     } catch (error) {
       next(error);

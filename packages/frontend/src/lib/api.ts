@@ -171,6 +171,42 @@ class ApiClient {
     return this.request(`/sessions/${id}`, { method: 'DELETE' });
   }
 
+  // Recurring Series Management
+  async getSeriesSessions(groupId: string) {
+    return this.request<RecurringSeriesData>(`/sessions/series/${groupId}`);
+  }
+
+  async updateSeries(groupId: string, data: Partial<CreateSessionData> & { time?: string; durationMinutes?: number }) {
+    return this.request<{ updated: number; groupId: string }>(`/sessions/series/${groupId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteSeries(groupId: string, fromDate?: string) {
+    const query = fromDate ? `?fromDate=${fromDate}` : '';
+    return this.request<{ cancelled: number; bookingsAffected: number; groupId: string }>(`/sessions/series/${groupId}${query}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async extendSeries(groupId: string, data: { newEndDate?: string; additionalWeeks?: number }) {
+    return this.request<{ created: number; groupId: string }>(`/sessions/series/${groupId}/extend`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async checkConflicts(params: { locationId: string; start: string; end: string; roomId?: string; coachId?: string }) {
+    const query = new URLSearchParams();
+    query.set('locationId', params.locationId);
+    query.set('start', params.start);
+    query.set('end', params.end);
+    if (params.roomId) query.set('roomId', params.roomId);
+    if (params.coachId) query.set('coachId', params.coachId);
+    return this.request<ConflictCheckResult>(`/sessions/conflicts?${query.toString()}`);
+  }
+
   // Bookings
   async bookSession(sessionId: string) {
     return this.request<Booking>('/bookings', {
@@ -198,6 +234,30 @@ class ApiClient {
     return this.request(`/bookings/${bookingId}/attendance`, {
       method: 'PUT',
       body: JSON.stringify({ status }),
+    });
+  }
+
+  async getMyWeek() {
+    return this.request<MyWeekData>('/bookings/my-week');
+  }
+
+  async batchBookSessions(sessionIds: string[]) {
+    return this.request<Booking[]>('/bookings/batch', {
+      method: 'POST',
+      body: JSON.stringify({ sessionIds }),
+    });
+  }
+
+  // Check-in (staff)
+  async getTodaySessions(locationId?: string) {
+    const query = locationId ? `?locationId=${locationId}` : '';
+    return this.request<CheckinSession[]>(`/sessions/today${query}`);
+  }
+
+  async bulkCheckin(sessionId: string, bookingIds: string[], status: 'COMPLETED' | 'NO_SHOW') {
+    return this.request<{ updated: number }>(`/sessions/${sessionId}/checkin`, {
+      method: 'POST',
+      body: JSON.stringify({ bookingIds, status }),
     });
   }
 
@@ -242,7 +302,7 @@ class ApiClient {
   }
 
   async getPastDueMemberships() {
-    return this.request<MembershipWithClient[]>('/memberships/past-due');
+    return this.request<FailedPaymentItem[]>('/memberships/past-due');
   }
 
   async getCancelRequests() {
@@ -392,6 +452,10 @@ class ApiClient {
     return this.request<MemberStats>('/reports/members');
   }
 
+  async getDashboardStats() {
+    return this.request<DashboardStats>('/reports/dashboard');
+  }
+
   // Notifications
   async getNotifications(params?: { unread?: boolean; page?: number }) {
     const query = new URLSearchParams();
@@ -406,6 +470,21 @@ class ApiClient {
 
   async markAllNotificationsRead() {
     return this.request('/notifications/read-all', { method: 'PUT' });
+  }
+
+  // Push Tokens
+  async registerPushToken(token: string, deviceInfo?: string) {
+    return this.request('/notifications/push-token', {
+      method: 'POST',
+      body: JSON.stringify({ token, deviceInfo }),
+    });
+  }
+
+  async removePushToken(token: string) {
+    return this.request('/notifications/push-token', {
+      method: 'DELETE',
+      body: JSON.stringify({ token }),
+    });
   }
 
   // Onboarding
@@ -774,6 +853,55 @@ class ApiClient {
     });
   }
 
+  // ─── Settings / Branding ───
+
+  async getBranding() {
+    return this.request<OrgSettings>('/settings/branding');
+  }
+
+  async updateBranding(data: Partial<OrgSettings>) {
+    return this.request<OrgSettings>('/settings/branding', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async uploadLogo(file: File) {
+    const formData = new FormData();
+    formData.append('logo', file);
+    const token = this.getToken();
+    const response = await fetch(`${this.baseUrl}/settings/branding/logo`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    const data = await response.json();
+    if (!response.ok) throw new ApiError(response.status, data.message || 'Upload failed');
+    return data as ApiResponse<OrgSettings>;
+  }
+
+  async removeLogo() {
+    return this.request<OrgSettings>('/settings/branding/logo', { method: 'DELETE' });
+  }
+
+  async uploadSchoolLogo(schoolId: string, file: File) {
+    const formData = new FormData();
+    formData.append('logo', file);
+    const token = this.getToken();
+    const response = await fetch(`${this.baseUrl}/settings/schools/${schoolId}/logo`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    const data = await response.json();
+    if (!response.ok) throw new ApiError(response.status, data.message || 'Upload failed');
+    return data as ApiResponse<SchoolTeam>;
+  }
+
+  async removeSchoolLogo(schoolId: string) {
+    return this.request<SchoolTeam>(`/settings/schools/${schoolId}/logo`, { method: 'DELETE' });
+  }
+
   // ─── Session Type Configs ───
 
   async getSessionTypeConfigs(locationId: string) {
@@ -789,6 +917,42 @@ class ApiClient {
 
   async getSessionTypeDefaults(sessionType: string, locationId: string) {
     return this.request(`/session-type-configs/defaults/${sessionType}?locationId=${locationId}`);
+  }
+
+  // ─── Outside Coaches ───
+
+  async getMyOutsideCoaches() {
+    return this.request<OutsideCoachLink[]>('/outside-coaches/my');
+  }
+
+  async addOutsideCoach(data: {
+    coachName: string;
+    coachEmail: string;
+    coachPhone?: string;
+    organization?: string;
+    coachRole?: string;
+    athleteId?: string;
+  }) {
+    return this.request<OutsideCoachLink>('/outside-coaches', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async removeOutsideCoach(linkId: string) {
+    return this.request(`/outside-coaches/${linkId}`, { method: 'DELETE' });
+  }
+
+  async getOutsideCoachAthletes() {
+    return this.request<OutsideCoachAthlete[]>('/outside-coaches/athletes');
+  }
+
+  async getOutsideCoachAthleteReports(athleteId: string) {
+    return this.request<OutsideCoachAthleteReport>(`/outside-coaches/athletes/${athleteId}/reports`);
+  }
+
+  async getAllOutsideCoachLinks() {
+    return this.request<OutsideCoachLinkAdmin[]>('/outside-coaches/all');
   }
 }
 
@@ -872,13 +1036,56 @@ export interface CreateSessionData {
   roomId?: string;
   title: string;
   sessionType: string;
-  startTime: string;
-  endTime: string;
+  // Legacy format
+  startTime?: string;
+  endTime?: string;
+  // New format
+  startDate?: string;
+  time?: string;
+  durationMinutes?: number;
+  isRecurring?: boolean;
+  recurringDays?: number[];
+  recurringEndDate?: string;
+  // Shared
   maxCapacity?: number;
   registrationCutoffHours?: number;
   cancellationCutoffHours?: number;
   recurringRule?: string;
   recurringCount?: number;
+}
+
+export interface RecurringSeriesSession extends Session {
+  isActive: boolean;
+  isPast: boolean;
+  recurringRule?: string | null;
+}
+
+export interface RecurringSeriesData {
+  groupId: string;
+  title: string;
+  sessionType: string;
+  locationId: string;
+  recurringRule: string | null;
+  totalSessions: number;
+  activeSessions: number;
+  futureSessions: number;
+  firstDate: string;
+  lastDate: string;
+  sessions: RecurringSeriesSession[];
+}
+
+export interface ConflictCheckResult {
+  hasConflicts: boolean;
+  count: number;
+  conflicts: Array<{
+    id: string;
+    title: string;
+    sessionType: string;
+    startTime: string;
+    endTime: string;
+    room?: Room;
+    coach?: { id: string; fullName: string };
+  }>;
 }
 
 export interface SessionTypeConfig {
@@ -918,6 +1125,55 @@ export interface Booking {
     room?: { name: string };
     coach?: { fullName: string };
   };
+}
+
+export interface BookingWithCancelInfo extends Booking {
+  canCancel: boolean;
+  cancellationCutoff: string;
+}
+
+export interface CheckinRosterEntry {
+  bookingId: string;
+  clientId: string;
+  clientName: string;
+  phone: string | null;
+  status: 'CONFIRMED' | 'COMPLETED' | 'NO_SHOW';
+}
+
+export interface CheckinSession {
+  id: string;
+  title: string;
+  sessionType: string;
+  startTime: string;
+  endTime: string;
+  maxCapacity: number;
+  room: { id: string; name: string } | null;
+  coach: { id: string; fullName: string } | null;
+  isActive: boolean;
+  isPast: boolean;
+  stats: {
+    checkedIn: number;
+    noShows: number;
+    pending: number;
+    total: number;
+  };
+  roster: CheckinRosterEntry[];
+}
+
+export interface MyWeekData {
+  membership: {
+    planName: string;
+    ageGroup: string;
+    sessionsPerWeek: number | null;
+    isUnlimited: boolean;
+    billingDay: string;
+  } | null;
+  bookings: BookingWithCancelInfo[];
+  credits: {
+    total: number;
+    used: number;
+    remaining: number;
+  } | null;
 }
 
 export interface Membership {
@@ -994,6 +1250,19 @@ export interface MembershipWithClient {
   plan: MembershipPlan;
   location: { id: string; name: string };
   payments?: PaymentRecord[];
+}
+
+export interface FailedPaymentItem {
+  membershipId: string;
+  clientName: string;
+  clientEmail: string;
+  planName: string;
+  locationName: string;
+  ageGroup: string | null;
+  consecutiveFailures: number;
+  failedWeeks: number;
+  firstFailedAt: string | null;
+  lastFailureReason: string | null;
 }
 
 export interface CardChangeRequestWithClient {
@@ -1181,6 +1450,69 @@ export interface MemberStats {
   byAgeGroup: { ageGroup: string; count: number }[];
   byPlan: { plan: string; count: number }[];
   byLocation: { location: string; count: number }[];
+}
+
+// Dashboard Command Center types
+export interface DashboardTodaySession {
+  id: string;
+  title: string;
+  sessionType: string;
+  startTime: string;
+  endTime: string;
+  maxCapacity: number;
+  enrolled: number;
+  checkedIn: number;
+  noShows: number;
+  pending: number;
+  isActive: boolean;
+  isPast: boolean;
+  coach: { id: string; name: string } | null;
+  room: { id: string; name: string } | null;
+}
+
+export interface DashboardAtRiskMember {
+  clientId: string;
+  name: string;
+  plan: string;
+  lastBooking: string | null;
+  daysSinceLastBooking: number | null;
+}
+
+export interface DashboardStats {
+  today: {
+    sessions: DashboardTodaySession[];
+    totalSessions: number;
+    totalBookings: number;
+    totalCheckedIn: number;
+  };
+  membership: {
+    active: number;
+    pastDue: number;
+    suspended: number;
+    newSignups7d: number;
+  };
+  revenue: {
+    mrr: number;
+    collected30d: number;
+    revenueChange: number;
+  };
+  weeklyBookingTrend: { date: string; day: string; count: number }[];
+  utilizationRate: number;
+  atRiskMembers: DashboardAtRiskMember[];
+  pendingActions: {
+    pastDue: number;
+    cancelRequests: number;
+    cardChanges: number;
+    total: number;
+  };
+  recentActivity: {
+    id: string;
+    action: string;
+    resourceType: string;
+    resourceId: string | null;
+    userName: string;
+    createdAt: string;
+  }[];
 }
 
 // Notification types
@@ -1746,6 +2078,78 @@ class CoachApiClient {
   async deactivateSchoolCoach(schoolId: string, coachId: string) {
     return api.request(`/schools/${schoolId}/coaches/${coachId}`, { method: 'DELETE' });
   }
+}
+
+// ─── Outside Coach Types ───
+
+export interface OutsideCoachLink {
+  id: string;
+  athleteId: string;
+  coachName: string;
+  coachEmail: string;
+  coachPhone: string | null;
+  organization: string | null;
+  coachRole: string | null;
+  isActive: boolean;
+  invitedAt: string;
+  acceptedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OutsideCoachAthlete {
+  linkId: string;
+  organization: string | null;
+  coachRole: string | null;
+  athlete: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    ageGroup: string | null;
+    dateOfBirth: string | null;
+    userId: string;
+  };
+}
+
+export interface OutsideCoachAthleteReport {
+  athlete: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    ageGroup: string | null;
+  };
+  coachNotes: Array<{
+    id: string;
+    coachName: string;
+    sessionDate: string | null;
+    sessionType: string | null;
+    content: string;
+    createdAt: string;
+  }>;
+}
+
+export interface OutsideCoachLinkAdmin extends OutsideCoachLink {
+  athlete: {
+    firstName: string;
+    lastName: string;
+    ageGroup: string | null;
+    user: { fullName: string; email: string };
+  };
+}
+
+// Organization Settings
+export interface OrgSettings {
+  id: string;
+  businessName: string;
+  tagline: string;
+  logoData: string | null;
+  primaryColor: string;
+  accentColor: string;
+  defaultCapacity: number;
+  sessionDurationMinutes: number;
+  registrationCutoffHours: number;
+  cancellationCutoffHours: number;
+  updatedAt: string;
 }
 
 export class ApiError extends Error {

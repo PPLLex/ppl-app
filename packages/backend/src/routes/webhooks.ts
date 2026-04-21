@@ -10,7 +10,9 @@ import {
   PaymentStatus,
   NotificationType,
   NotificationChannel,
+  BookingStatus,
 } from '@prisma/client';
+import { notifyLocationCoordinators } from '../services/paymentRetryService';
 
 const router = Router();
 
@@ -268,6 +270,58 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
     data: { status: MembershipStatus.PAST_DUE },
   });
 
+  // ---- REMOVE ATHLETE FROM ALL FUTURE BOOKED SESSIONS ----
+  // Cancel all upcoming bookings and return credits to account (frozen)
+  const now = new Date();
+  const futureBookings = await prisma.booking.findMany({
+    where: {
+      clientId: membership.clientId,
+      status: BookingStatus.CONFIRMED,
+      session: { startTime: { gt: now } },
+    },
+    include: { session: { select: { id: true, startTime: true, sessionTypeName: true } } },
+  });
+
+  if (futureBookings.length > 0) {
+    // Cancel all future bookings
+    await prisma.booking.updateMany({
+      where: { id: { in: futureBookings.map(b => b.id) } },
+      data: { status: BookingStatus.CANCELLED, cancelledAt: now },
+    });
+
+    // Return credits for each cancelled booking (they'll be frozen below)
+    for (const booking of futureBookings) {
+      if (booking.creditsUsed > 0) {
+        // Find the weekly credit record and return the credits
+        const weeklyCredit = await prisma.weeklyCredit.findFirst({
+          where: {
+            clientId: membership.clientId,
+            membershipId: membership.id,
+            weekStartDate: { lte: booking.session.startTime },
+            weekEndDate: { gt: booking.session.startTime },
+          },
+        });
+        if (weeklyCredit) {
+          await prisma.weeklyCredit.update({
+            where: { id: weeklyCredit.id },
+            data: { creditsUsed: { decrement: booking.creditsUsed } },
+          });
+        }
+      }
+    }
+
+    console.log(`[PaymentFailed] Cancelled ${futureBookings.length} future bookings for ${membership.client.fullName}`);
+
+    await prisma.creditTransaction.create({
+      data: {
+        clientId: membership.clientId,
+        transactionType: 'cancel_return',
+        amount: futureBookings.reduce((sum, b) => sum + b.creditsUsed, 0),
+        notes: `Credits returned from ${futureBookings.length} cancelled bookings due to failed payment. Credits are frozen until payment resolves.`,
+      },
+    });
+  }
+
   // Revoke ALL credits — full lockdown
   if (membership.plan.sessionsPerWeek !== null) {
     const weekStart = getWeekStart(new Date(), membership.billingDay);
@@ -316,22 +370,20 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
     },
   });
 
-  // Notify all admins
-  const admins = await prisma.user.findMany({
-    where: { role: 'ADMIN', isActive: true },
-    select: { id: true },
-  });
+  // Notify coordinators at the athlete's location (not all staff)
+  const ageGroup = await prisma.athleteProfile.findFirst({
+    where: { userId: membership.clientId },
+    select: { ageGroup: true },
+  }).then(p => p?.ageGroup || membership.plan.ageGroup);
 
-  for (const admin of admins) {
-    await notify({
-      userId: admin.id,
-      type: NotificationType.PAYMENT_FAILED,
-      title: `Payment Failed: ${membership.client.fullName}`,
-      body: `Payment of ${amount} failed for ${membership.client.fullName} (${membership.client.email}). Plan: ${membership.plan.name}. Reason: ${failureReason}. Account locked to dummy mode until payment resolves.`,
-      channels: [NotificationChannel.EMAIL],
-      metadata: { membershipId: membership.id, clientId: membership.clientId },
-    });
-  }
+  await notifyLocationCoordinators({
+    locationId: membership.locationId,
+    ageGroup,
+    type: NotificationType.PAYMENT_FAILED,
+    title: `Payment Failed: ${membership.client.fullName}`,
+    body: `Payment of ${amount} failed for ${membership.client.fullName} (${membership.client.email}). Plan: ${membership.plan.name}. Reason: ${failureReason}. ${futureBookings.length > 0 ? `${futureBookings.length} upcoming session(s) have been cancelled.` : ''} Account is locked until payment resolves.`,
+    metadata: { membershipId: membership.id, clientId: membership.clientId, cancelledBookings: futureBookings.length },
+  });
 
   await createAuditLog({
     userId: membership.clientId,

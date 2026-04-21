@@ -33,6 +33,9 @@ import schoolCoachDashboardRoutes from './routes/schoolCoachDashboard';
 import sessionTypeConfigRoutes from './routes/sessionTypeConfigs';
 import integrationRoutes from './routes/integrations';
 import revenueRoutes from './routes/revenue';
+import kioskRoutes from './routes/kiosk';
+import outsideCoachRoutes from './routes/outsideCoaches';
+import settingsRoutes from './routes/settings';
 import { membershipGuard } from './middleware/membershipGuard';
 
 const app = express();
@@ -118,6 +121,9 @@ app.use('/api/locations', locationRevenueRoutes);
 app.use('/api/session-type-configs', sessionTypeConfigRoutes);
 app.use('/api/integrations', integrationRoutes);
 app.use('/api/revenue', revenueRoutes);
+app.use('/api/kiosk', kioskRoutes);
+app.use('/api/outside-coaches', outsideCoachRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // ============================================================
 // ERROR HANDLING

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { api, SchoolTeamDetail, SchoolInvoice, SchoolContract, SchoolCoach, coachApi } from '@/lib/api';
@@ -256,12 +256,18 @@ export default function SchoolDetailPage() {
           ← Back to Partner Schools
         </Link>
         <div className="flex items-center gap-4 mt-2">
-          <div
-            className="w-14 h-14 rounded-lg flex items-center justify-center text-white font-bold text-xl"
-            style={{ backgroundColor: school.brandColors?.primary || '#374151' }}
-          >
-            {school.name.charAt(0)}
-          </div>
+          {school.brandLogoUrl ? (
+            <div className="w-14 h-14 rounded-lg overflow-hidden border border-border bg-background flex items-center justify-center">
+              <img src={school.brandLogoUrl} alt={school.name} className="max-w-full max-h-full object-contain" />
+            </div>
+          ) : (
+            <div
+              className="w-14 h-14 rounded-lg flex items-center justify-center text-white font-bold text-xl"
+              style={{ backgroundColor: school.brandColors?.primary || '#374151' }}
+            >
+              {school.name.charAt(0)}
+            </div>
+          )}
           <div>
             <h1 className="text-2xl font-bold text-foreground">{school.name}</h1>
             <p className="text-sm text-muted">
@@ -357,6 +363,9 @@ export default function SchoolDetailPage() {
               <div><span className="text-muted">Email:</span>{' '}<span className="text-foreground">{school.paymentContactEmail || school.coachEmail || 'Not set'}</span></div>
             </div>
           </div>
+
+          {/* School Branding */}
+          <SchoolBrandingCard school={school} onUpdated={load} />
 
           {/* Quick Stats */}
           <div className="ppl-card">
@@ -694,5 +703,108 @@ function PermBadge({ label }: { label: string }) {
     <span className="inline-flex items-center rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-400 border border-green-500/20">
       {label}
     </span>
+  );
+}
+
+/* ─── School Branding Card ─── */
+function SchoolBrandingCard({ school, onUpdated }: { school: SchoolTeamDetail; onUpdated: () => void }) {
+  const [uploading, setUploading] = useState(false);
+  const [msg, setMsg] = useState('');
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setMsg('Logo must be under 2MB');
+      return;
+    }
+    setUploading(true);
+    setMsg('');
+    try {
+      await api.uploadSchoolLogo(school.id, file);
+      setMsg('Logo uploaded!');
+      onUpdated();
+      setTimeout(() => setMsg(''), 2000);
+    } catch {
+      setMsg('Upload failed');
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  };
+
+  const handleRemove = async () => {
+    setUploading(true);
+    try {
+      await api.removeSchoolLogo(school.id);
+      setMsg('Logo removed');
+      onUpdated();
+      setTimeout(() => setMsg(''), 2000);
+    } catch {
+      setMsg('Failed to remove');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="ppl-card">
+      <h3 className="font-semibold text-foreground mb-3">Team Branding</h3>
+      <div className="flex items-center gap-4">
+        {school.brandLogoUrl ? (
+          <div className="relative group">
+            <div className="w-16 h-16 rounded-lg bg-background border border-border flex items-center justify-center overflow-hidden">
+              <img src={school.brandLogoUrl} alt={school.name} className="max-w-full max-h-full object-contain" />
+            </div>
+            <button
+              onClick={handleRemove}
+              disabled={uploading}
+              className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              title="Remove logo"
+            >
+              &times;
+            </button>
+          </div>
+        ) : (
+          <div
+            className="w-16 h-16 rounded-lg flex items-center justify-center text-white font-bold text-xl"
+            style={{ backgroundColor: school.brandColors?.primary || '#374151' }}
+          >
+            {school.name.charAt(0)}
+          </div>
+        )}
+        <div>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
+            onChange={handleUpload}
+            className="hidden"
+            id={`school-logo-${school.id}`}
+          />
+          <label
+            htmlFor={`school-logo-${school.id}`}
+            className={`ppl-btn ppl-btn-secondary text-xs cursor-pointer inline-block ${uploading ? 'opacity-50 pointer-events-none' : ''}`}
+          >
+            {uploading ? 'Uploading...' : school.brandLogoUrl ? 'Change Logo' : 'Upload Logo'}
+          </label>
+          <p className="text-[10px] text-muted mt-1">PNG, JPG, WebP, SVG, or GIF. Max 2MB.</p>
+          {msg && <p className={`text-xs mt-1 ${msg.includes('fail') || msg.includes('must') ? 'text-red-400' : 'text-ppl-light-green'}`}>{msg}</p>}
+        </div>
+      </div>
+      {school.brandColors && (
+        <div className="flex items-center gap-3 mt-3">
+          <div className="flex items-center gap-1.5">
+            <div className="w-5 h-5 rounded-full border border-border" style={{ backgroundColor: school.brandColors.primary }} />
+            <span className="text-xs text-muted">Primary</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-5 h-5 rounded-full border border-border" style={{ backgroundColor: school.brandColors.secondary }} />
+            <span className="text-xs text-muted">Secondary</span>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

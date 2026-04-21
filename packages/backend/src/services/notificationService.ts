@@ -3,6 +3,7 @@ import { prisma } from '../utils/prisma';
 import { NotificationType, NotificationChannel, NotificationStatus, Role } from '@prisma/client';
 import { sendEmail, buildPPLEmail } from './emailService';
 import { sendSms } from './smsService';
+import { sendPush } from './pushService';
 
 interface NotifyParams {
   userId: string;
@@ -18,7 +19,7 @@ interface NotifyParams {
  * Stores in DB for history, and dispatches via email/SMS.
  */
 export async function notify(params: NotifyParams) {
-  const channels = params.channels || [NotificationChannel.EMAIL, NotificationChannel.SMS];
+  const channels = params.channels || [NotificationChannel.EMAIL, NotificationChannel.SMS, NotificationChannel.PUSH];
 
   // Look up user's contact info
   const user = await prisma.user.findUnique({
@@ -59,6 +60,17 @@ export async function notify(params: NotifyParams) {
         // SMS gets a shorter version — strip HTML, keep it under 160 chars if possible
         const smsBody = `PPL: ${params.body}`.substring(0, 320);
         sent = await sendSms({ to: user.phone, body: smsBody });
+      } else if (channel === NotificationChannel.PUSH) {
+        sent = await sendPush(params.userId, {
+          title: params.title,
+          body: params.body,
+          data: {
+            type: params.type,
+            ...(params.metadata ? Object.fromEntries(
+              Object.entries(params.metadata).map(([k, v]) => [k, String(v)])
+            ) : {}),
+          },
+        });
       }
 
       // Update notification status

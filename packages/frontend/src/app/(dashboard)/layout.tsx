@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import NotificationBell from '@/components/layout/NotificationBell';
+import PushNotificationPrompt from '@/components/notifications/PushNotificationPrompt';
 
 export default function DashboardLayout({
   children,
@@ -69,6 +70,9 @@ export default function DashboardLayout({
         {/* Page content */}
         <div className="flex-1 p-4 sm:p-6 max-w-7xl mx-auto w-full">{children}</div>
       </main>
+
+      {/* Push notification opt-in prompt */}
+      <PushNotificationPrompt />
     </div>
   );
 }

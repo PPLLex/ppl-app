@@ -41,6 +41,12 @@ export const config = {
     keyId: process.env.APPLE_KEY_ID || '',
     privateKey: (process.env.APPLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
   },
+
+  firebase: {
+    projectId: process.env.FIREBASE_PROJECT_ID || '',
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL || '',
+    privateKey: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+  },
 };
 
 /**
@@ -68,6 +74,9 @@ export function validateProductionConfig() {
   if (!config.smtp.user || !config.smtp.pass) {
     warnings.push('SMTP credentials missing.');
   }
+  if (!config.firebase.projectId || !config.firebase.clientEmail || !config.firebase.privateKey) {
+    warnings.push('Firebase credentials missing — push notifications disabled.');
+  }
 
   if (warnings.length > 0) {
     console.warn('Production warnings:');
@@ -77,7 +86,9 @@ export function validateProductionConfig() {
   if (critical.length > 0) {
     console.error('Missing CRITICAL production environment variables:');
     critical.forEach((key) => console.error('   - ' + key));
-    process.exit(1);
+    // Use setTimeout to allow stderr to flush before exiting
+    setTimeout(() => process.exit(1), 500);
+    throw new Error(`Missing critical env vars: ${critical.join(', ')}`);
   }
 
   console.log('Production config validated');

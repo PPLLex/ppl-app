@@ -178,6 +178,7 @@ model Location {
   timezone       String   @default("America/Chicago")
   operatingHours Json?    // { monday: { open: "06:00", close: "21:00" }, ... }
   closedDay      String?  // e.g., "sunday"
+  kioskPin       String?  // 4-6 digit PIN for self-service kiosk check-in
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -249,6 +250,7 @@ model User {
   adminCardRequests  CardChangeRequest[] @relation("AdminCardRequests")
   sentMessages       Message[]
   notifications      Notification[]
+  pushTokens         PushToken[]
   auditLogs          AuditLog[]
 
   // Coach Notes relations
@@ -355,7 +357,7 @@ model Session {
   recurringRule           String?     // iCal RRULE format
   recurringGroupId        String?     // links recurring instances
   registrationCutoffHours Int         @default(2)
-  cancellationCutoffHours Int         @default(1)
+  cancellationCutoffHours Int         @default(4)
   isActive                Boolean     @default(true)
   createdAt               DateTime    @default(now())
   updatedAt               DateTime    @updatedAt
@@ -455,7 +457,7 @@ model ScheduleTemplate {
   durationMinutes Int         @default(60)
   maxCapacity     Int         @default(8)
   registrationCutoffHours Int @default(2)
-  cancellationCutoffHours Int @default(1)
+  cancellationCutoffHours Int @default(4)
   isActive        Boolean     @default(true)
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
@@ -480,7 +482,7 @@ model SessionTypeConfig {
   maxCapacity             Int         @default(8)
   durationMinutes         Int         @default(60)
   registrationCutoffHours Int         @default(2)
-  cancellationCutoffHours Int         @default(1)
+  cancellationCutoffHours Int         @default(4)
   color                   String?     // Hex color for calendar display, e.g. "#10B981"
   isActive                Boolean     @default(true)
   createdAt               DateTime    @default(now())
@@ -686,6 +688,26 @@ model Notification {
   @@index([userId, createdAt])
   @@index([status])
   @@map("notifications")
+}
+
+// ============================================================
+// PUSH NOTIFICATION TOKENS
+// ============================================================
+
+model PushToken {
+  id         String   @id @default(uuid())
+  userId     String
+  token      String   @unique // FCM device token
+  deviceInfo String?  // "Chrome on Windows", "Safari on iPhone", etc.
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_tokens")
 }
 
 // ============================================================
@@ -999,10 +1021,43 @@ model AthleteProfile {
   onboardingRecord   OnboardingRecord?
   memberships        ClientMembership[]
 
+  outsideCoachLinks OutsideCoachLink[]
+
   @@index([familyId])
   @@index([schoolTeamId])
   @@index([ageGroup])
   @@map("athlete_profiles")
+}
+
+// ============================================================
+// OUTSIDE COACH LINKS
+// ============================================================
+
+/**
+ * Links an athlete to their non-PPL coaches (high school, travel ball, etc.)
+ * Outside coaches get read-only access to: metrics, reports, and coach notes.
+ * They CANNOT book, edit, or see scheduling info — just performance data.
+ */
+model OutsideCoachLink {
+  id            String   @id @default(uuid())
+  athleteId     String
+  coachName     String   // Full name of the outside coach
+  coachEmail    String   // Email for reports / login
+  coachPhone    String?
+  organization  String?  // "Central High School", "Louisville Sluggers Travel", etc.
+  coachRole     String?  // "Head Coach", "Pitching Coach", "Travel Coach", etc.
+  isActive      Boolean  @default(true)
+  invitedAt     DateTime @default(now())
+  acceptedAt    DateTime? // When the coach claimed their account
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  athlete AthleteProfile @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@unique([athleteId, coachEmail])
+  @@index([coachEmail])
+  @@map("outside_coach_links")
 }
 
 model OnboardingRecord {
@@ -1212,4 +1267,27 @@ model AuditLog {
   @@index([resourceType, resourceId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ============================================================
+// ORGANIZATION SETTINGS (PPL branding & defaults)
+// ============================================================
+
+model OrgSettings {
+  id               String   @id @default("ppl")  // singleton row
+  businessName     String   @default("Pitching Performance Lab")
+  tagline          String   @default("Train like a pro.")
+  logoData         String?  // base64 data URI for the logo image
+  primaryColor     String   @default("#166534")
+  accentColor      String   @default("#4ade80")
+
+  // Session defaults
+  defaultCapacity          Int @default(8)
+  sessionDurationMinutes   Int @default(60)
+  registrationCutoffHours  Int @default(1)
+  cancellationCutoffHours  Int @default(6)
+
+  updatedAt DateTime @updatedAt
+
+  @@map("org_settings")
 }

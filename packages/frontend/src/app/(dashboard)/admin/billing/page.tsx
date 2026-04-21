@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   api,
   MembershipWithClient,
+  FailedPaymentItem,
   CardChangeRequestWithClient,
   MembershipStats,
   Location,
@@ -20,7 +21,7 @@ export default function AdminBillingPage() {
   const [tab, setTab] = useState<'overview' | 'members' | 'pastdue' | 'requests'>('overview');
   const [stats, setStats] = useState<MembershipStats | null>(null);
   const [memberships, setMemberships] = useState<MembershipWithClient[]>([]);
-  const [pastDue, setPastDue] = useState<MembershipWithClient[]>([]);
+  const [pastDue, setPastDue] = useState<FailedPaymentItem[]>([]);
   const [cancelRequests, setCancelRequests] = useState<MembershipWithClient[]>([]);
   const [cardRequests, setCardRequests] = useState<CardChangeRequestWithClient[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -90,13 +91,18 @@ export default function AdminBillingPage() {
     if (tab === 'requests') loadRequests();
   }, [tab, loadMembers, loadPastDue, loadRequests]);
 
-  const handleRetryPayment = async (membershipId: string) => {
+  const [retryingAll, setRetryingAll] = useState(false);
+  const [sortPastDue, setSortPastDue] = useState<'severity' | 'name' | 'weeks'>('severity');
+
+  const handleRetryPayment = async (membershipId: string, clientName?: string) => {
     setActionInProgress(membershipId);
     try {
       const res = await api.adminRetryPayment(membershipId);
       setMessage({
         type: res.success ? 'success' : 'error',
-        text: res.message || 'Payment retry processed.',
+        text: res.success
+          ? `Payment recovered for ${clientName || 'member'}!`
+          : res.message || 'Payment retry failed — card still declining.',
       });
       await loadPastDue();
       await loadData();
@@ -105,6 +111,29 @@ export default function AdminBillingPage() {
     } finally {
       setActionInProgress(null);
     }
+  };
+
+  const handleRetryAll = async () => {
+    if (!confirm(`Retry payment for all ${pastDue.length} past-due members? This will attempt to charge each card.`)) return;
+    setRetryingAll(true);
+    let successCount = 0;
+    let failCount = 0;
+    for (const item of pastDue) {
+      try {
+        const res = await api.adminRetryPayment(item.membershipId);
+        if (res.success) successCount++;
+        else failCount++;
+      } catch {
+        failCount++;
+      }
+    }
+    setMessage({
+      type: successCount > 0 ? 'success' : 'error',
+      text: `Bulk retry complete: ${successCount} recovered, ${failCount} still failing.`,
+    });
+    await loadPastDue();
+    await loadData();
+    setRetryingAll(false);
   };
 
   const handleCancelMembership = async (membershipId: string, clientName: string) => {
@@ -120,6 +149,28 @@ export default function AdminBillingPage() {
     } finally {
       setActionInProgress(null);
     }
+  };
+
+  // Sort past-due items
+  const sortedPastDue = [...pastDue].sort((a, b) => {
+    if (sortPastDue === 'severity') return b.failedWeeks - a.failedWeeks || b.consecutiveFailures - a.consecutiveFailures;
+    if (sortPastDue === 'weeks') return b.failedWeeks - a.failedWeeks;
+    return a.clientName.localeCompare(b.clientName);
+  });
+
+  // Severity helpers
+  const getSeverity = (item: FailedPaymentItem): 'critical' | 'high' | 'medium' | 'new' => {
+    if (item.failedWeeks >= 4) return 'critical';
+    if (item.failedWeeks >= 2) return 'high';
+    if (item.consecutiveFailures >= 3) return 'medium';
+    return 'new';
+  };
+
+  const severityConfig = {
+    critical: { label: 'Critical', color: 'text-red-400', bg: 'bg-red-500/15 border-red-500/30', dot: 'bg-red-500' },
+    high: { label: 'High', color: 'text-orange-400', bg: 'bg-orange-500/15 border-orange-500/30', dot: 'bg-orange-500' },
+    medium: { label: 'Medium', color: 'text-amber-400', bg: 'bg-amber-500/15 border-amber-500/30', dot: 'bg-amber-500' },
+    new: { label: 'New', color: 'text-blue-400', bg: 'bg-blue-500/15 border-blue-500/30', dot: 'bg-blue-500' },
   };
 
   const handleSendCardLink = async (requestId: string) => {
@@ -313,50 +364,151 @@ export default function AdminBillingPage() {
         </div>
       )}
 
-      {/* Past Due Tab */}
+      {/* Past Due / Failed Payment Dashboard Tab */}
       {tab === 'pastdue' && (
-        <div className="space-y-3">
+        <div>
           {pastDue.length === 0 ? (
-            <div className="ppl-card text-center py-8">
-              <p className="text-ppl-light-green font-medium">No past-due accounts!</p>
+            <div className="ppl-card text-center py-12">
+              <div className="text-4xl mb-3">&#10003;</div>
+              <p className="text-ppl-light-green font-semibold text-lg">All payments current!</p>
+              <p className="text-muted text-sm mt-1">No past-due accounts right now. The daily auto-retry runs every morning at 9 AM.</p>
             </div>
           ) : (
-            pastDue.map((m) => (
-              <div key={m.id} className="ppl-card border-danger/30">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <p className="font-semibold text-foreground">{m.client.fullName}</p>
-                    <p className="text-sm text-muted">{m.client.email}</p>
-                    <p className="text-sm text-muted">
-                      {m.plan.name} &middot; {m.location.name}
-                    </p>
-                    {m.payments && m.payments.length > 0 && (
-                      <p className="text-xs text-danger mt-1">
-                        Last failed: {formatDate(m.payments[0].createdAt)}
-                        {m.payments[0].failureReason && ` — ${m.payments[0].failureReason}`}
-                      </p>
-                    )}
-                  </div>
-                  <span className="ppl-badge ppl-badge-danger">Past Due</span>
+            <>
+              {/* Summary Row */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+                <div className="ppl-card text-center py-3">
+                  <p className="text-2xl font-bold text-danger">{pastDue.length}</p>
+                  <p className="text-xs text-muted">Past Due</p>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleRetryPayment(m.id)}
-                    disabled={actionInProgress === m.id}
-                    className="ppl-btn ppl-btn-primary text-sm"
-                  >
-                    {actionInProgress === m.id ? 'Retrying...' : 'Retry Payment'}
-                  </button>
-                  <button
-                    onClick={() => handleCancelMembership(m.id, m.client.fullName)}
-                    disabled={actionInProgress === m.id}
-                    className="ppl-btn ppl-btn-danger text-sm"
-                  >
-                    Cancel Membership
-                  </button>
+                <div className="ppl-card text-center py-3">
+                  <p className="text-2xl font-bold text-orange-400">
+                    {pastDue.filter(p => p.failedWeeks >= 2).length}
+                  </p>
+                  <p className="text-xs text-muted">2+ Weeks Failing</p>
+                </div>
+                <div className="ppl-card text-center py-3">
+                  <p className="text-2xl font-bold text-red-400">
+                    {pastDue.filter(p => p.failedWeeks >= 4).length}
+                  </p>
+                  <p className="text-xs text-muted">4+ Weeks (Critical)</p>
+                </div>
+                <div className="ppl-card text-center py-3">
+                  <p className="text-2xl font-bold text-amber-400">
+                    {pastDue.reduce((sum, p) => sum + p.consecutiveFailures, 0)}
+                  </p>
+                  <p className="text-xs text-muted">Total Failed Attempts</p>
                 </div>
               </div>
-            ))
+
+              {/* Controls */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted">Sort:</span>
+                  {(['severity', 'weeks', 'name'] as const).map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setSortPastDue(s)}
+                      className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                        sortPastDue === s
+                          ? 'bg-ppl-dark-green/30 text-ppl-light-green'
+                          : 'text-muted hover:text-foreground'
+                      }`}
+                    >
+                      {s === 'severity' ? 'Severity' : s === 'weeks' ? 'Weeks Failing' : 'Name'}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={handleRetryAll}
+                  disabled={retryingAll}
+                  className="ppl-btn ppl-btn-primary text-sm"
+                >
+                  {retryingAll ? 'Retrying All...' : `Retry All (${pastDue.length})`}
+                </button>
+              </div>
+
+              {/* Failed Payment Cards */}
+              <div className="space-y-3">
+                {sortedPastDue.map((item) => {
+                  const sev = getSeverity(item);
+                  const config = severityConfig[sev];
+                  return (
+                    <div key={item.membershipId} className={`ppl-card border ${config.bg}`}>
+                      {/* Header Row */}
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`inline-block w-2 h-2 rounded-full ${config.dot}`} />
+                            <p className="font-semibold text-foreground">{item.clientName}</p>
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${config.bg} ${config.color}`}>
+                              {config.label}
+                            </span>
+                          </div>
+                          <p className="text-sm text-muted">{item.clientEmail}</p>
+                          <p className="text-sm text-muted">
+                            {item.planName} &middot; {item.locationName}
+                            {item.ageGroup && <span> &middot; {item.ageGroup}</span>}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Failure Details Grid */}
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3 p-3 bg-black/20 rounded-lg">
+                        <div>
+                          <p className="text-xs text-muted">Failed Attempts</p>
+                          <p className={`text-lg font-bold ${item.consecutiveFailures >= 5 ? 'text-red-400' : item.consecutiveFailures >= 3 ? 'text-orange-400' : 'text-foreground'}`}>
+                            {item.consecutiveFailures}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted">Weeks Failing</p>
+                          <p className={`text-lg font-bold ${item.failedWeeks >= 4 ? 'text-red-400' : item.failedWeeks >= 2 ? 'text-orange-400' : 'text-foreground'}`}>
+                            {item.failedWeeks}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted">First Failed</p>
+                          <p className="text-sm font-medium text-foreground">
+                            {item.firstFailedAt ? formatDate(item.firstFailedAt) : '—'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted">Account Status</p>
+                          <p className="text-sm font-medium text-danger">Frozen</p>
+                        </div>
+                      </div>
+
+                      {/* Failure Reason */}
+                      {item.lastFailureReason && (
+                        <div className="mb-3 p-2 bg-danger/10 rounded-md">
+                          <p className="text-xs text-muted mb-0.5">Last Decline Reason</p>
+                          <p className="text-sm text-danger">{item.lastFailureReason}</p>
+                        </div>
+                      )}
+
+                      {/* Actions */}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleRetryPayment(item.membershipId, item.clientName)}
+                          disabled={actionInProgress === item.membershipId || retryingAll}
+                          className="ppl-btn ppl-btn-primary text-sm"
+                        >
+                          {actionInProgress === item.membershipId ? 'Retrying...' : 'Retry Payment'}
+                        </button>
+                        <button
+                          onClick={() => handleCancelMembership(item.membershipId, item.clientName)}
+                          disabled={actionInProgress === item.membershipId}
+                          className="ppl-btn ppl-btn-danger text-sm"
+                        >
+                          Cancel Membership
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
       )}

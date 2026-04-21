@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -26,6 +26,9 @@ export default function NewSchoolPage() {
   const [primaryLocationId, setPrimaryLocationId] = useState('');
   const [primaryColor, setPrimaryColor] = useState('#1a3e72');
   const [secondaryColor, setSecondaryColor] = useState('#c4a34d');
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     (async () => {
@@ -61,6 +64,15 @@ export default function NewSchoolPage() {
       });
 
       if (res.data) {
+        // Upload logo if one was selected
+        if (logoFile) {
+          try {
+            await api.uploadSchoolLogo(res.data.id, logoFile);
+          } catch {
+            // School created successfully, logo upload failed — continue anyway
+            console.error('Logo upload failed, school was still created');
+          }
+        }
         router.push(`/admin/schools/${res.data.id}`);
       }
     } catch (err: unknown) {
@@ -121,6 +133,57 @@ export default function NewSchoolPage() {
               </select>
             </div>
 
+            {/* Team Logo */}
+            <div>
+              <label className="text-sm text-muted block mb-2">Team Logo</label>
+              <div className="flex items-center gap-4">
+                {logoPreview ? (
+                  <div className="relative group">
+                    <div className="w-16 h-16 rounded-lg bg-background border border-border flex items-center justify-center overflow-hidden">
+                      <img src={logoPreview} alt="Logo preview" className="max-w-full max-h-full object-contain" />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setLogoFile(null); setLogoPreview(null); if (logoInputRef.current) logoInputRef.current.value = ''; }}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      &times;
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-16 h-16 rounded-lg bg-background border-2 border-dashed border-border flex items-center justify-center">
+                    <svg className="w-6 h-6 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+                    </svg>
+                  </div>
+                )}
+                <div>
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        if (file.size > 2 * 1024 * 1024) {
+                          setMessage({ type: 'error', text: 'Logo must be under 2MB' });
+                          return;
+                        }
+                        setLogoFile(file);
+                        setLogoPreview(URL.createObjectURL(file));
+                      }
+                    }}
+                    className="hidden"
+                    id="school-logo-upload"
+                  />
+                  <label htmlFor="school-logo-upload" className="ppl-btn ppl-btn-secondary text-xs cursor-pointer inline-block">
+                    {logoPreview ? 'Change Logo' : 'Upload Logo'}
+                  </label>
+                  <p className="text-[10px] text-muted mt-1">PNG, JPG, WebP, SVG, or GIF. Max 2MB.</p>
+                </div>
+              </div>
+            </div>
+
             {/* Brand Colors */}
             <div>
               <label className="text-sm text-muted block mb-2">Team Colors</label>
@@ -146,12 +209,18 @@ export default function NewSchoolPage() {
               </div>
               {/* Preview */}
               <div className="mt-3 p-4 rounded-lg border border-border flex items-center gap-3">
-                <div
-                  className="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold"
-                  style={{ backgroundColor: primaryColor }}
-                >
-                  {name ? name.charAt(0).toUpperCase() : '?'}
-                </div>
+                {logoPreview ? (
+                  <div className="w-12 h-12 rounded-lg overflow-hidden border border-border">
+                    <img src={logoPreview} alt="Logo" className="w-full h-full object-contain" />
+                  </div>
+                ) : (
+                  <div
+                    className="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold"
+                    style={{ backgroundColor: primaryColor }}
+                  >
+                    {name ? name.charAt(0).toUpperCase() : '?'}
+                  </div>
+                )}
                 <div>
                   <p className="font-semibold" style={{ color: primaryColor }}>{name || 'Team Name'}</p>
                   <p className="text-xs" style={{ color: secondaryColor }}>Partner with PPL</p>
