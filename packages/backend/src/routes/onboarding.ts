@@ -31,14 +31,37 @@ router.post('/status', authenticate, async (req: Request, res: Response, next: N
       );
     }
 
-    // Get the user's athlete profile
-    const athleteProfile = await prisma.athleteProfile.findUnique({
+    // Get the user's athlete profile — auto-create if it doesn't exist.
+    //
+    // The /register endpoint only creates a User row; we lazily materialize
+    // the AthleteProfile when the athlete first hits this onboarding step.
+    // That keeps registration simple and also means existing clients who
+    // paid the $300 onboarding fee BEFORE the app existed can sign up for
+    // the app and pick "returning" on this screen — we'll create their
+    // profile on the fly and mark the fee as NOT_APPLICABLE so they don't
+    // get double-charged.
+    let athleteProfile = await prisma.athleteProfile.findUnique({
       where: { userId },
       include: { onboardingRecord: true },
     });
 
     if (!athleteProfile) {
-      throw ApiError.notFound('Athlete profile not found. Please complete registration first.');
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { fullName: true },
+      });
+      if (!user) throw ApiError.notFound('User account not found.');
+
+      // Split fullName into first/last. If it's a single word, fall back to
+      // "Athlete" for the last name so we satisfy the non-null constraint.
+      const nameParts = (user.fullName || '').trim().split(/\s+/).filter(Boolean);
+      const firstName = nameParts[0] || 'Athlete';
+      const lastName = nameParts.slice(1).join(' ') || 'Athlete';
+
+      const created = await prisma.athleteProfile.create({
+        data: { userId, firstName, lastName },
+      });
+      athleteProfile = { ...created, onboardingRecord: null };
     }
 
     // If they already have an onboarding record, return it
