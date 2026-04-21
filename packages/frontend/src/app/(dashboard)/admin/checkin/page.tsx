@@ -132,7 +132,7 @@ export default function StaffCheckinPage() {
         <div
           className={`mb-4 p-3 rounded-lg text-sm transition-all ${
             message.type === 'success'
-              ? 'bg-primary/10 border border-primary/20 text-accent-text'
+              ? 'bg-highlight/10 border border-highlight/20 text-accent-text'
               : 'bg-danger/10 border border-danger/20 text-danger'
           }`}
         >
@@ -177,7 +177,7 @@ export default function StaffCheckinPage() {
                       isSelected
                         ? 'ppl-gradient text-white shadow-lg'
                         : session.isActive
-                        ? 'bg-primary/10 border border-primary/30 text-foreground hover:bg-primary/20'
+                        ? 'bg-highlight/10 border border-highlight/30 text-foreground hover:bg-highlight/20'
                         : session.isPast
                         ? 'bg-surface/50 border border-border/50 text-muted'
                         : 'bg-surface border border-border text-foreground hover:border-border-light'
@@ -244,7 +244,7 @@ export default function StaffCheckinPage() {
 
                 {/* Stats bar */}
                 <div className="grid grid-cols-3 gap-3 mb-4">
-                  <div className="bg-primary/10 border border-primary/20 rounded-xl p-3 text-center">
+                  <div className="bg-highlight/10 border border-highlight/20 rounded-xl p-3 text-center">
                     <p className="text-2xl font-bold text-accent-text">{activeSession.stats.checkedIn}</p>
                     <p className="text-xs text-muted">Checked In</p>
                   </div>
@@ -332,7 +332,7 @@ function RosterRow({
     <div
       className={`flex items-center justify-between p-3 rounded-xl transition-all ${
         isCheckedIn
-          ? 'bg-primary/10 border border-primary/20'
+          ? 'bg-highlight/10 border border-highlight/20'
           : isNoShow
           ? 'bg-danger/5 border border-danger/15'
           : 'bg-surface border border-border'

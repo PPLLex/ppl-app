@@ -126,7 +126,7 @@ export default function NotificationBell() {
                       if (isUnread) handleMarkRead(notif.id);
                     }}
                     className={`w-full px-4 py-3 text-left border-b border-border/50 transition hover:bg-background ${
-                      isUnread ? 'bg-primary/5' : ''
+                      isUnread ? 'bg-highlight/5' : ''
                     }`}
                   >
                     <div className="flex gap-3">

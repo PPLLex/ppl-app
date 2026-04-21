@@ -195,7 +195,7 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
                 onClick={handleNavClick}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                   isActive
-                    ? 'bg-primary/15 text-accent-text'
+                    ? 'bg-highlight/15 text-accent-text'
                     : 'text-muted hover:text-foreground hover:bg-surface-hover'
                 }`}
               >

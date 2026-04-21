@@ -13,7 +13,7 @@ const SESSION_TYPE_LABELS: Record<string, string> = {
 };
 
 const SESSION_TYPE_COLORS: Record<string, string> = {
-  COLLEGE_PITCHING: 'bg-primary/20 border-primary text-accent-text',
+  COLLEGE_PITCHING: 'bg-highlight/20 border-highlight text-accent-text',
   MS_HS_PITCHING: 'bg-blue-500/20 border-blue-500 text-blue-400',
   YOUTH_PITCHING: 'bg-amber-500/20 border-amber-500 text-amber-400',
   PRIVATE_LESSON: 'bg-purple-500/20 border-purple-500 text-purple-400',
@@ -164,7 +164,7 @@ export default function AdminSchedulePage() {
           onClick={() => setActiveTab('calendar')}
           className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'calendar'
-              ? 'border-accent text-accent-text'
+              ? 'border-highlight text-accent-text'
               : 'border-transparent text-muted hover:text-foreground'
           }`}
         >
@@ -174,7 +174,7 @@ export default function AdminSchedulePage() {
           onClick={() => setActiveTab('templates')}
           className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'templates'
-              ? 'border-accent text-accent-text'
+              ? 'border-highlight text-accent-text'
               : 'border-transparent text-muted hover:text-foreground'
           }`}
         >
@@ -245,7 +245,7 @@ export default function AdminSchedulePage() {
               <div
                 key={i}
                 className={`p-3 text-center border-r border-border last:border-r-0 ${
-                  isToday ? 'bg-primary/10' : ''
+                  isToday ? 'bg-highlight/10' : ''
                 }`}
               >
                 <p className="text-xs text-muted uppercase">{dayName}</p>
@@ -524,7 +524,7 @@ function ScheduleTemplatesView({
       {message && (
         <div className={`mb-4 p-3 rounded-lg text-sm ${
           message.type === 'success'
-            ? 'bg-primary/10 border border-primary/20 text-accent-text'
+            ? 'bg-highlight/10 border border-highlight/20 text-accent-text'
             : 'bg-danger/10 border border-danger/20 text-danger'
         }`}>
           {message.text}
@@ -1149,7 +1149,7 @@ function CreateSessionModal({
 
           {/* Summary preview */}
           {isRecurring && estimatedCount > 0 && (
-            <div className="bg-primary/10 border border-primary/20 rounded-lg p-3">
+            <div className="bg-highlight/10 border border-highlight/20 rounded-lg p-3">
               <p className="text-sm text-accent-text font-medium">
                 This will create {estimatedCount} session{estimatedCount !== 1 ? 's' : ''}
               </p>
@@ -1707,7 +1707,7 @@ function SeriesDetailModal({
         {message && (
           <div className={`mx-6 mt-4 p-3 rounded-lg text-sm ${
             message.type === 'success'
-              ? 'bg-primary/10 border border-primary/20 text-accent-text'
+              ? 'bg-highlight/10 border border-highlight/20 text-accent-text'
               : 'bg-danger/10 border border-danger/20 text-danger'
           }`}>
             {message.text}

@@ -43,7 +43,7 @@ export default function ClientAccountPage() {
         <div
           className={`mb-4 p-3 rounded-lg text-sm ${
             message.type === 'success'
-              ? 'bg-primary/10 border border-primary/20 text-accent-text'
+              ? 'bg-highlight/10 border border-highlight/20 text-accent-text'
               : 'bg-danger/10 border border-danger/20 text-danger'
           }`}
         >
@@ -57,7 +57,7 @@ export default function ClientAccountPage() {
           onClick={() => setActiveSection('profile')}
           className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
             activeSection === 'profile'
-              ? 'bg-primary/20 text-accent-text'
+              ? 'bg-highlight/20 text-accent-text'
               : 'text-muted hover:text-foreground'
           }`}
         >
@@ -67,7 +67,7 @@ export default function ClientAccountPage() {
           onClick={() => setActiveSection('coaches')}
           className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
             activeSection === 'coaches'
-              ? 'bg-primary/20 text-accent-text'
+              ? 'bg-highlight/20 text-accent-text'
               : 'text-muted hover:text-foreground'
           }`}
         >
@@ -77,7 +77,7 @@ export default function ClientAccountPage() {
           onClick={() => setActiveSection('password')}
           className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
             activeSection === 'password'
-              ? 'bg-primary/20 text-accent-text'
+              ? 'bg-highlight/20 text-accent-text'
               : 'text-muted hover:text-foreground'
           }`}
         >
@@ -349,7 +349,7 @@ function CoachesSection({
           {coaches.map(coach => (
             <div key={coach.id} className="ppl-card flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <div className="w-12 h-12 rounded-full bg-highlight/10 flex items-center justify-center shrink-0">
                   <span className="text-accent-text font-bold text-lg">
                     {coach.coachName.charAt(0).toUpperCase()}
                   </span>
@@ -369,7 +369,7 @@ function CoachesSection({
               </div>
               <div className="flex items-center gap-3">
                 {coach.acceptedAt ? (
-                  <span className="text-xs bg-primary/10 text-accent-text px-2 py-1 rounded">Connected</span>
+                  <span className="text-xs bg-highlight/10 text-accent-text px-2 py-1 rounded">Connected</span>
                 ) : (
                   <span className="text-xs bg-yellow-500/10 text-yellow-400 px-2 py-1 rounded">Invited</span>
                 )}
@@ -431,7 +431,7 @@ function AddCoachForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="ppl-card border-2 border-primary/20">
+    <form onSubmit={handleSubmit} className="ppl-card border-2 border-highlight/20">
       <h3 className="text-base font-bold text-foreground mb-4">Add Outside Coach</h3>
       <div className="grid grid-cols-2 gap-4">
         <div>

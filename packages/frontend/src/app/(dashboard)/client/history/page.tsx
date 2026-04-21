@@ -63,7 +63,7 @@ export default function ClientBookingHistoryPage() {
             onClick={() => { setFilter(f.key); setPage(1); }}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
               filter === f.key
-                ? 'bg-primary/20 text-accent-text'
+                ? 'bg-highlight/20 text-accent-text'
                 : 'text-muted hover:text-foreground'
             }`}
           >

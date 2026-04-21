@@ -136,7 +136,7 @@ export default function MessagePanel({ conversationFilter }: MessagePanelProps) 
             <h3 className="font-bold text-foreground text-sm">Messages</h3>
             <button
               onClick={() => setShowNewConv(!showNewConv)}
-              className="w-7 h-7 rounded-md bg-primary/20 text-accent-text flex items-center justify-center text-lg hover:bg-primary/30 transition"
+              className="w-7 h-7 rounded-md bg-highlight/20 text-accent-text flex items-center justify-center text-lg hover:bg-highlight/30 transition"
             >
               +
             </button>
@@ -189,7 +189,7 @@ export default function MessagePanel({ conversationFilter }: MessagePanelProps) 
                 key={conv.id}
                 onClick={() => setSelectedConvId(conv.id)}
                 className={`w-full px-3 py-3 text-left border-b border-border/50 transition ${
-                  isSelected ? 'bg-primary/10' : 'hover:bg-surface'
+                  isSelected ? 'bg-highlight/10' : 'hover:bg-surface'
                 }`}
               >
                 <div className="flex items-start gap-2">

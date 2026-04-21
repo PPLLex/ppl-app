@@ -13,7 +13,7 @@ const SESSION_TYPE_LABELS: Record<string, string> = {
 };
 
 const SESSION_TYPE_COLORS: Record<string, string> = {
-  COLLEGE_PITCHING: 'bg-primary/20 border-primary text-accent-text',
+  COLLEGE_PITCHING: 'bg-highlight/20 border-highlight text-accent-text',
   MS_HS_PITCHING: 'bg-blue-500/20 border-blue-500 text-blue-400',
   YOUTH_PITCHING: 'bg-amber-500/20 border-amber-500 text-amber-400',
   PRIVATE_LESSON: 'bg-purple-500/20 border-purple-500 text-purple-400',
@@ -307,7 +307,7 @@ function AttendanceModal({
             </div>
 
             {message && (
-              <div className="mb-3 p-2 bg-primary/10 border border-primary/20 rounded-lg text-sm text-accent-text text-center">
+              <div className="mb-3 p-2 bg-highlight/10 border border-highlight/20 rounded-lg text-sm text-accent-text text-center">
                 {message}
               </div>
             )}
@@ -601,7 +601,7 @@ function CreateSessionModal({
           )}
 
           {isRecurring && estimatedCount > 0 && (
-            <div className="bg-primary/10 border border-primary/20 rounded-lg p-2">
+            <div className="bg-highlight/10 border border-highlight/20 rounded-lg p-2">
               <p className="text-sm text-accent-text font-medium">Will create {estimatedCount} session{estimatedCount !== 1 ? 's' : ''}</p>
             </div>
           )}

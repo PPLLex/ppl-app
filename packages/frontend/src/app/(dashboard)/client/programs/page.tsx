@@ -45,7 +45,7 @@ export default function ClientProgramsPage() {
 
   const statusColors: Record<string, string> = {
     DRAFT: 'bg-gray-500/10 text-gray-500',
-    ACTIVE: 'bg-primary/10 text-primary-text',
+    ACTIVE: 'bg-highlight/10 text-primary-text',
     COMPLETED: 'bg-green-500/10 text-green-600',
     ARCHIVED: 'bg-gray-400/10 text-gray-400',
   };
@@ -202,7 +202,7 @@ export default function ClientProgramsPage() {
             <button
               key={program.id}
               onClick={() => loadProgramDetail(program.id)}
-              className="ppl-card text-left hover:border-primary/30 transition-colors"
+              className="ppl-card text-left hover:border-highlight/30 transition-colors"
             >
               <div className="flex items-start justify-between">
                 <div>

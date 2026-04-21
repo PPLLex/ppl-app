@@ -203,7 +203,7 @@ export default function AdminBillingPage() {
         <div
           className={`mb-4 p-3 rounded-lg text-sm ${
             message.type === 'success'
-              ? 'bg-primary/10 border border-primary/20 text-accent-text'
+              ? 'bg-highlight/10 border border-highlight/20 text-accent-text'
               : 'bg-danger/10 border border-danger/20 text-danger'
           }`}
         >
@@ -411,7 +411,7 @@ export default function AdminBillingPage() {
                       onClick={() => setSortPastDue(s)}
                       className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
                         sortPastDue === s
-                          ? 'bg-primary/30 text-accent-text'
+                          ? 'bg-highlight/30 text-accent-text'
                           : 'text-muted hover:text-foreground'
                       }`}
                     >

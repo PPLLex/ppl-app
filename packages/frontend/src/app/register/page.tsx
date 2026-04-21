@@ -489,13 +489,13 @@ function RegisterForm() {
                   onClick={() => setAthleteSelection('returning')}
                   className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
                     athleteSelection === 'returning'
-                      ? 'border-primary bg-primary/10'
+                      ? 'border-highlight bg-highlight/10'
                       : 'border-border hover:border-border-light'
                   }`}
                 >
                   <div className="flex items-center gap-3 mb-2">
                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                      athleteSelection === 'returning' ? 'border-primary' : 'border-muted'
+                      athleteSelection === 'returning' ? 'border-highlight' : 'border-muted'
                     }`}>
                       {athleteSelection === 'returning' && (
                         <div className="w-2.5 h-2.5 rounded-full bg-primary" />
@@ -514,13 +514,13 @@ function RegisterForm() {
                   onClick={() => setAthleteSelection('new')}
                   className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
                     athleteSelection === 'new'
-                      ? 'border-primary bg-primary/10'
+                      ? 'border-highlight bg-highlight/10'
                       : 'border-border hover:border-border-light'
                   }`}
                 >
                   <div className="flex items-center gap-3 mb-2">
                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                      athleteSelection === 'new' ? 'border-primary' : 'border-muted'
+                      athleteSelection === 'new' ? 'border-highlight' : 'border-muted'
                     }`}>
                       {athleteSelection === 'new' && (
                         <div className="w-2.5 h-2.5 rounded-full bg-primary" />
@@ -539,13 +539,13 @@ function RegisterForm() {
                   onClick={() => setAthleteSelection('youth_graduate')}
                   className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
                     athleteSelection === 'youth_graduate'
-                      ? 'border-primary bg-primary/10'
+                      ? 'border-highlight bg-highlight/10'
                       : 'border-border hover:border-border-light'
                   }`}
                 >
                   <div className="flex items-center gap-3 mb-2">
                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                      athleteSelection === 'youth_graduate' ? 'border-primary' : 'border-muted'
+                      athleteSelection === 'youth_graduate' ? 'border-highlight' : 'border-muted'
                     }`}>
                       {athleteSelection === 'youth_graduate' && (
                         <div className="w-2.5 h-2.5 rounded-full bg-primary" />
@@ -564,13 +564,13 @@ function RegisterForm() {
                   onClick={() => setAthleteSelection('free_assessment')}
                   className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
                     athleteSelection === 'free_assessment'
-                      ? 'border-primary bg-primary/10'
+                      ? 'border-highlight bg-highlight/10'
                       : 'border-border hover:border-border-light'
                   }`}
                 >
                   <div className="flex items-center gap-3 mb-2">
                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                      athleteSelection === 'free_assessment' ? 'border-primary' : 'border-muted'
+                      athleteSelection === 'free_assessment' ? 'border-highlight' : 'border-muted'
                     }`}>
                       {athleteSelection === 'free_assessment' && (
                         <div className="w-2.5 h-2.5 rounded-full bg-primary" />
@@ -586,7 +586,7 @@ function RegisterForm() {
 
               {/* Fee notice for non-returning selections */}
               {athleteSelection && athleteSelection !== 'returning' && (
-                <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 text-sm text-foreground">
+                <div className="p-3 rounded-lg bg-highlight/5 border border-highlight/20 text-sm text-foreground">
                   <span className="font-medium">One-time onboarding fee:</span> $300 â covers your initial assessment, program setup, and personalized training plan.
                 </div>
               )}
@@ -619,7 +619,7 @@ function RegisterForm() {
           {step === 3 && (
             <div className="space-y-5">
               <div className="text-center">
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-highlight/10 mb-4">
                   <svg className="w-8 h-8 text-primary-text" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
                   </svg>
@@ -685,13 +685,13 @@ function RegisterForm() {
                   onClick={() => setTrainingPreference('IN_PERSON')}
                   className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
                     trainingPreference === 'IN_PERSON'
-                      ? 'border-primary bg-primary/10'
+                      ? 'border-highlight bg-highlight/10'
                       : 'border-border hover:border-border-light'
                   }`}
                 >
                   <div className="flex items-center gap-3 mb-2">
                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                      trainingPreference === 'IN_PERSON' ? 'border-primary' : 'border-muted'
+                      trainingPreference === 'IN_PERSON' ? 'border-highlight' : 'border-muted'
                     }`}>
                       {trainingPreference === 'IN_PERSON' && (
                         <div className="w-2.5 h-2.5 rounded-full bg-primary" />
@@ -709,13 +709,13 @@ function RegisterForm() {
                   onClick={() => setTrainingPreference('REMOTE')}
                   className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
                     trainingPreference === 'REMOTE'
-                      ? 'border-primary bg-primary/10'
+                      ? 'border-highlight bg-highlight/10'
                       : 'border-border hover:border-border-light'
                   }`}
                 >
                   <div className="flex items-center gap-3 mb-2">
                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                      trainingPreference === 'REMOTE' ? 'border-primary' : 'border-muted'
+                      trainingPreference === 'REMOTE' ? 'border-highlight' : 'border-muted'
                     }`}>
                       {trainingPreference === 'REMOTE' && (
                         <div className="w-2.5 h-2.5 rounded-full bg-primary" />
@@ -733,13 +733,13 @@ function RegisterForm() {
                   onClick={() => setTrainingPreference('HYBRID')}
                   className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
                     trainingPreference === 'HYBRID'
-                      ? 'border-primary bg-primary/10'
+                      ? 'border-highlight bg-highlight/10'
                       : 'border-border hover:border-border-light'
                   }`}
                 >
                   <div className="flex items-center gap-3 mb-2">
                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                      trainingPreference === 'HYBRID' ? 'border-primary' : 'border-muted'
+                      trainingPreference === 'HYBRID' ? 'border-highlight' : 'border-muted'
                     }`}>
                       {trainingPreference === 'HYBRID' && (
                         <div className="w-2.5 h-2.5 rounded-full bg-primary" />
@@ -806,7 +806,7 @@ function RegisterForm() {
                       onClick={() => setLocationId(loc.id)}
                       className={`w-full text-left p-3 rounded-lg border transition-all ${
                         locationId === loc.id
-                          ? 'border-primary bg-primary/10'
+                          ? 'border-highlight bg-highlight/10'
                           : 'border-border hover:border-border-light'
                       }`}
                     >
@@ -835,7 +835,7 @@ function RegisterForm() {
                       onClick={() => setAgeGroup(group.value)}
                       className={`w-full text-left p-3 rounded-lg border transition-all ${
                         ageGroup === group.value
-                          ? 'border-primary bg-primary/10'
+                          ? 'border-highlight bg-highlight/10'
                           : 'border-border hover:border-border-light'
                       }`}
                     >

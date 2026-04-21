@@ -31,7 +31,7 @@ export default function AdminSettingsPage() {
             onClick={() => setActiveTab(tab.key)}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
               activeTab === tab.key
-                ? 'bg-primary/20 text-accent-text'
+                ? 'bg-highlight/20 text-accent-text'
                 : 'text-muted hover:text-foreground'
             }`}
           >
@@ -561,7 +561,7 @@ function SessionTypeConfigPanel({ locations }: { locations: Location[] }) {
                   onClick={() => updateConfig(idx, 'isActive', !cfg.isActive)}
                   className={`text-xs px-2 py-1 rounded-md font-medium ${
                     cfg.isActive
-                      ? 'bg-primary/20 text-accent-text'
+                      ? 'bg-highlight/20 text-accent-text'
                       : 'bg-red-500/10 text-red-400'
                   }`}
                 >
@@ -686,7 +686,7 @@ function PlanSettings() {
         <div
           className={`mb-4 p-3 rounded-lg text-sm ${
             message.type === 'success'
-              ? 'bg-primary/10 border border-primary/20 text-accent-text'
+              ? 'bg-highlight/10 border border-highlight/20 text-accent-text'
               : 'bg-danger/10 border border-danger/20 text-danger'
           }`}
         >
@@ -1082,7 +1082,7 @@ function StaffSettings() {
         <div
           className={`mb-4 p-3 rounded-lg text-sm ${
             message.type === 'success'
-              ? 'bg-primary/10 border border-primary/20 text-accent-text'
+              ? 'bg-highlight/10 border border-highlight/20 text-accent-text'
               : 'bg-danger/10 border border-danger/20 text-danger'
           }`}
         >
@@ -1597,7 +1597,7 @@ function KioskSetupPanel({ locations }: { locations: Location[] }) {
     <div className="ppl-card">
       <div className="flex items-center justify-between mb-1">
         <h2 className="text-lg font-bold text-foreground">Self-Service Kiosk</h2>
-        <span className="ppl-badge bg-primary/10 text-accent-text border border-primary/20 text-xs">New</span>
+        <span className="ppl-badge bg-highlight/10 text-accent-text border border-highlight/20 text-xs">New</span>
       </div>
       <p className="text-sm text-muted mb-4">
         Set up a tablet at your facility for athletes to check themselves in. Each location gets its own PIN.

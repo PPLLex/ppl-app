@@ -38,7 +38,7 @@ export default function AdminReportsPage() {
               onClick={() => setPeriod(p.key)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                 period === p.key
-                  ? 'bg-primary/20 text-accent-text'
+                  ? 'bg-highlight/20 text-accent-text'
                   : 'text-muted hover:text-foreground'
               }`}
             >
@@ -56,7 +56,7 @@ export default function AdminReportsPage() {
             onClick={() => setActiveTab(tab.key)}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
               activeTab === tab.key
-                ? 'bg-primary/20 text-accent-text'
+                ? 'bg-highlight/20 text-accent-text'
                 : 'text-muted hover:text-foreground'
             }`}
           >
@@ -101,7 +101,7 @@ function BarChart({ data, labelKey, valueKey, maxHeight = 120 }: {
           <div key={i} className="flex-1 flex flex-col items-center gap-1">
             <span className="text-xs text-muted">{item[valueKey]}</span>
             <div
-              className="w-full rounded-t-md bg-primary/60 hover:bg-accent/60 transition min-h-[2px]"
+              className="w-full rounded-t-md bg-highlight/60 hover:bg-accent/60 transition min-h-[2px]"
               style={{ height: Math.max(height, 2) }}
             />
             <span className="text-xs text-muted truncate w-full text-center">{item[labelKey]}</span>

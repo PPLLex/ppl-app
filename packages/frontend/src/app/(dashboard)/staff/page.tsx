@@ -98,7 +98,7 @@ export default function StaffDashboard() {
             <p className="text-3xl font-bold text-foreground mt-1">{totalAthletesToday}</p>
             <p className="text-xs text-muted mt-0.5">across all sessions</p>
           </div>
-          <Link href="/staff/messages" className="ppl-card hover:border-primary/50 transition-colors">
+          <Link href="/staff/messages" className="ppl-card hover:border-highlight/50 transition-colors">
             <p className="text-sm text-muted">Unread Messages</p>
             <p className={`text-3xl font-bold mt-1 ${unreadCount > 0 ? 'text-accent-text' : 'text-foreground'}`}>
               {unreadCount}
@@ -130,7 +130,7 @@ export default function StaffDashboard() {
                     key={s.id}
                     className={`flex items-center justify-between p-3 rounded-lg ${
                       isNow
-                        ? 'bg-primary/10 border border-primary/30'
+                        ? 'bg-highlight/10 border border-highlight/30'
                         : isPast
                         ? 'bg-surface opacity-60'
                         : 'bg-surface'
@@ -140,7 +140,7 @@ export default function StaffDashboard() {
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-medium text-foreground">{s.title}</p>
                         {isNow && (
-                          <span className="text-xs ppl-badge bg-primary/20 text-accent-text border border-primary/30">
+                          <span className="text-xs ppl-badge bg-highlight/20 text-accent-text border border-highlight/30">
                             NOW
                           </span>
                         )}

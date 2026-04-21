@@ -102,7 +102,7 @@ export default function StaffAthletesPage() {
                 onClick={() => selectClient(client)}
                 className={`ppl-card flex items-center gap-4 cursor-pointer transition-colors ${
                   selectedClient?.id === client.id
-                    ? 'border-primary/50 bg-primary/5'
+                    ? 'border-highlight/50 bg-highlight/5'
                     : 'hover:border-border/60'
                 }`}
               >

@@ -144,6 +144,17 @@ function applyColorsToDOM(primary: string, accent: string) {
   // "On" colors — text to place ON a solid primary/accent background
   root.style.setProperty('--color-on-primary', textOnBackground(primary));
   root.style.setProperty('--color-on-accent', textOnBackground(accent));
+
+  // Highlight color — whichever brand color is more visible on the dark background.
+  // Used for active states, selection tints, borders — ensures they're always visible
+  // even if the admin sets one brand color to something very dark.
+  const primaryLum = relativeLuminance(primary);
+  const accentLum = relativeLuminance(accent);
+  const highlight = accentLum >= primaryLum ? accent : primary;
+  const highlightText = ensureReadableOnDark(highlight);
+  root.style.setProperty('--color-highlight', highlight);
+  root.style.setProperty('--color-highlight-text', highlightText);
+  root.style.setProperty('--color-highlight-rgb', hexToRgb(highlight));
 }
 
 /* ============================================================

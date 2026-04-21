@@ -122,7 +122,7 @@ export default function ClientDashboard() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           {/* Membership Status */}
-          <Link href="/client/membership" className="ppl-card hover:border-primary/50 transition-colors">
+          <Link href="/client/membership" className="ppl-card hover:border-highlight/50 transition-colors">
             <p className="text-sm text-muted">Membership</p>
             {mem ? (
               <>
@@ -240,7 +240,7 @@ export default function ClientDashboard() {
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-medium text-foreground">{booking.session.title}</p>
                         {isToday && (
-                          <span className="text-xs ppl-badge bg-primary/20 text-accent-text border border-primary/30">
+                          <span className="text-xs ppl-badge bg-highlight/20 text-accent-text border border-highlight/30">
                             TODAY
                           </span>
                         )}
@@ -288,14 +288,14 @@ export default function ClientDashboard() {
       <div className="grid grid-cols-2 gap-3">
         <Link
           href="/client/history"
-          className="ppl-card text-center py-4 hover:border-primary/50 transition-colors"
+          className="ppl-card text-center py-4 hover:border-highlight/50 transition-colors"
         >
           <p className="text-sm font-medium text-foreground">Booking History</p>
           <p className="text-xs text-muted mt-0.5">View past sessions</p>
         </Link>
         <Link
           href="/client/messages"
-          className="ppl-card text-center py-4 hover:border-primary/50 transition-colors"
+          className="ppl-card text-center py-4 hover:border-highlight/50 transition-colors"
         >
           <p className="text-sm font-medium text-foreground">Messages</p>
           <p className="text-xs text-muted mt-0.5">Chat with your coach</p>

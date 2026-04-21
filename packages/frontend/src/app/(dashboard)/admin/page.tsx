@@ -121,7 +121,7 @@ export default function AdminDashboard() {
       {/* ── Top Metric Cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {/* Active Members */}
-        <Link href="/admin/members" className="ppl-card hover:border-primary/50 transition-colors group">
+        <Link href="/admin/members" className="ppl-card hover:border-highlight/50 transition-colors group">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted">Active Members</p>
             <svg className="w-4 h-4 text-muted group-hover:text-accent-text transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -135,7 +135,7 @@ export default function AdminDashboard() {
         </Link>
 
         {/* MRR */}
-        <Link href="/admin/revenue" className="ppl-card hover:border-primary/50 transition-colors group">
+        <Link href="/admin/revenue" className="ppl-card hover:border-highlight/50 transition-colors group">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted">Monthly Revenue</p>
             <svg className="w-4 h-4 text-muted group-hover:text-accent-text transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -151,7 +151,7 @@ export default function AdminDashboard() {
         </Link>
 
         {/* Today's Sessions */}
-        <Link href="/admin/checkin" className="ppl-card hover:border-primary/50 transition-colors group">
+        <Link href="/admin/checkin" className="ppl-card hover:border-highlight/50 transition-colors group">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted">Today&apos;s Sessions</p>
             <svg className="w-4 h-4 text-muted group-hover:text-accent-text transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -203,7 +203,7 @@ export default function AdminDashboard() {
           {today.sessions.length > 0 ? (
             <div className="space-y-2">
               {today.sessions.map((s: DashboardTodaySession) => (
-                <div key={s.id} className={`flex items-center justify-between p-3 rounded-lg ${s.isActive ? 'bg-primary/10 border border-primary/30' : 'bg-surface'}`}>
+                <div key={s.id} className={`flex items-center justify-between p-3 rounded-lg ${s.isActive ? 'bg-highlight/10 border border-highlight/30' : 'bg-surface'}`}>
                   <div className="flex items-center gap-3 min-w-0">
                     {/* Time column */}
                     <div className="w-16 flex-shrink-0 text-center">

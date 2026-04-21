@@ -20,6 +20,8 @@
   --color-accent-text: #95C83C;
   --color-on-primary: #ffffff;
   --color-on-accent: #111111;
+  --color-highlight: #95C83C;
+  --color-highlight-text: #95C83C;
 }
 
 /* Static theme values — inlined at build time for performance */
@@ -177,8 +179,8 @@ html {
 }
 
 .ppl-badge-active {
-  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
-  color: var(--color-accent-text);
+  background: color-mix(in srgb, var(--color-highlight) 15%, transparent);
+  color: var(--color-highlight-text);
 }
 
 .ppl-badge-warning {

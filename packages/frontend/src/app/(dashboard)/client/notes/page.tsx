@@ -138,7 +138,7 @@ export default function ClientNotesPage() {
                     <span className="text-sm font-medium text-foreground">{r.email}</span>
                     {r.name && <span className="text-xs text-muted ml-2">({r.name})</span>}
                     {r.relation && (
-                      <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary-text ml-2">
+                      <span className="text-xs px-1.5 py-0.5 rounded-full bg-highlight/10 text-primary-text ml-2">
                         {r.relation}
                       </span>
                     )}
@@ -229,7 +229,7 @@ export default function ClientNotesPage() {
           {Object.entries(groupedNotes).map(([date, dayNotes]) => (
             <div key={date}>
               <h3 className="text-sm font-semibold text-muted uppercase tracking-wide mb-3">{date}</h3>
-              <div className="space-y-3 relative pl-6 border-l-2 border-primary/20">
+              <div className="space-y-3 relative pl-6 border-l-2 border-highlight/20">
                 {dayNotes.map((note) => (
                   <div key={note.id} className="relative">
                     {/* Timeline dot */}
@@ -241,7 +241,7 @@ export default function ClientNotesPage() {
                           <span className="text-sm font-semibold text-foreground">
                             Coach {note.coach.fullName}
                           </span>
-                          <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary-text ml-2">
+                          <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-highlight/10 text-primary-text ml-2">
                             {formatCategory(note.trainingCategory)}
                           </span>
                         </div>

@@ -119,7 +119,7 @@ export default function AdminMembersPage() {
           {clients.map((client) => (
             <div
               key={client.id}
-              className="ppl-card flex items-center justify-between cursor-pointer hover:border-primary/50 transition-colors"
+              className="ppl-card flex items-center justify-between cursor-pointer hover:border-highlight/50 transition-colors"
               onClick={() => setSelectedClient(selectedClient?.id === client.id ? null : client)}
             >
               <div className="flex items-center gap-4 flex-1">

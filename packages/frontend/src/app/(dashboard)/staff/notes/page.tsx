@@ -140,7 +140,7 @@ export default function StaffNotesPage() {
             </div>
           )}
           {successMsg && (
-            <div className="mb-4 p-3 rounded-lg bg-primary/10 border border-primary/20 text-primary-text text-sm">
+            <div className="mb-4 p-3 rounded-lg bg-highlight/10 border border-highlight/20 text-primary-text text-sm">
               {successMsg}
             </div>
           )}
@@ -152,7 +152,7 @@ export default function StaffNotesPage() {
                 Athlete
               </label>
               {selectedAthleteId ? (
-                <div className="flex items-center justify-between p-3 rounded-lg border border-primary bg-primary/10">
+                <div className="flex items-center justify-between p-3 rounded-lg border border-highlight bg-highlight/10">
                   <span className="font-medium text-foreground">{selectedAthleteName}</span>
                   <button
                     type="button"
@@ -264,7 +264,7 @@ export default function StaffNotesPage() {
                       {formatDate(note.sessionDate)}
                     </span>
                   </div>
-                  <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary-text mb-2">
+                  <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-highlight/10 text-primary-text mb-2">
                     {formatCategory(note.trainingCategory)}
                   </span>
                   <p className="text-sm text-muted leading-relaxed">

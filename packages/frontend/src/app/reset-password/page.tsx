@@ -50,7 +50,7 @@ function ResetPasswordForm() {
   if (success) {
     return (
       <div className="ppl-card text-center">
-        <div className="w-12 h-12 rounded-full bg-primary/20 mx-auto mb-3 flex items-center justify-center">
+        <div className="w-12 h-12 rounded-full bg-highlight/20 mx-auto mb-3 flex items-center justify-center">
           <svg className="w-6 h-6 text-accent-text" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
           </svg>
