@@ -15,13 +15,25 @@ export default function RegisterPage() {
   );
 }
 
-// Total steps:
-//   1 = Account, 2 = New/Returning, 3 = Onboarding fee (if new),
-//   4 = Training Preference, 5 = Location, 6 = Current Playing Level
+// Registration steps (not all run for every path):
+//   0 = Role selector (athlete vs parent/guardian)
+//   1 = Account (parent's own info if parent path, athlete's info if self)
+//   7 = Athlete details (parent path only — athlete's first/last/DOB)
+//   2 = New/Returning
+//   3 = Onboarding fee (if new)
+//   4 = Training preference
+//   5 = Location
+//   6 = Current playing level
 // After step 6 we route to /client/membership which already handles plan
 // selection + weekly subscription via Stripe Elements.
+//
+// Rules: Youth + MS/HS athletes MUST register via the parent path (parent
+// account is created alongside the athlete profile). College athletes may
+// register solo with an explicit opt-out acknowledgment. Pro athletes are
+// always solo. Enforced on both the UI and POST /api/auth/register.
 type AthleteSelection = 'new' | 'returning' | 'youth_graduate' | 'free_assessment';
 type TrainingPref = 'IN_PERSON' | 'REMOTE' | 'HYBRID';
+type RegisteringAs = 'athlete' | 'parent';
 
 function RegisterForm() {
   const router = useRouter();
@@ -34,13 +46,14 @@ function RegisterForm() {
   const paymentStatus = searchParams.get('payment');
 
   // Determine starting step
-  const getInitialStep = () => {
+  const getInitialStep = (): number => {
     if (stepParam === 'location' && paymentStatus === 'success') return 4; // returning from Stripe success â training pref
     if (stepParam === '2' && oauthProvider) return 2; // OAuth user needs onboarding
-    return 1;
+    return 0; // fresh visit: start at the "who's signing up?" selector
   };
 
   const [step, setStep] = useState(getInitialStep);
+  const [registeringAs, setRegisteringAs] = useState<RegisteringAs | ''>('');
   const [locations, setLocations] = useState<Location[]>([]);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -63,9 +76,20 @@ function RegisterForm() {
   const [locationId, setLocationId] = useState('');
   const [ageGroup, setAgeGroup] = useState('');
 
+  // Step 7 fields (parent path only — the athlete's details)
+  const [athleteFirstName, setAthleteFirstName] = useState('');
+  const [athleteLastName, setAthleteLastName] = useState('');
+  const [athleteDateOfBirth, setAthleteDateOfBirth] = useState('');
+
+  // Step 6 fields (college opt-out — solo college athlete acknowledges
+  // they're managing their own scheduling, cancellations, and payments)
+  const [parentOptOut, setParentOptOut] = useState(false);
+
   // Payment state
   const [requiresPayment, setRequiresPayment] = useState(false);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+
+  const isParentPath = registeringAs === 'parent';
 
   useEffect(() => {
     api.getLocations().then((res) => {
@@ -142,6 +166,17 @@ function RegisterForm() {
     }
   }, [googleLoaded, handleGoogleResponse, step]);
 
+  // Step 7 (parent path only): validate athlete details then advance to step 2
+  const handleAthleteDetailsNext = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (!athleteFirstName.trim() || !athleteLastName.trim()) {
+      setError("Please enter your athlete's first and last name");
+      return;
+    }
+    setStep(2);
+  };
+
   const handleStep1 = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -154,7 +189,9 @@ function RegisterForm() {
       setError('Passwords do not match');
       return;
     }
-    setStep(2);
+    // Parent path: detour through the athlete-details step before
+    // continuing to the new/returning question.
+    setStep(isParentPath ? 7 : 2);
   };
 
   // Step 2: Submit athlete status selection
@@ -212,7 +249,12 @@ function RegisterForm() {
       const token = localStorage.getItem('ppl_token');
 
       if (!token && !isOAuthOnboarding) {
-        // Need to create the account first, then redirect to Stripe
+        // Need to create the account first, then redirect to Stripe.
+        // At step 3, we don't have locationId or ageGroup yet — those come on
+        // steps 5 and 6. Backend accepts empty locationId here (we update the
+        // profile post-payment). Parent-path registration fields are passed
+        // so the Family + athlete User get created up front even though the
+        // athlete's playing level is captured later via profile update.
         const regRes = await api.register({
           fullName,
           email,
@@ -220,6 +262,12 @@ function RegisterForm() {
           password,
           locationId: '', // Will be set after payment
           ageGroup: '',
+          registeringAs: isParentPath ? 'PARENT' : 'SELF',
+          ...(isParentPath && {
+            athleteFirstName,
+            athleteLastName,
+            athleteDateOfBirth: athleteDateOfBirth || undefined,
+          }),
         });
 
         if (regRes.data) {
@@ -298,6 +346,15 @@ function RegisterForm() {
             password,
             locationId,
             ageGroup,
+            registeringAs: isParentPath ? 'PARENT' : 'SELF',
+            ...(isParentPath && {
+              athleteFirstName,
+              athleteLastName,
+              athleteDateOfBirth: athleteDateOfBirth || undefined,
+            }),
+            ...(!isParentPath && ageGroup === 'college' && parentOptOut && {
+              parentOptOut: true,
+            }),
           });
 
           if (res.data) {
@@ -321,16 +378,26 @@ function RegisterForm() {
     }
   };
 
-  // Total visual steps (onboarding-fee payment step only shows for new athletes).
-  // With location split from playing level, we now have 5 or 6 visible dots.
-  const totalSteps = requiresPayment ? 6 : 5;
+  // Total visual steps. Step 0 (role selector) and step 7 (athlete details
+  // — parent path only) both count when applicable.
+  const totalSteps =
+    (isParentPath ? 1 : 0) + // step 7 (athlete details)
+    (requiresPayment ? 6 : 5);
   const visualStep = () => {
+    // Step 0 is before the progress bar starts rendering (we hide it there).
     if (step === 1) return 1;
-    if (step === 2) return 2;
-    if (step === 3) return 3; // onboarding fee
-    if (step === 4) return requiresPayment ? 4 : 3; // training preference
-    if (step === 5) return requiresPayment ? 5 : 4; // location
-    if (step === 6) return requiresPayment ? 6 : 5; // current playing level
+    if (step === 7) return 2; // parent path: athlete details slots after account
+    if (step === 2) return isParentPath ? 3 : 2;
+    if (step === 3) return isParentPath ? 4 : 3; // onboarding fee
+    if (step === 4) {
+      return (isParentPath ? 1 : 0) + (requiresPayment ? 4 : 3);
+    }
+    if (step === 5) {
+      return (isParentPath ? 1 : 0) + (requiresPayment ? 5 : 4);
+    }
+    if (step === 6) {
+      return (isParentPath ? 1 : 0) + (requiresPayment ? 6 : 5);
+    }
     return step;
   };
 
@@ -352,32 +419,93 @@ function RegisterForm() {
           <p className="text-muted mt-1">
             {isOAuthOnboarding
               ? 'Just a couple more details to get you started'
-              : step === 3
-                ? 'Complete your onboarding fee to get started'
-                : step === 4
-                  ? 'How would you like to train?'
-                  : step === 5
-                    ? 'Where will you train?'
-                    : step === 6
-                      ? 'What level are you playing at?'
-                      : 'Create your account to start training'}
+              : step === 0
+                ? 'Who are we setting up?'
+                : step === 3
+                  ? isParentPath
+                    ? "Complete your athlete's onboarding fee"
+                    : 'Complete your onboarding fee to get started'
+                  : step === 4
+                    ? isParentPath
+                      ? 'How would your athlete like to train?'
+                      : 'How would you like to train?'
+                    : step === 5
+                      ? isParentPath
+                        ? 'Where will your athlete train?'
+                        : 'Where will you train?'
+                      : step === 6
+                        ? isParentPath
+                          ? "What level is your athlete playing at?"
+                          : 'What level are you playing at?'
+                        : step === 7
+                          ? "Tell us about your athlete"
+                          : isParentPath
+                            ? 'Create your parent/guardian account'
+                            : 'Create your account to start training'}
           </p>
         </div>
 
-        {/* Progress indicator */}
-        <div className="flex items-center gap-2 mb-6">
-          {Array.from({ length: totalSteps }).map((_, i) => (
-            <div
-              key={i}
-              className={`h-1 flex-1 rounded-full ${visualStep() > i ? 'ppl-gradient' : 'bg-border'}`}
-            />
-          ))}
-        </div>
+        {/* Progress indicator — hidden on step 0 since that's before the flow begins */}
+        {step !== 0 && (
+          <div className="flex items-center gap-2 mb-6">
+            {Array.from({ length: totalSteps }).map((_, i) => (
+              <div
+                key={i}
+                className={`h-1 flex-1 rounded-full ${visualStep() > i ? 'ppl-gradient' : 'bg-border'}`}
+              />
+            ))}
+          </div>
+        )}
 
         <div className="ppl-card">
           {error && (
             <div className="mb-4 p-3 rounded-lg bg-danger/10 border border-danger/20 text-danger text-sm">
               {error}
+            </div>
+          )}
+
+          {/* ============================================ */}
+          {/* STEP 0: Role selector (athlete vs parent)    */}
+          {/* ============================================ */}
+          {step === 0 && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted mb-2">
+                Choose the option that fits. We&apos;ll tailor the rest of signup around your answer.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setRegisteringAs('athlete');
+                  setStep(1);
+                }}
+                className="w-full text-left p-4 rounded-xl border-2 border-border hover:border-border-light bg-surface transition-all"
+              >
+                <div className="font-bold text-foreground text-base leading-tight">
+                  I&apos;m the athlete
+                </div>
+                <div className="text-xs text-muted/80 mt-1.5 font-normal leading-snug">
+                  You&apos;re signing yourself up. Available for College and Pro athletes.
+                  Youth and Middle/High School athletes must be registered by a parent or guardian.
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setRegisteringAs('parent');
+                  setStep(1);
+                }}
+                className="w-full text-left p-4 rounded-xl border-2 border-border hover:border-border-light bg-surface transition-all"
+              >
+                <div className="font-bold text-foreground text-base leading-tight">
+                  I&apos;m a parent or guardian
+                </div>
+                <div className="text-xs text-muted/80 mt-1.5 font-normal leading-snug">
+                  You&apos;re signing up an athlete. We&apos;ll create your account
+                  (the billing and management contact) and your athlete&apos;s profile.
+                </div>
+              </button>
             </div>
           )}
 
@@ -412,17 +540,34 @@ function RegisterForm() {
                 </div>
               </div>
 
+              {isParentPath && (
+                <div className="mb-5 p-3 rounded-lg bg-surface border border-border text-sm text-muted">
+                  You&apos;re signing up as a <strong className="text-foreground">parent or guardian</strong>.
+                  This account will be used for billing, scheduling, and communication.{' '}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRegisteringAs('');
+                      setStep(0);
+                    }}
+                    className="underline text-accent-text hover:text-primary-text"
+                  >
+                    Change
+                  </button>
+                </div>
+              )}
+
               <form onSubmit={handleStep1} className="space-y-4">
                 <div>
                   <label htmlFor="fullName" className="block text-sm font-medium text-foreground mb-1.5">
-                    Full Name
+                    {isParentPath ? 'Your Full Name' : 'Full Name'}
                   </label>
                   <input
                     id="fullName"
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    placeholder="John Smith"
+                    placeholder={isParentPath ? 'Parent or guardian name' : 'John Smith'}
                     className="ppl-input"
                     required
                   />
@@ -430,7 +575,7 @@ function RegisterForm() {
 
                 <div>
                   <label htmlFor="regEmail" className="block text-sm font-medium text-foreground mb-1.5">
-                    Email
+                    {isParentPath ? 'Your Email' : 'Email'}
                   </label>
                   <input
                     id="regEmail"
@@ -496,12 +641,88 @@ function RegisterForm() {
           )}
 
           {/* ============================================ */}
+          {/* STEP 7: Athlete Details (parent path only)   */}
+          {/* ============================================ */}
+          {step === 7 && (
+            <form onSubmit={handleAthleteDetailsNext} className="space-y-4">
+              <h2 className="text-lg font-semibold text-foreground mb-1">
+                Your athlete&apos;s details
+              </h2>
+              <p className="text-sm text-muted mb-2">
+                We&apos;ll use this info for their PPL profile, session bookings,
+                and notes. You can add another athlete to your account later.
+              </p>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    First name
+                  </label>
+                  <input
+                    type="text"
+                    value={athleteFirstName}
+                    onChange={(e) => setAthleteFirstName(e.target.value)}
+                    className="ppl-input w-full"
+                    required
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    Last name
+                  </label>
+                  <input
+                    type="text"
+                    value={athleteLastName}
+                    onChange={(e) => setAthleteLastName(e.target.value)}
+                    className="ppl-input w-full"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1.5">
+                  Date of birth <span className="text-muted font-normal">(optional)</span>
+                </label>
+                <input
+                  type="date"
+                  value={athleteDateOfBirth}
+                  onChange={(e) => setAthleteDateOfBirth(e.target.value)}
+                  className="ppl-input w-full"
+                />
+                <p className="text-xs text-muted mt-1">
+                  Helps us suggest the right playing-level group as they grow.
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="ppl-btn ppl-btn-secondary flex-1 py-3"
+                >
+                  Back
+                </button>
+                <button
+                  type="submit"
+                  className="ppl-btn ppl-btn-primary flex-1 py-3 text-base"
+                >
+                  Continue
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* ============================================ */}
           {/* STEP 2: New vs Returning Athlete             */}
           {/* ============================================ */}
           {step === 2 && (
             <div className="space-y-5">
               <div>
-                <h2 className="text-lg font-semibold text-foreground mb-1">Have you trained at PPL before?</h2>
+                <h2 className="text-lg font-semibold text-foreground mb-1">
+                  {isParentPath ? 'Has your athlete trained at PPL before?' : 'Have you trained at PPL before?'}
+                </h2>
                 <p className="text-sm text-muted">
                   This helps us set up the right experience for you. New athletes have a one-time $300 onboarding fee.
                 </p>
@@ -878,11 +1099,17 @@ function RegisterForm() {
                   { value: 'youth', label: 'Youth', desc: '12 and under' },
                   { value: 'ms_hs', label: 'Middle School / High School', desc: 'Ages 13–18' },
                   { value: 'college', label: 'College', desc: 'College athletes' },
+                  { value: 'pro', label: 'Pro', desc: 'Professional athletes' },
                 ].map((group) => (
                   <button
                     key={group.value}
                     type="button"
-                    onClick={() => setAgeGroup(group.value)}
+                    onClick={() => {
+                      setAgeGroup(group.value);
+                      setError('');
+                      // Reset college opt-out whenever the selection changes
+                      if (group.value !== 'college') setParentOptOut(false);
+                    }}
                     className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
                       ageGroup === group.value
                         ? 'border-highlight bg-highlight/10 shadow-sm'
@@ -899,6 +1126,62 @@ function RegisterForm() {
                 ))}
               </div>
 
+              {/* Self-signup gate: Youth and MS/HS athletes must register
+                  through the parent/guardian flow. We don't silently let
+                  them continue — surface the redirect inline. */}
+              {!isParentPath && (ageGroup === 'youth' || ageGroup === 'ms_hs') && (
+                <div className="p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 text-sm">
+                  <p className="text-amber-400 font-semibold mb-1">
+                    A parent or guardian needs to sign up for you
+                  </p>
+                  <p className="text-foreground/90 mb-3">
+                    Athletes under 18 are registered by a parent or guardian so
+                    they can manage billing, scheduling, and cancellations. We&apos;ll
+                    switch you to that flow — your progress so far stays with you.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Preserve the name they entered on step 1 as the athlete's
+                      // name, then reset to step 0 so they can enter the parent's
+                      // details cleanly.
+                      const parts = fullName.trim().split(/\s+/);
+                      setAthleteFirstName(parts[0] || '');
+                      setAthleteLastName(parts.slice(1).join(' ') || '');
+                      setRegisteringAs('parent');
+                      setFullName('');
+                      setEmail('');
+                      setPassword('');
+                      setConfirmPassword('');
+                      setStep(1);
+                      setError('');
+                    }}
+                    className="ppl-btn ppl-btn-primary text-sm"
+                  >
+                    Switch to parent/guardian signup
+                  </button>
+                </div>
+              )}
+
+              {/* College solo signup: require an explicit self-management
+                  acknowledgment before they can continue without a parent
+                  account. */}
+              {!isParentPath && ageGroup === 'college' && (
+                <label className="flex gap-3 p-4 rounded-xl border border-border bg-surface cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={parentOptOut}
+                    onChange={(e) => setParentOptOut(e.target.checked)}
+                    className="mt-0.5 accent-highlight"
+                  />
+                  <span className="text-sm text-foreground/90 leading-snug">
+                    I&apos;m managing this account myself — I understand I&apos;m responsible
+                    for my own scheduling, session cancellations, and billing. A
+                    parent/guardian doesn&apos;t need to be added.
+                  </span>
+                </label>
+              )}
+
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
@@ -909,7 +1192,14 @@ function RegisterForm() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isLoading}
+                  disabled={
+                    isLoading ||
+                    // Block continue if the self-signup athlete picked a
+                    // level that requires a parent, or picked college but
+                    // hasn't ticked the opt-out.
+                    (!isParentPath && (ageGroup === 'youth' || ageGroup === 'ms_hs')) ||
+                    (!isParentPath && ageGroup === 'college' && !parentOptOut)
+                  }
                   className="ppl-btn ppl-btn-primary flex-1 py-3 text-base"
                 >
                   {isLoading

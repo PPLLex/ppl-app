@@ -1062,6 +1062,20 @@ export interface RegisterData {
   phone?: string;
   locationId: string;
   ageGroup?: string;
+  /**
+   * 'PARENT' when a parent/guardian is registering for an athlete.
+   * Requires athleteFirstName/athleteLastName/athleteDateOfBirth to be set.
+   * Defaults to SELF.
+   */
+  registeringAs?: 'SELF' | 'PARENT';
+  athleteFirstName?: string;
+  athleteLastName?: string;
+  athleteDateOfBirth?: string;
+  /**
+   * College-only, solo athletes: explicit acknowledgment they're managing
+   * their own scheduling/billing without a parent/guardian account.
+   */
+  parentOptOut?: boolean;
 }
 
 export interface Location {

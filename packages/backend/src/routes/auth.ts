@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 import { prisma } from '../utils/prisma';
 import { ApiError } from '../utils/apiError';
 import { authenticate, generateToken, JwtPayload } from '../middleware/auth';
@@ -130,10 +131,49 @@ router.post('/seed-admin', async (req: Request, res: Response, next: NextFunctio
  */
 router.post('/register', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { email, password, fullName, phone, locationId, ageGroup } = req.body;
+    const {
+      email,
+      password,
+      fullName,
+      phone,
+      locationId,
+      ageGroup,
+      // Parent path: when registeringAs==='PARENT', the User account being
+      // created is the PARENT. The athlete gets their own User row + profile
+      // linked via Family. Youth and MS/HS registrations MUST use this path.
+      registeringAs,
+      athleteFirstName,
+      athleteLastName,
+      athleteDateOfBirth,
+      // Athlete self-signup for College only: acknowledge full responsibility
+      // (no parent account created). Ignored for any other combo.
+      parentOptOut,
+    } = req.body;
 
     if (!email || !password || !fullName || !locationId) {
       throw ApiError.badRequest('Email, password, full name, and location are required');
+    }
+
+    const isParentRegistration = registeringAs === 'PARENT';
+    if (isParentRegistration) {
+      if (!athleteFirstName || !athleteLastName) {
+        throw ApiError.badRequest(
+          "Parent registration requires the athlete's first and last name"
+        );
+      }
+    } else {
+      // Athlete self-signup enforcement: Youth and MS/HS must register via a
+      // parent account. Pro and College (with opt-out) can register themselves.
+      if (ageGroup === 'youth' || ageGroup === 'ms_hs') {
+        throw ApiError.badRequest(
+          'Athletes under 18 must be registered by a parent or guardian. Please restart registration using the parent/guardian option.'
+        );
+      }
+      if (ageGroup === 'college' && !parentOptOut) {
+        throw ApiError.badRequest(
+          'College athletes must either register through a parent/guardian OR acknowledge they are managing their own account.'
+        );
+      }
     }
 
     // Check if user already exists
@@ -151,26 +191,88 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
     // Hash password
     const passwordHash = await bcrypt.hash(password, 12);
 
-    // Create user + client profile in a transaction
-    const user = await prisma.user.create({
-      data: {
-        email: email.toLowerCase(),
-        passwordHash,
-        fullName,
-        phone,
-        role: Role.CLIENT,
-        authProvider: 'email',
-        homeLocationId: locationId,
-        clientProfile: {
-          create: {
-            ageGroup: ageGroup || null,
+    // Create user + client profile. For parent registrations we also create
+    // the Family, the athlete User (with no login of their own — parent
+    // controls everything), and the AthleteProfile — all in one transaction
+    // so nothing ends up half-persisted on a failure.
+    const user = await prisma.$transaction(async (tx) => {
+      const authUser = await tx.user.create({
+        data: {
+          email: email.toLowerCase(),
+          passwordHash,
+          fullName,
+          phone,
+          role: Role.CLIENT,
+          authProvider: 'email',
+          homeLocationId: locationId,
+          clientProfile: {
+            create: {
+              ageGroup: ageGroup || null,
+            },
           },
         },
-      },
-      include: {
-        clientProfile: true,
-        homeLocation: { select: { id: true, name: true } },
-      },
+        include: {
+          clientProfile: true,
+          homeLocation: { select: { id: true, name: true } },
+        },
+      });
+
+      if (isParentRegistration) {
+        const family = await tx.family.create({
+          data: {
+            parentUserId: authUser.id,
+            primaryLocationId: locationId,
+          },
+        });
+
+        // Athlete User: placeholder email (parent's email + "+athlete-<short>"
+        // tag, which is RFC 5233 compliant and keeps our UNIQUE email index
+        // happy without inventing a fake domain). passwordHash is null so
+        // direct login is impossible — this account is managed by the parent.
+        const athleteEmailTag = randomBytes(4).toString('hex');
+        const parentLocalPart = email.toLowerCase().split('@')[0];
+        const parentDomain = email.toLowerCase().split('@')[1];
+        const athleteEmail = `${parentLocalPart}+athlete-${athleteEmailTag}@${parentDomain}`;
+
+        const athleteUser = await tx.user.create({
+          data: {
+            email: athleteEmail,
+            passwordHash: null,
+            fullName: `${athleteFirstName} ${athleteLastName}`.trim(),
+            role: Role.CLIENT,
+            authProvider: 'family',
+            homeLocationId: locationId,
+          },
+        });
+
+        await tx.athleteProfile.create({
+          data: {
+            userId: athleteUser.id,
+            familyId: family.id,
+            firstName: athleteFirstName,
+            lastName: athleteLastName,
+            dateOfBirth: athleteDateOfBirth ? new Date(athleteDateOfBirth) : null,
+            ageGroup: ageGroup || null,
+            relationToParent: 'CHILD',
+          },
+        });
+      } else if (parentOptOut === true && ageGroup === 'college') {
+        // Solo college athlete: create their AthleteProfile up front with
+        // relationToParent=SELF and a logged opt-out acknowledgment.
+        await tx.athleteProfile.create({
+          data: {
+            userId: authUser.id,
+            firstName: authUser.fullName.split(/\s+/)[0] || 'Athlete',
+            lastName: authUser.fullName.split(/\s+/).slice(1).join(' ') || 'Athlete',
+            ageGroup,
+            relationToParent: 'SELF',
+            parentOptOut: true,
+            parentOptOutAckedAt: new Date(),
+          },
+        });
+      }
+
+      return authUser;
     });
 
     // Send welcome email (non-blocking)
