@@ -107,7 +107,7 @@ export default function NotificationBell() {
             {unreadCount > 0 && (
               <button
                 onClick={handleMarkAllRead}
-                className="text-xs text-accent hover:underline"
+                className="text-xs text-accent-text hover:underline"
               >
                 Mark all read
               </button>

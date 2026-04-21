@@ -134,7 +134,7 @@ export default function ClientGoalsPage() {
                     onClick={() => setType('SHORT_TERM')}
                     className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${
                       type === 'SHORT_TERM'
-                        ? 'border-primary bg-primary/10 text-primary'
+                        ? 'border-primary bg-primary/10 text-primary-text'
                         : 'border-border text-muted hover:text-foreground'
                     }`}
                   >
@@ -145,7 +145,7 @@ export default function ClientGoalsPage() {
                     onClick={() => setType('LONG_TERM')}
                     className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${
                       type === 'LONG_TERM'
-                        ? 'border-primary bg-primary/10 text-primary'
+                        ? 'border-primary bg-primary/10 text-primary-text'
                         : 'border-border text-muted hover:text-foreground'
                     }`}
                   >
@@ -240,7 +240,7 @@ export default function ClientGoalsPage() {
                   )}
                 </div>
                 <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                  goal.status === 'ACTIVE' ? 'bg-primary/10 text-primary' :
+                  goal.status === 'ACTIVE' ? 'bg-primary/10 text-primary-text' :
                   goal.status === 'COMPLETED' ? 'bg-green-500/10 text-green-600' :
                   'bg-gray-500/10 text-gray-500'
                 }`}>
@@ -268,7 +268,7 @@ export default function ClientGoalsPage() {
                         onClick={() => handleUpdateProgress(goal.id, p)}
                         className={`text-xs px-2 py-1 rounded border transition-colors ${
                           goal.progress >= p
-                            ? 'border-primary bg-primary/10 text-primary'
+                            ? 'border-primary bg-primary/10 text-primary-text'
                             : 'border-border text-muted hover:text-foreground'
                         }`}
                       >

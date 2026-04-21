@@ -13,7 +13,7 @@ const SESSION_TYPE_LABELS: Record<string, string> = {
 };
 
 const SESSION_TYPE_COLORS: Record<string, string> = {
-  COLLEGE_PITCHING: 'bg-primary/20 border-primary text-accent',
+  COLLEGE_PITCHING: 'bg-primary/20 border-primary text-accent-text',
   MS_HS_PITCHING: 'bg-blue-500/20 border-blue-500 text-blue-400',
   YOUTH_PITCHING: 'bg-amber-500/20 border-amber-500 text-amber-400',
   PRIVATE_LESSON: 'bg-purple-500/20 border-purple-500 text-purple-400',
@@ -164,7 +164,7 @@ export default function AdminSchedulePage() {
           onClick={() => setActiveTab('calendar')}
           className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'calendar'
-              ? 'border-accent text-accent'
+              ? 'border-accent text-accent-text'
               : 'border-transparent text-muted hover:text-foreground'
           }`}
         >
@@ -174,7 +174,7 @@ export default function AdminSchedulePage() {
           onClick={() => setActiveTab('templates')}
           className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'templates'
-              ? 'border-accent text-accent'
+              ? 'border-accent text-accent-text'
               : 'border-transparent text-muted hover:text-foreground'
           }`}
         >
@@ -251,7 +251,7 @@ export default function AdminSchedulePage() {
                 <p className="text-xs text-muted uppercase">{dayName}</p>
                 <p
                   className={`text-lg font-bold mt-0.5 ${
-                    isToday ? 'text-accent' : 'text-foreground'
+                    isToday ? 'text-accent-text' : 'text-foreground'
                   }`}
                 >
                   {dayNum}
@@ -524,7 +524,7 @@ function ScheduleTemplatesView({
       {message && (
         <div className={`mb-4 p-3 rounded-lg text-sm ${
           message.type === 'success'
-            ? 'bg-primary/10 border border-primary/20 text-accent'
+            ? 'bg-primary/10 border border-primary/20 text-accent-text'
             : 'bg-danger/10 border border-danger/20 text-danger'
         }`}>
           {message.text}
@@ -1116,7 +1116,7 @@ function CreateSessionModal({
                   ))}
                 </div>
                 {recurringDays.length > 0 && (
-                  <p className="text-xs text-accent mt-1.5">
+                  <p className="text-xs text-accent-text mt-1.5">
                     Every {recurringDays.map((d) => DAY_NAMES[d]).join(', ')}
                   </p>
                 )}
@@ -1150,7 +1150,7 @@ function CreateSessionModal({
           {/* Summary preview */}
           {isRecurring && estimatedCount > 0 && (
             <div className="bg-primary/10 border border-primary/20 rounded-lg p-3">
-              <p className="text-sm text-accent font-medium">
+              <p className="text-sm text-accent-text font-medium">
                 This will create {estimatedCount} session{estimatedCount !== 1 ? 's' : ''}
               </p>
               <p className="text-xs text-muted mt-0.5">
@@ -1392,7 +1392,7 @@ function RosterModal({ sessionId, onClose }: { sessionId: string; onClose: () =>
                       </div>
                     )}
                     {violationForm.clientId && (
-                      <p className="text-xs text-accent mt-0.5">Selected: {violationForm.clientName}</p>
+                      <p className="text-xs text-accent-text mt-0.5">Selected: {violationForm.clientName}</p>
                     )}
                   </div>
                   <div>
@@ -1456,7 +1456,7 @@ function RosterModal({ sessionId, onClose }: { sessionId: string; onClose: () =>
                       <div className="flex items-center gap-2">
                         <span className={`text-xs font-medium ${
                           v.status === 'PENDING' ? 'text-amber-400' :
-                          v.status === 'PAID' ? 'text-accent' : 'text-muted'
+                          v.status === 'PAID' ? 'text-accent-text' : 'text-muted'
                         }`}>
                           {v.status}
                         </span>
@@ -1707,7 +1707,7 @@ function SeriesDetailModal({
         {message && (
           <div className={`mx-6 mt-4 p-3 rounded-lg text-sm ${
             message.type === 'success'
-              ? 'bg-primary/10 border border-primary/20 text-accent'
+              ? 'bg-primary/10 border border-primary/20 text-accent-text'
               : 'bg-danger/10 border border-danger/20 text-danger'
           }`}>
             {message.text}

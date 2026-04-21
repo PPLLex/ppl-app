@@ -140,7 +140,7 @@ export default function StaffNotesPage() {
             </div>
           )}
           {successMsg && (
-            <div className="mb-4 p-3 rounded-lg bg-primary/10 border border-primary/20 text-primary text-sm">
+            <div className="mb-4 p-3 rounded-lg bg-primary/10 border border-primary/20 text-primary-text text-sm">
               {successMsg}
             </div>
           )}
@@ -264,7 +264,7 @@ export default function StaffNotesPage() {
                       {formatDate(note.sessionDate)}
                     </span>
                   </div>
-                  <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary mb-2">
+                  <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary-text mb-2">
                     {formatCategory(note.trainingCategory)}
                   </span>
                   <p className="text-sm text-muted leading-relaxed">

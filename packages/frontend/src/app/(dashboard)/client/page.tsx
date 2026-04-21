@@ -126,7 +126,7 @@ export default function ClientDashboard() {
             <p className="text-sm text-muted">Membership</p>
             {mem ? (
               <>
-                <p className="text-lg font-bold text-accent mt-1">{mem.plan.name}</p>
+                <p className="text-lg font-bold text-accent-text mt-1">{mem.plan.name}</p>
                 <span
                   className={`ppl-badge text-xs mt-2 ${
                     mem.status === 'ACTIVE'
@@ -142,7 +142,7 @@ export default function ClientDashboard() {
             ) : (
               <>
                 <p className="text-lg font-bold text-muted mt-1">No active plan</p>
-                <span className="text-xs text-accent">Set up membership →</span>
+                <span className="text-xs text-accent-text">Set up membership →</span>
               </>
             )}
           </Link>
@@ -153,7 +153,7 @@ export default function ClientDashboard() {
             {credits ? (
               <>
                 <div className="flex items-baseline gap-1 mt-1">
-                  <span className="text-3xl font-bold text-accent">{credits.remaining}</span>
+                  <span className="text-3xl font-bold text-accent-text">{credits.remaining}</span>
                   <span className="text-sm text-muted">/ {credits.total}</span>
                 </div>
                 <div className="h-2 bg-surface rounded-full overflow-hidden mt-2">
@@ -165,7 +165,7 @@ export default function ClientDashboard() {
               </>
             ) : mem?.plan.sessionsPerWeek === null ? (
               <>
-                <p className="text-3xl font-bold text-accent mt-1">∞</p>
+                <p className="text-3xl font-bold text-accent-text mt-1">∞</p>
                 <p className="text-xs text-muted">Unlimited sessions</p>
               </>
             ) : (
@@ -205,7 +205,7 @@ export default function ClientDashboard() {
       <div className="ppl-card mb-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-foreground">Upcoming Sessions</h3>
-          <Link href="/client/book" className="text-sm text-accent hover:underline">
+          <Link href="/client/book" className="text-sm text-accent-text hover:underline">
             Book more →
           </Link>
         </div>
@@ -240,7 +240,7 @@ export default function ClientDashboard() {
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-medium text-foreground">{booking.session.title}</p>
                         {isToday && (
-                          <span className="text-xs ppl-badge bg-primary/20 text-accent border border-primary/30">
+                          <span className="text-xs ppl-badge bg-primary/20 text-accent-text border border-primary/30">
                             TODAY
                           </span>
                         )}
@@ -263,7 +263,7 @@ export default function ClientDashboard() {
             {upcomingBookings.length > 5 && (
               <Link
                 href="/client/history"
-                className="block text-center text-sm text-accent hover:underline py-2"
+                className="block text-center text-sm text-accent-text hover:underline py-2"
               >
                 View all {upcomingBookings.length} upcoming sessions
               </Link>

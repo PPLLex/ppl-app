@@ -236,7 +236,7 @@ export default function ClientBookPage() {
                 </span>
               </div>
             ) : (
-              <span className="text-xs font-medium text-accent px-2 py-0.5 rounded-full bg-accent/10">
+              <span className="text-xs font-medium text-accent-text px-2 py-0.5 rounded-full bg-accent/10">
                 Unlimited
               </span>
             )}
@@ -282,7 +282,7 @@ export default function ClientBookPage() {
         <div
           className={`mb-4 p-3 rounded-lg text-sm ${
             message.type === 'success'
-              ? 'bg-primary/10 border border-primary/20 text-accent'
+              ? 'bg-primary/10 border border-primary/20 text-accent-text'
               : 'bg-danger/10 border border-danger/20 text-danger'
           }`}
         >
@@ -376,7 +376,7 @@ export default function ClientBookPage() {
               </p>
               <p className="text-xl font-bold mt-0.5">{day.getDate()}</p>
               {sessionCount > 0 && !isPast && (
-                <p className={`text-xs mt-1 ${isSelected ? 'text-white/80' : 'text-accent'}`}>
+                <p className={`text-xs mt-1 ${isSelected ? 'text-white/80' : 'text-accent-text'}`}>
                   {sessionCount} session{sessionCount !== 1 ? 's' : ''}
                 </p>
               )}

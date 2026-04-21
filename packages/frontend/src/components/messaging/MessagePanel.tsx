@@ -136,7 +136,7 @@ export default function MessagePanel({ conversationFilter }: MessagePanelProps) 
             <h3 className="font-bold text-foreground text-sm">Messages</h3>
             <button
               onClick={() => setShowNewConv(!showNewConv)}
-              className="w-7 h-7 rounded-md bg-primary/20 text-accent flex items-center justify-center text-lg hover:bg-primary/30 transition"
+              className="w-7 h-7 rounded-md bg-primary/20 text-accent-text flex items-center justify-center text-lg hover:bg-primary/30 transition"
             >
               +
             </button>
@@ -229,7 +229,7 @@ export default function MessagePanel({ conversationFilter }: MessagePanelProps) 
               <p className="text-sm text-muted">No conversations yet</p>
               <button
                 onClick={() => setShowNewConv(true)}
-                className="text-sm text-accent hover:underline mt-1"
+                className="text-sm text-accent-text hover:underline mt-1"
               >
                 Start a conversation
               </button>
@@ -276,7 +276,7 @@ export default function MessagePanel({ conversationFilter }: MessagePanelProps) 
                       }`}
                     >
                       {!isMe && (
-                        <p className="text-xs font-semibold text-accent mb-0.5">
+                        <p className="text-xs font-semibold text-accent-text mb-0.5">
                           {msg.senderName}
                         </p>
                       )}

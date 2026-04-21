@@ -73,7 +73,7 @@ export default function AdminLocationsPage() {
         <div
           className={`mb-4 p-3 rounded-lg text-sm ${
             message.type === 'success'
-              ? 'bg-primary/10 border border-primary/20 text-accent'
+              ? 'bg-primary/10 border border-primary/20 text-accent-text'
               : 'bg-danger/10 border border-danger/20 text-danger'
           }`}
         >
@@ -121,7 +121,7 @@ export default function AdminLocationsPage() {
                   <h3 className="text-sm font-semibold text-muted uppercase tracking-wider">Rooms</h3>
                   <button
                     onClick={() => setShowRoomModal(loc.id)}
-                    className="text-xs text-accent hover:underline"
+                    className="text-xs text-accent-text hover:underline"
                   >
                     + Add Room
                   </button>

@@ -195,7 +195,7 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
                 onClick={handleNavClick}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                   isActive
-                    ? 'bg-primary/15 text-accent'
+                    ? 'bg-primary/15 text-accent-text'
                     : 'text-muted hover:text-foreground hover:bg-surface-hover'
                 }`}
               >
@@ -212,7 +212,7 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
             <p className="text-sm font-medium text-foreground truncate">{user.fullName}</p>
             <p className="text-xs text-muted truncate">{user.email}</p>
             {user.homeLocation && (
-              <p className="text-xs text-primary mt-0.5">{user.homeLocation.name}</p>
+              <p className="text-xs text-primary-text mt-0.5">{user.homeLocation.name}</p>
             )}
           </div>
           <button

@@ -36,22 +36,119 @@ const ThemeContext = createContext<ThemeContextType>({
   refreshBranding: async () => {},
 });
 
-/** Derive rgba values from hex for use in opacity utilities like bg-primary/15 */
-function hexToRgb(hex: string): string {
+/* ============================================================
+   COLOR CONTRAST UTILITIES
+   ============================================================
+   These functions ensure text is always readable regardless
+   of which primary/accent colors the admin picks.
+   ============================================================ */
+
+/** Convert a hex color to linearized sRGB channel values */
+function hexToLinear(hex: string): [number, number, number] {
   const h = hex.replace('#', '');
-  const r = parseInt(h.substring(0, 2), 16);
-  const g = parseInt(h.substring(2, 4), 16);
-  const b = parseInt(h.substring(4, 6), 16);
+  const channels = [
+    parseInt(h.substring(0, 2), 16) / 255,
+    parseInt(h.substring(2, 4), 16) / 255,
+    parseInt(h.substring(4, 6), 16) / 255,
+  ] as [number, number, number];
+  return channels.map((c) =>
+    c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+  ) as [number, number, number];
+}
+
+/** WCAG relative luminance (0 = black, 1 = white) */
+function relativeLuminance(hex: string): number {
+  const [r, g, b] = hexToLinear(hex);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** WCAG contrast ratio between two luminance values */
+function contrastRatio(l1: number, l2: number): number {
+  const lighter = Math.max(l1, l2);
+  const darker = Math.min(l1, l2);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+/** Parse hex to RGB components */
+function hexToRgbComponents(hex: string): [number, number, number] {
+  const h = hex.replace('#', '');
+  return [
+    parseInt(h.substring(0, 2), 16),
+    parseInt(h.substring(2, 4), 16),
+    parseInt(h.substring(4, 6), 16),
+  ];
+}
+
+/** Format RGB components back to hex */
+function rgbToHex(r: number, g: number, b: number): string {
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+}
+
+/**
+ * Lighten a color until it meets the minimum contrast ratio against
+ * the app's dark background. Preserves the hue by scaling toward white.
+ */
+function ensureReadableOnDark(hex: string, bgHex: string = '#0A0A0A', minRatio: number = 4.5): string {
+  const bgLum = relativeLuminance(bgHex);
+  const colorLum = relativeLuminance(hex);
+
+  if (contrastRatio(colorLum, bgLum) >= minRatio) return hex;
+
+  // Lighten by mixing toward white in small steps
+  let [r, g, b] = hexToRgbComponents(hex);
+  for (let t = 0.05; t <= 1.0; t += 0.05) {
+    const nr = Math.round(r + (255 - r) * t);
+    const ng = Math.round(g + (255 - g) * t);
+    const nb = Math.round(b + (255 - b) * t);
+    const candidate = rgbToHex(nr, ng, nb);
+    if (contrastRatio(relativeLuminance(candidate), bgLum) >= minRatio) {
+      return candidate;
+    }
+  }
+
+  return '#FFFFFF';
+}
+
+/** Choose white or dark text for maximum contrast on a given background */
+function textOnBackground(bgHex: string): string {
+  const lum = relativeLuminance(bgHex);
+  // Use a lower threshold (0.35) so we prefer white text on medium colors
+  return lum > 0.35 ? '#111111' : '#FFFFFF';
+}
+
+/** Derive space-separated RGB string for Tailwind opacity utilities */
+function hexToRgb(hex: string): string {
+  const [r, g, b] = hexToRgbComponents(hex);
   return `${r} ${g} ${b}`;
 }
 
+/* ============================================================
+   DOM APPLICATION
+   ============================================================ */
+
 function applyColorsToDOM(primary: string, accent: string) {
   const root = document.documentElement;
+
+  // Raw brand colors — used for backgrounds, gradients, borders
   root.style.setProperty('--color-primary', primary);
   root.style.setProperty('--color-accent', accent);
   root.style.setProperty('--color-primary-rgb', hexToRgb(primary));
   root.style.setProperty('--color-accent-rgb', hexToRgb(accent));
+
+  // Contrast-safe text colors — used when primary/accent appear as TEXT on the dark bg
+  const primaryText = ensureReadableOnDark(primary);
+  const accentText = ensureReadableOnDark(accent);
+  root.style.setProperty('--color-primary-text', primaryText);
+  root.style.setProperty('--color-accent-text', accentText);
+
+  // "On" colors — text to place ON a solid primary/accent background
+  root.style.setProperty('--color-on-primary', textOnBackground(primary));
+  root.style.setProperty('--color-on-accent', textOnBackground(accent));
 }
+
+/* ============================================================
+   PROVIDER
+   ============================================================ */
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [branding, setBranding] = useState<BrandingData>(defaultBranding);
@@ -74,7 +171,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       }
     } catch (err) {
       console.error('Failed to load branding:', err);
-      // Apply defaults
       applyColorsToDOM(defaultBranding.primaryColor, defaultBranding.accentColor);
     } finally {
       setIsLoaded(true);
@@ -82,7 +178,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // Apply defaults immediately so there's no flash
     applyColorsToDOM(defaultBranding.primaryColor, defaultBranding.accentColor);
     refreshBranding();
   }, [refreshBranding]);

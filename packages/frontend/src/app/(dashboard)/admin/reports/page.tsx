@@ -38,7 +38,7 @@ export default function AdminReportsPage() {
               onClick={() => setPeriod(p.key)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                 period === p.key
-                  ? 'bg-primary/20 text-accent'
+                  ? 'bg-primary/20 text-accent-text'
                   : 'text-muted hover:text-foreground'
               }`}
             >
@@ -56,7 +56,7 @@ export default function AdminReportsPage() {
             onClick={() => setActiveTab(tab.key)}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
               activeTab === tab.key
-                ? 'bg-primary/20 text-accent'
+                ? 'bg-primary/20 text-accent-text'
                 : 'text-muted hover:text-foreground'
             }`}
           >
@@ -77,7 +77,7 @@ function StatCard({ label, value, sub, accent }: { label: string; value: string;
   return (
     <div className="ppl-card">
       <p className="text-xs text-muted font-medium">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${accent ? 'text-accent' : 'text-foreground'}`}>
+      <p className={`text-2xl font-bold mt-1 ${accent ? 'text-accent-text' : 'text-foreground'}`}>
         {value}
       </p>
       {sub && <p className="text-xs text-muted mt-0.5">{sub}</p>}
@@ -156,7 +156,7 @@ function RevenueReport({ period }: { period: Period }) {
                     <p className="text-sm font-medium text-foreground">{item.plan}</p>
                     <p className="text-xs text-muted">{item.members} member{item.members !== 1 ? 's' : ''}</p>
                   </div>
-                  <p className="text-sm font-bold text-accent">${item.revenue.toLocaleString()}/wk</p>
+                  <p className="text-sm font-bold text-accent-text">${item.revenue.toLocaleString()}/wk</p>
                 </div>
               ))}
             </div>

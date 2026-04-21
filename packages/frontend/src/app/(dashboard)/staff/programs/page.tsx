@@ -189,7 +189,7 @@ export default function StaffProgramsPage() {
               <p className="text-sm text-muted">
                 For {selectedProgram.athlete?.fullName}
                 <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
-                  selectedProgram.status === 'ACTIVE' ? 'bg-primary/10 text-primary' :
+                  selectedProgram.status === 'ACTIVE' ? 'bg-primary/10 text-primary-text' :
                   selectedProgram.status === 'DRAFT' ? 'bg-yellow-500/10 text-yellow-600' :
                   'bg-gray-500/10 text-gray-500'
                 }`}>{selectedProgram.status}</span>
@@ -252,7 +252,7 @@ export default function StaffProgramsPage() {
                         {ex.exercise?.name || ex.customName}
                       </span>
                       {ex.sets && <span className="text-xs text-muted">{ex.sets}Ã{ex.reps || '?'}</span>}
-                      {ex.intensity && <span className="text-xs text-primary">{ex.intensity}</span>}
+                      {ex.intensity && <span className="text-xs text-primary-text">{ex.intensity}</span>}
                     </div>
                   ))}
 
@@ -345,7 +345,7 @@ export default function StaffProgramsPage() {
         <div className="p-3 rounded-lg bg-danger/10 border border-danger/20 text-danger text-sm">{error}</div>
       )}
       {success && (
-        <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 text-primary text-sm">{success}</div>
+        <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 text-primary-text text-sm">{success}</div>
       )}
 
       {/* Create program form */}
@@ -432,7 +432,7 @@ export default function StaffProgramsPage() {
                       {p.description && <p className="text-sm text-muted mt-0.5 line-clamp-1">{p.description}</p>}
                     </div>
                     <span className={`text-xs px-2 py-1 rounded-full ${
-                      p.status === 'ACTIVE' ? 'bg-primary/10 text-primary' :
+                      p.status === 'ACTIVE' ? 'bg-primary/10 text-primary-text' :
                       p.status === 'DRAFT' ? 'bg-yellow-500/10 text-yellow-600' :
                       'bg-gray-500/10 text-gray-500'
                     }`}>{p.status}</span>

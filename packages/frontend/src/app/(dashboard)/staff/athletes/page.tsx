@@ -166,7 +166,7 @@ export default function StaffAthletesPage() {
               <div className="bg-background rounded-lg p-3 text-center">
                 {selectedClient.membership ? (
                   <>
-                    <p className="text-lg font-bold text-accent">
+                    <p className="text-lg font-bold text-accent-text">
                       ${(selectedClient.membership.plan.priceCents / 100).toFixed(0)}
                     </p>
                     <p className="text-xs text-muted">/week</p>

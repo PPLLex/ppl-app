@@ -13,7 +13,7 @@ const SESSION_TYPE_LABELS: Record<string, string> = {
 };
 
 const SESSION_TYPE_COLORS: Record<string, string> = {
-  COLLEGE_PITCHING: 'bg-primary/20 border-primary text-accent',
+  COLLEGE_PITCHING: 'bg-primary/20 border-primary text-accent-text',
   MS_HS_PITCHING: 'bg-blue-500/20 border-blue-500 text-blue-400',
   YOUTH_PITCHING: 'bg-amber-500/20 border-amber-500 text-amber-400',
   PRIVATE_LESSON: 'bg-purple-500/20 border-purple-500 text-purple-400',
@@ -149,7 +149,7 @@ export default function StaffSchedulePage() {
             const today = isToday(day);
             return (
               <div key={day.toISOString()} className="min-h-[400px]">
-                <div className={`text-center mb-2 ${today ? 'text-accent' : 'text-muted'}`}>
+                <div className={`text-center mb-2 ${today ? 'text-accent-text' : 'text-muted'}`}>
                   <div className="text-xs font-semibold uppercase">
                     {day.toLocaleDateString('en-US', { weekday: 'short' })}
                   </div>
@@ -307,7 +307,7 @@ function AttendanceModal({
             </div>
 
             {message && (
-              <div className="mb-3 p-2 bg-primary/10 border border-primary/20 rounded-lg text-sm text-accent text-center">
+              <div className="mb-3 p-2 bg-primary/10 border border-primary/20 rounded-lg text-sm text-accent-text text-center">
                 {message}
               </div>
             )}
@@ -585,7 +585,7 @@ function CreateSessionModal({
                     <button key={day} type="button" onClick={() => toggleDay(idx)} className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${recurringDays.includes(idx) ? 'bg-primary text-white ring-1 ring-accent/30' : 'bg-background text-muted hover:text-foreground'}`}>{day}</button>
                   ))}
                 </div>
-                {recurringDays.length > 0 && <p className="text-xs text-accent mt-1">Every {recurringDays.map((d) => DAY_NAMES[d]).join(', ')}</p>}
+                {recurringDays.length > 0 && <p className="text-xs text-accent-text mt-1">Every {recurringDays.map((d) => DAY_NAMES[d]).join(', ')}</p>}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -602,7 +602,7 @@ function CreateSessionModal({
 
           {isRecurring && estimatedCount > 0 && (
             <div className="bg-primary/10 border border-primary/20 rounded-lg p-2">
-              <p className="text-sm text-accent font-medium">Will create {estimatedCount} session{estimatedCount !== 1 ? 's' : ''}</p>
+              <p className="text-sm text-accent-text font-medium">Will create {estimatedCount} session{estimatedCount !== 1 ? 's' : ''}</p>
             </div>
           )}
 

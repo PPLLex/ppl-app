@@ -88,7 +88,7 @@ export default function StaffDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <div className="ppl-card">
             <p className="text-sm text-muted">Sessions Today</p>
-            <p className="text-3xl font-bold text-accent mt-1">{todaySessions.length}</p>
+            <p className="text-3xl font-bold text-accent-text mt-1">{todaySessions.length}</p>
             {completedToday.length > 0 && (
               <p className="text-xs text-muted mt-0.5">{completedToday.length} completed</p>
             )}
@@ -100,7 +100,7 @@ export default function StaffDashboard() {
           </div>
           <Link href="/staff/messages" className="ppl-card hover:border-primary/50 transition-colors">
             <p className="text-sm text-muted">Unread Messages</p>
-            <p className={`text-3xl font-bold mt-1 ${unreadCount > 0 ? 'text-accent' : 'text-foreground'}`}>
+            <p className={`text-3xl font-bold mt-1 ${unreadCount > 0 ? 'text-accent-text' : 'text-foreground'}`}>
               {unreadCount}
             </p>
           </Link>
@@ -112,7 +112,7 @@ export default function StaffDashboard() {
         <div className="ppl-card">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-foreground">Today&apos;s Sessions</h3>
-            <Link href="/staff/schedule" className="text-xs text-accent hover:underline">
+            <Link href="/staff/schedule" className="text-xs text-accent-text hover:underline">
               Full Schedule →
             </Link>
           </div>
@@ -140,7 +140,7 @@ export default function StaffDashboard() {
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-medium text-foreground">{s.title}</p>
                         {isNow && (
-                          <span className="text-xs ppl-badge bg-primary/20 text-accent border border-primary/30">
+                          <span className="text-xs ppl-badge bg-primary/20 text-accent-text border border-primary/30">
                             NOW
                           </span>
                         )}
@@ -155,7 +155,7 @@ export default function StaffDashboard() {
                     </div>
                     <div className="text-right">
                       <p className={`text-sm font-bold ${
-                        s.currentEnrolled >= s.maxCapacity ? 'text-red-400' : 'text-accent'
+                        s.currentEnrolled >= s.maxCapacity ? 'text-red-400' : 'text-accent-text'
                       }`}>
                         {s.currentEnrolled}/{s.maxCapacity}
                       </p>

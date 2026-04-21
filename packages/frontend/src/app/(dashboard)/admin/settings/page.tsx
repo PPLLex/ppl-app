@@ -31,7 +31,7 @@ export default function AdminSettingsPage() {
             onClick={() => setActiveTab(tab.key)}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
               activeTab === tab.key
-                ? 'bg-primary/20 text-accent'
+                ? 'bg-primary/20 text-accent-text'
                 : 'text-muted hover:text-foreground'
             }`}
           >
@@ -336,7 +336,7 @@ function GeneralSettings() {
             {brandSaving ? 'Saving...' : brandMsg || 'Save Branding'}
           </button>
           {brandMsg && !brandSaving && (
-            <span className={`text-xs ${brandMsg.includes('Error') || brandMsg.includes('failed') ? 'text-red-400' : 'text-accent'}`}>
+            <span className={`text-xs ${brandMsg.includes('Error') || brandMsg.includes('failed') ? 'text-red-400' : 'text-accent-text'}`}>
               {brandMsg}
             </span>
           )}
@@ -406,7 +406,7 @@ function GeneralSettings() {
             {defaultsSaving ? 'Saving...' : defaultsMsg || 'Save Defaults'}
           </button>
           {defaultsMsg && !defaultsSaving && (
-            <span className={`text-xs ${defaultsMsg.includes('Error') ? 'text-red-400' : 'text-accent'}`}>
+            <span className={`text-xs ${defaultsMsg.includes('Error') ? 'text-red-400' : 'text-accent-text'}`}>
               {defaultsMsg}
             </span>
           )}
@@ -426,7 +426,7 @@ function GeneralSettings() {
             <h2 className="text-lg font-bold text-foreground">Locations</h2>
             <p className="text-sm text-muted">Quick view of your facilities</p>
           </div>
-          <a href="/admin/locations" className="text-sm text-accent hover:underline">
+          <a href="/admin/locations" className="text-sm text-accent-text hover:underline">
             Manage Locations &rarr;
           </a>
         </div>
@@ -561,7 +561,7 @@ function SessionTypeConfigPanel({ locations }: { locations: Location[] }) {
                   onClick={() => updateConfig(idx, 'isActive', !cfg.isActive)}
                   className={`text-xs px-2 py-1 rounded-md font-medium ${
                     cfg.isActive
-                      ? 'bg-primary/20 text-accent'
+                      ? 'bg-primary/20 text-accent-text'
                       : 'bg-red-500/10 text-red-400'
                   }`}
                 >
@@ -627,7 +627,7 @@ function SessionTypeConfigPanel({ locations }: { locations: Location[] }) {
         </button>
       )}
       {saveMsg && !hasChanges && (
-        <p className="text-xs text-accent mt-2">{saveMsg}</p>
+        <p className="text-xs text-accent-text mt-2">{saveMsg}</p>
       )}
     </div>
   );
@@ -686,7 +686,7 @@ function PlanSettings() {
         <div
           className={`mb-4 p-3 rounded-lg text-sm ${
             message.type === 'success'
-              ? 'bg-primary/10 border border-primary/20 text-accent'
+              ? 'bg-primary/10 border border-primary/20 text-accent-text'
               : 'bg-danger/10 border border-danger/20 text-danger'
           }`}
         >
@@ -726,7 +726,7 @@ function PlanSettings() {
                 </div>
                 <div className="flex items-center gap-4 ml-4">
                   <div className="text-right">
-                    <p className="text-lg font-bold text-accent">
+                    <p className="text-lg font-bold text-accent-text">
                       ${(plan.priceCents / 100).toFixed(0)}
                     </p>
                     <p className="text-xs text-muted">/{plan.billingCycle}</p>
@@ -1082,7 +1082,7 @@ function StaffSettings() {
         <div
           className={`mb-4 p-3 rounded-lg text-sm ${
             message.type === 'success'
-              ? 'bg-primary/10 border border-primary/20 text-accent'
+              ? 'bg-primary/10 border border-primary/20 text-accent-text'
               : 'bg-danger/10 border border-danger/20 text-danger'
           }`}
         >
@@ -1163,7 +1163,7 @@ function StaffSettings() {
                                       ? role === 'OWNER'
                                         ? 'bg-primary text-white'
                                         : role === 'COORDINATOR'
-                                        ? 'bg-accent/20 text-accent ring-1 ring-accent/30'
+                                        ? 'bg-accent/20 text-accent-text ring-1 ring-accent/30'
                                         : 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/30'
                                       : 'bg-background text-muted hover:bg-surface/50'
                                   }`}
@@ -1385,7 +1385,7 @@ function InviteStaffModal({
                                 ? role === 'OWNER'
                                   ? 'bg-primary text-white'
                                   : role === 'COORDINATOR'
-                                  ? 'bg-accent/20 text-accent ring-1 ring-accent/30'
+                                  ? 'bg-accent/20 text-accent-text ring-1 ring-accent/30'
                                   : 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/30'
                                 : 'bg-background text-muted hover:bg-surface/50'
                             }`}
@@ -1513,7 +1513,7 @@ function IntegrationSettings() {
               <h3 className="font-semibold text-foreground">{integration.name}</h3>
               <p className="text-sm text-muted">{integration.description}</p>
               {h.message && (
-                <p className={`text-xs mt-0.5 ${h.status === 'connected' ? 'text-accent' : 'text-red-400'}`}>
+                <p className={`text-xs mt-0.5 ${h.status === 'connected' ? 'text-accent-text' : 'text-red-400'}`}>
                   {h.message}
                 </p>
               )}
@@ -1597,7 +1597,7 @@ function KioskSetupPanel({ locations }: { locations: Location[] }) {
     <div className="ppl-card">
       <div className="flex items-center justify-between mb-1">
         <h2 className="text-lg font-bold text-foreground">Self-Service Kiosk</h2>
-        <span className="ppl-badge bg-primary/10 text-accent border border-primary/20 text-xs">New</span>
+        <span className="ppl-badge bg-primary/10 text-accent-text border border-primary/20 text-xs">New</span>
       </div>
       <p className="text-sm text-muted mb-4">
         Set up a tablet at your facility for athletes to check themselves in. Each location gets its own PIN.
@@ -1613,7 +1613,7 @@ function KioskSetupPanel({ locations }: { locations: Location[] }) {
                   href={`${appDomain}/kiosk`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs text-accent hover:underline"
+                  className="text-xs text-accent-text hover:underline"
                 >
                   Open Kiosk &rarr;
                 </a>
@@ -1653,7 +1653,7 @@ function KioskSetupPanel({ locations }: { locations: Location[] }) {
             </div>
             {pins[loc.id] && (
               <p className="text-xs text-muted mt-2">
-                Kiosk URL: <code className="text-foreground bg-surface px-1 rounded">{appDomain}/kiosk</code> — enter PIN <code className="text-accent bg-surface px-1 rounded">{pins[loc.id]}</code>
+                Kiosk URL: <code className="text-foreground bg-surface px-1 rounded">{appDomain}/kiosk</code> — enter PIN <code className="text-accent-text bg-surface px-1 rounded">{pins[loc.id]}</code>
               </p>
             )}
           </div>
@@ -1663,7 +1663,7 @@ function KioskSetupPanel({ locations }: { locations: Location[] }) {
       <div className="mt-4 p-3 bg-surface rounded-lg">
         <p className="text-xs text-muted">
           <strong className="text-foreground">Setup guide:</strong> Open{' '}
-          <code className="text-accent">{appDomain}/kiosk</code> on a tablet browser, enter the
+          <code className="text-accent-text">{appDomain}/kiosk</code> on a tablet browser, enter the
           location PIN, then use the browser&apos;s fullscreen mode (or &quot;Add to Home Screen&quot; on
           iPad) for the best experience. The kiosk auto-refreshes and doesn&apos;t require login.
         </p>

@@ -107,7 +107,7 @@ export default function OutsideCoachDashboardPage() {
             >
               <div className="flex items-center gap-3">
                 <div className="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                  <span className="text-accent font-bold text-lg">
+                  <span className="text-accent-text font-bold text-lg">
                     {a.athlete.firstName.charAt(0)}
                   </span>
                 </div>
@@ -160,7 +160,7 @@ export default function OutsideCoachDashboardPage() {
                     </h2>
                     <div className="flex items-center gap-3 mt-1">
                       {report.athlete.ageGroup && (
-                        <span className="text-xs bg-primary/10 text-accent px-2 py-0.5 rounded">
+                        <span className="text-xs bg-primary/10 text-accent-text px-2 py-0.5 rounded">
                           {report.athlete.ageGroup}
                         </span>
                       )}

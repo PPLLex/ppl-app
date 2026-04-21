@@ -45,7 +45,7 @@ export default function ClientProgramsPage() {
 
   const statusColors: Record<string, string> = {
     DRAFT: 'bg-gray-500/10 text-gray-500',
-    ACTIVE: 'bg-primary/10 text-primary',
+    ACTIVE: 'bg-primary/10 text-primary-text',
     COMPLETED: 'bg-green-500/10 text-green-600',
     ARCHIVED: 'bg-gray-400/10 text-gray-400',
   };
@@ -135,7 +135,7 @@ export default function ClientProgramsPage() {
                                     </span>
                                   )}
                                   {ex.intensity && (
-                                    <span className="text-xs text-primary font-medium">
+                                    <span className="text-xs text-primary-text font-medium">
                                       {ex.intensity}
                                     </span>
                                   )}

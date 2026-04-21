@@ -132,7 +132,7 @@ export default function StaffCheckinPage() {
         <div
           className={`mb-4 p-3 rounded-lg text-sm transition-all ${
             message.type === 'success'
-              ? 'bg-primary/10 border border-primary/20 text-accent'
+              ? 'bg-primary/10 border border-primary/20 text-accent-text'
               : 'bg-danger/10 border border-danger/20 text-danger'
           }`}
         >
@@ -188,7 +188,7 @@ export default function StaffCheckinPage() {
                         {formatTime(session.startTime)}
                       </span>
                       {session.isActive && !isSelected && (
-                        <span className="text-xs font-bold text-accent animate-pulse">LIVE</span>
+                        <span className="text-xs font-bold text-accent-text animate-pulse">LIVE</span>
                       )}
                       {session.isActive && isSelected && (
                         <span className="text-xs font-bold text-white/80 animate-pulse">LIVE</span>
@@ -245,7 +245,7 @@ export default function StaffCheckinPage() {
                 {/* Stats bar */}
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   <div className="bg-primary/10 border border-primary/20 rounded-xl p-3 text-center">
-                    <p className="text-2xl font-bold text-accent">{activeSession.stats.checkedIn}</p>
+                    <p className="text-2xl font-bold text-accent-text">{activeSession.stats.checkedIn}</p>
                     <p className="text-xs text-muted">Checked In</p>
                   </div>
                   <div className="bg-surface border border-border rounded-xl p-3 text-center">
@@ -350,7 +350,7 @@ function RosterRow({
           }`}
         >
           {isCheckedIn ? (
-            <svg className="w-5 h-5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <svg className="w-5 h-5 text-accent-text" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           ) : isNoShow ? (
@@ -395,7 +395,7 @@ function RosterRow({
           </>
         )}
         {isCheckedIn && (
-          <span className="text-xs font-medium text-accent px-2 py-1 rounded-full bg-accent/10">
+          <span className="text-xs font-medium text-accent-text px-2 py-1 rounded-full bg-accent/10">
             Checked In
           </span>
         )}

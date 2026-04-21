@@ -248,7 +248,7 @@ function JoinFlow() {
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="w-full max-w-md text-center">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary/20 mb-6">
-            <svg className="w-10 h-10 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <svg className="w-10 h-10 text-accent-text" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           </div>
@@ -307,7 +307,7 @@ function JoinFlow() {
             <span
               key={label}
               className={`text-xs font-medium transition-colors ${
-                i + 1 <= step ? 'text-accent' : 'text-muted'
+                i + 1 <= step ? 'text-accent-text' : 'text-muted'
               }`}
             >
               {label}
@@ -545,7 +545,7 @@ function JoinFlow() {
                           )}
                         </div>
                         <div className="text-right ml-4 shrink-0">
-                          <span className="text-2xl font-bold text-accent">
+                          <span className="text-2xl font-bold text-accent-text">
                             ${(plan.priceCents / 100).toFixed(0)}
                           </span>
                           <span className="block text-xs text-muted">
@@ -554,7 +554,7 @@ function JoinFlow() {
                         </div>
                       </div>
                       {selected && (
-                        <div className="mt-2 flex items-center gap-1.5 text-accent text-xs font-medium">
+                        <div className="mt-2 flex items-center gap-1.5 text-accent-text text-xs font-medium">
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                           </svg>
@@ -615,7 +615,7 @@ function JoinFlow() {
             <div className="mt-6 text-center">
               <p className="text-sm text-muted">
                 Already have an account?{' '}
-                <Link href="/login" className="text-accent hover:text-primary transition-colors">
+                <Link href="/login" className="text-accent-text hover:text-primary-text transition-colors">
                   Sign in
                 </Link>
               </p>

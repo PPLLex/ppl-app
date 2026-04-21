@@ -88,7 +88,7 @@ export default function RevenueDashboardPage() {
           <h1 className="text-2xl font-bold text-foreground">Revenue Dashboard</h1>
           <p className="text-sm text-muted mt-0.5">Real-time revenue data from active memberships</p>
         </div>
-        <Link href="/admin" className="text-sm text-accent hover:underline">
+        <Link href="/admin" className="text-sm text-accent-text hover:underline">
           ← Back to Dashboard
         </Link>
       </div>
@@ -97,7 +97,7 @@ export default function RevenueDashboardPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="ppl-card">
           <p className="text-xs text-muted uppercase tracking-wide">Total Revenue</p>
-          <p className="text-2xl font-bold text-accent mt-1">{fmt(totals.totalWeeklyRevenueCents)}</p>
+          <p className="text-2xl font-bold text-accent-text mt-1">{fmt(totals.totalWeeklyRevenueCents)}</p>
           <p className="text-xs text-muted">/week ({fmt(totals.totalMonthlyRevenueCents)}/mo)</p>
         </div>
         <div className="ppl-card">
@@ -139,7 +139,7 @@ export default function RevenueDashboardPage() {
                 <tr key={loc.locationId} className="border-b border-border/50">
                   <td className="py-3 pr-4 font-medium text-foreground">{loc.locationName}</td>
                   <td className="py-3 pr-4 text-right text-foreground">{loc.activeMemberCount}</td>
-                  <td className="py-3 pr-4 text-right text-accent font-semibold">{fmt(loc.weeklyRevenueCents)}</td>
+                  <td className="py-3 pr-4 text-right text-accent-text font-semibold">{fmt(loc.weeklyRevenueCents)}</td>
                   <td className="py-3 pr-4 text-right text-foreground">{fmt(loc.monthlyRevenueCents)}</td>
                   <td className="py-3 pr-4 text-right">
                     <span className={loc.pastDueCount > 0 ? 'text-red-400 font-semibold' : 'text-muted'}>
@@ -153,7 +153,7 @@ export default function RevenueDashboardPage() {
               <tr className="font-bold">
                 <td className="py-3 pr-4 text-foreground">Total</td>
                 <td className="py-3 pr-4 text-right text-foreground">{totals.activeMemberCount}</td>
-                <td className="py-3 pr-4 text-right text-accent">{fmt(totals.totalWeeklyRevenueCents)}</td>
+                <td className="py-3 pr-4 text-right text-accent-text">{fmt(totals.totalWeeklyRevenueCents)}</td>
                 <td className="py-3 pr-4 text-right text-foreground">{fmt(totals.totalMonthlyRevenueCents)}</td>
                 <td className="py-3 pr-4 text-right text-red-400">{totals.pastDueCount}</td>
                 <td className="py-3 text-right text-red-400">{fmt(totals.pastDueAmountCents)}</td>
@@ -181,7 +181,7 @@ export default function RevenueDashboardPage() {
                 <tr key={loc.locationId} className="border-b border-border/50">
                   <td className="py-3 pr-4 font-medium text-foreground">{loc.locationName}</td>
                   <td className="py-3 pr-4 text-right text-foreground">{loc.youthMemberCount}</td>
-                  <td className="py-3 pr-4 text-right text-accent font-semibold">{fmt(loc.weeklyRevenueCents)}</td>
+                  <td className="py-3 pr-4 text-right text-accent-text font-semibold">{fmt(loc.weeklyRevenueCents)}</td>
                   <td className="py-3 text-right text-foreground">{fmt(loc.monthlyRevenueCents)}</td>
                 </tr>
               ))}
@@ -191,7 +191,7 @@ export default function RevenueDashboardPage() {
                 <td className="py-3 pr-4 text-right text-foreground">
                   {youthRevenueByLocation.reduce((s, l) => s + l.youthMemberCount, 0)}
                 </td>
-                <td className="py-3 pr-4 text-right text-accent">
+                <td className="py-3 pr-4 text-right text-accent-text">
                   {fmt(youthRevenueByLocation.reduce((s, l) => s + l.weeklyRevenueCents, 0))}
                 </td>
                 <td className="py-3 text-right text-foreground">

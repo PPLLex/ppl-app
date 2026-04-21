@@ -106,7 +106,7 @@ export default function MemberDetailPage() {
     <div>
       {/* Back + Header */}
       <div className="mb-6">
-        <Link href="/admin/members" className="text-sm text-muted hover:text-accent transition-colors">
+        <Link href="/admin/members" className="text-sm text-muted hover:text-accent-text transition-colors">
           â Back to Members
         </Link>
         <div className="flex items-start justify-between mt-2">
@@ -181,7 +181,7 @@ export default function MemberDetailPage() {
               <h3 className="font-semibold text-foreground">Coach Notes</h3>
               <button
                 onClick={() => setIsEditing(!isEditing)}
-                className="text-xs text-accent hover:underline"
+                className="text-xs text-accent-text hover:underline"
               >
                 {isEditing ? 'Cancel' : 'Edit'}
               </button>
@@ -244,7 +244,7 @@ export default function MemberDetailPage() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xl font-bold text-accent">
+                  <p className="text-xl font-bold text-accent-text">
                     ${(activeMembership.plan.priceCents / 100).toFixed(0)}
                   </p>
                   <p className="text-xs text-muted">/week</p>

@@ -9,10 +9,17 @@
    Static colors use @theme inline for build-time performance.
    ============================================================ */
 
-/* Dynamic brand colors — uses var() so runtime overrides work */
+/* Dynamic brand colors — uses var() so runtime overrides work.
+   primary/accent      = raw brand colors (backgrounds, gradients, borders).
+   primary-text/accent-text = contrast-safe for TEXT on the dark app background.
+   on-primary/on-accent = text color ON a solid primary/accent background. */
 @theme {
   --color-primary: #5E9E50;
   --color-accent: #95C83C;
+  --color-primary-text: #5E9E50;
+  --color-accent-text: #95C83C;
+  --color-on-primary: #ffffff;
+  --color-on-accent: #111111;
 }
 
 /* Static theme values — inlined at build time for performance */
@@ -76,7 +83,7 @@ html {
 }
 
 .ppl-gradient-text {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  background: linear-gradient(135deg, var(--color-primary-text), var(--color-accent-text));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -111,7 +118,7 @@ html {
 
 .ppl-btn-primary {
   background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
-  color: white;
+  color: var(--color-on-primary);
 }
 
 .ppl-btn-primary:hover:not(:disabled) {
@@ -171,7 +178,7 @@ html {
 
 .ppl-badge-active {
   background: color-mix(in srgb, var(--color-primary) 15%, transparent);
-  color: var(--color-accent);
+  color: var(--color-accent-text);
 }
 
 .ppl-badge-warning {

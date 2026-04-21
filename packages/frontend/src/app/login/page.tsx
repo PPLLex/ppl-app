@@ -237,7 +237,7 @@ function LoginForm() {
               <button
                 type="button"
                 onClick={() => { setAuthMode('magic-link'); setError(''); }}
-                className="w-full mt-3 text-sm text-muted hover:text-accent transition-colors text-center"
+                className="w-full mt-3 text-sm text-muted hover:text-accent-text transition-colors text-center"
               >
                 Sign in with email link instead
               </button>
@@ -247,7 +247,7 @@ function LoginForm() {
               {magicLinkSent ? (
                 <div className="text-center py-4">
                   <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/20 mb-4">
-                    <svg className="w-7 h-7 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <svg className="w-7 h-7 text-accent-text" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                     </svg>
                   </div>
@@ -261,7 +261,7 @@ function LoginForm() {
                   <button
                     type="button"
                     onClick={() => { setMagicLinkSent(false); setEmail(''); }}
-                    className="mt-4 text-sm text-accent hover:text-primary transition-colors"
+                    className="mt-4 text-sm text-accent-text hover:text-primary-text transition-colors"
                   >
                     Use a different email
                   </button>
@@ -307,7 +307,7 @@ function LoginForm() {
               <button
                 type="button"
                 onClick={() => { setAuthMode('credentials'); setError(''); setMagicLinkSent(false); }}
-                className="w-full mt-3 text-sm text-muted hover:text-accent transition-colors text-center"
+                className="w-full mt-3 text-sm text-muted hover:text-accent-text transition-colors text-center"
               >
                 Sign in with password instead
               </button>
@@ -315,7 +315,7 @@ function LoginForm() {
           )}
 
           <div className="mt-4 text-center">
-            <Link href="/forgot-password" className="text-sm text-muted hover:text-accent transition-colors">
+            <Link href="/forgot-password" className="text-sm text-muted hover:text-accent-text transition-colors">
               Forgot your password?
             </Link>
           </div>
@@ -323,7 +323,7 @@ function LoginForm() {
           <div className="mt-3 text-center">
             <p className="text-sm text-muted">
               New to PPL?{' '}
-              <Link href="/register" className="text-accent hover:text-primary transition-colors">
+              <Link href="/register" className="text-accent-text hover:text-primary-text transition-colors">
                 Create an account
               </Link>
             </p>
