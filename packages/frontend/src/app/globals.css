@@ -3,21 +3,20 @@
 /* ============================================================
    PPL BRAND THEME — Dynamic Color System
    ============================================================
-   Colors are driven by CSS custom properties set at runtime
-   by ThemeProvider. The @theme block registers them with
-   Tailwind v4 so utilities like bg-primary, text-accent, etc.
-   work everywhere.
+   Primary and accent colors use @theme (NOT @theme inline)
+   so Tailwind generates var() references in utility classes.
+   This lets ThemeProvider override them at runtime.
+   Static colors use @theme inline for build-time performance.
    ============================================================ */
 
-@theme inline {
-  /* Dynamic brand colors — overridden at runtime by ThemeProvider */
+/* Dynamic brand colors — uses var() so runtime overrides work */
+@theme {
   --color-primary: #5E9E50;
   --color-accent: #95C83C;
+}
 
-  /* Legacy aliases so old code still works during migration */
-  --color-ppl-dark-green: var(--color-primary);
-  --color-ppl-light-green: var(--color-accent);
-
+/* Static theme values — inlined at build time for performance */
+@theme inline {
   /* Semantic colors */
   --color-background: #0A0A0A;
   --color-foreground: #F5F5F5;
@@ -28,7 +27,6 @@
   --color-muted: #888888;
   --color-danger: #EF4444;
   --color-warning: #F59E0B;
-  --color-success: var(--color-primary);
 
   /* Fonts */
   --font-sans: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
@@ -155,7 +153,7 @@ html {
 
 .ppl-input:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb, 94 158 80), 0.2);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 20%, transparent);
 }
 
 .ppl-input::placeholder {
@@ -172,7 +170,7 @@ html {
 }
 
 .ppl-badge-active {
-  background: rgba(var(--color-primary-rgb, 94 158 80), 0.15);
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
   color: var(--color-accent);
 }
 

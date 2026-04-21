@@ -6,10 +6,10 @@ import { authenticate, requireAdmin } from '../middleware/auth';
 
 const router = Router();
 
-// Multer — in-memory storage, max 2MB for logos
+// Multer — in-memory storage, max 10MB for logos
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
   fileFilter: (_req, file, cb) => {
     const allowed = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml', 'image/gif'];
     if (allowed.includes(file.mimetype)) {

@@ -50,7 +50,7 @@ export default function AdminSettingsPage() {
 
 /* ─── General Settings ─── */
 function GeneralSettings() {
-  const { updateTheme } = useTheme();
+  const { updateTheme, refreshBranding: refreshGlobalBranding } = useTheme();
   const [locations, setLocations] = useState<Location[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [defaults, setDefaults] = useState({
@@ -116,8 +116,8 @@ function GeneralSettings() {
         primaryColor: branding.primaryColor,
         accentColor: branding.accentColor,
       });
-      // Update live theme instantly
-      updateTheme({ primaryColor: branding.primaryColor, accentColor: branding.accentColor });
+      // Refresh the global theme context so colors, name, tagline all update everywhere
+      await refreshGlobalBranding();
       setBrandMsg('Saved!');
       setTimeout(() => setBrandMsg(''), 2000);
     } catch (err) {
@@ -149,8 +149,8 @@ function GeneralSettings() {
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      setBrandMsg('Logo must be under 2MB');
+    if (file.size > 10 * 1024 * 1024) {
+      setBrandMsg('Logo must be under 10MB');
       return;
     }
     setLogoUploading(true);
@@ -159,6 +159,7 @@ function GeneralSettings() {
       const res = await api.uploadLogo(file);
       if (res.data) {
         setBranding((prev) => ({ ...prev, logoData: res.data!.logoData }));
+        await refreshGlobalBranding();
         setBrandMsg('Logo uploaded!');
         setTimeout(() => setBrandMsg(''), 2000);
       }
@@ -175,6 +176,7 @@ function GeneralSettings() {
     try {
       await api.removeLogo();
       setBranding((prev) => ({ ...prev, logoData: null }));
+      await refreshGlobalBranding();
       setBrandMsg('Logo removed');
       setTimeout(() => setBrandMsg(''), 2000);
     } catch (err) {
@@ -256,7 +258,7 @@ function GeneralSettings() {
                 >
                   {logoUploading ? 'Uploading...' : branding.logoData ? 'Change Logo' : 'Upload Logo'}
                 </label>
-                <p className="text-[10px] text-muted mt-1">PNG, JPG, WebP, SVG, or GIF. Max 2MB.</p>
+                <p className="text-[10px] text-muted mt-1">PNG, JPG, WebP, SVG, or GIF. Max 10MB.</p>
               </div>
             </div>
           </div>
