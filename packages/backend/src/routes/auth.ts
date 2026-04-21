@@ -289,6 +289,12 @@ router.get('/me', authenticate, async (req: Request, res: Response, next: NextFu
       where: { id: req.user!.userId },
       include: {
         homeLocation: { select: { id: true, name: true } },
+        staffLocations: {
+          select: {
+            roles: true,
+            location: { select: { id: true, name: true } },
+          },
+        },
         clientProfile: true,
         clientMemberships: {
           where: { status: { in: ['ACTIVE', 'PAST_DUE'] } },
@@ -310,6 +316,11 @@ router.get('/me', authenticate, async (req: Request, res: Response, next: NextFu
         phone: user.phone,
         role: user.role,
         homeLocation: user.homeLocation,
+        locations: user.staffLocations.map((sl: any) => ({
+          id: sl.location.id,
+          name: sl.location.name,
+          roles: sl.roles,
+        })),
         profile: user.clientProfile,
         memberships: user.clientMemberships,
       },

@@ -994,6 +994,7 @@ export interface User {
   phone?: string;
   role: 'ADMIN' | 'STAFF' | 'CLIENT';
   homeLocation?: { id: string; name: string };
+  locations?: { id: string; name: string; roles: string[] }[];
   ageGroup?: string;
   memberships?: Membership[];
 }

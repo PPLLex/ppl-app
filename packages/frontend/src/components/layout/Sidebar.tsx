@@ -233,9 +233,15 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
           >
             <p className="text-sm font-medium text-foreground truncate">{user.fullName}</p>
             <p className="text-xs text-muted truncate">{user.email}</p>
-            {user.homeLocation && (
+            {user.locations && user.locations.length > 0 ? (
+              <div className="mt-0.5 space-y-0.5">
+                {user.locations.map((loc) => (
+                  <p key={loc.id} className="text-xs text-primary-text truncate">{loc.name}</p>
+                ))}
+              </div>
+            ) : user.homeLocation ? (
               <p className="text-xs text-primary-text mt-0.5">{user.homeLocation.name}</p>
-            )}
+            ) : null}
           </Link>
           <button
             onClick={logout}
