@@ -281,6 +281,81 @@ export function buildCoachInviteEmail(
 }
 
 /**
+ * Returning-athlete review alert.
+ *
+ * Sent to admins and location coordinators when someone self-selects
+ * "I've trained at PPL before" during registration. The idea: staff know
+ * immediately, can cross-check Swift records, and decide whether to waive
+ * the $300 fee (default) or charge it (if they blatantly lied). The charge
+ * action is atomic — only one admin's click can succeed.
+ */
+export function buildReturningAthleteAlertEmail(data: {
+  recipientFirstName: string;
+  athleteName: string;
+  athleteEmail: string;
+  athletePhone: string | null;
+  locationName: string;
+  reviewUrl: string;
+}): string {
+  return buildPPLEmail('Returning athlete needs review', `
+    <p style="margin:0 0 16px;color:#CCC;">Hey ${data.recipientFirstName},</p>
+    <p style="margin:0 0 16px;color:#CCC;">
+      A new signup just claimed they're a returning PPL athlete — the $300 onboarding fee
+      has been skipped based on their self-report. Please cross-check and decide whether to
+      charge the fee anyway.
+    </p>
+    <div style="background:#1A1A1A;border-radius:8px;padding:16px;margin:0 0 20px;border:1px solid #2A2A2A;">
+      <table cellpadding="0" cellspacing="0" style="width:100%;">
+        ${detailRow('Name', data.athleteName)}
+        ${detailRow('Email', data.athleteEmail)}
+        ${data.athletePhone ? detailRow('Phone', data.athletePhone) : ''}
+        ${detailRow('Location', data.locationName)}
+      </table>
+    </div>
+    <div style="background:#1A1A1A;border-radius:8px;padding:16px;margin:0 0 20px;border:1px solid #333;border-left:4px solid #E7A23E;">
+      <p style="margin:0;color:#CCC;font-size:13px;">
+        <strong style="color:#F5F5F5;">Only one admin can charge the fee.</strong>
+        Once someone clicks "Charge $300" below, that action is locked — any other admin
+        who clicks will see a "already processed" message, so you can't accidentally
+        double-charge if several people review the same signup.
+      </p>
+    </div>
+    <p style="margin:0 0 20px;text-align:center;">
+      <a href="${data.reviewUrl}" style="${greenBtn}">Review &amp; decide</a>
+    </p>
+    <p style="font-size:13px;color:#888;margin:0;">
+      Not sure? Clicking the button opens the review page in the admin app — it doesn't
+      charge anything by itself. You'll see a dedicated button there with a final confirm.
+    </p>
+  `);
+}
+
+/**
+ * Email the athlete a "please pay the onboarding fee" link after an admin has
+ * decided to charge them. Includes the sign-in + payment link.
+ */
+export function buildOnboardingFeeRequestEmail(data: {
+  athleteFirstName: string;
+  loginUrl: string;
+  note?: string | null;
+}): string {
+  return buildPPLEmail('One quick thing before we get started', `
+    <p style="margin:0 0 16px;color:#CCC;">Hey ${data.athleteFirstName},</p>
+    <p style="margin:0 0 16px;color:#CCC;">
+      Welcome to PPL. We need to collect the one-time $300 onboarding fee before your
+      account is fully activated. This is a one-time charge — you won't see it again.
+    </p>
+    ${data.note ? `<p style="margin:0 0 16px;color:#AAA;font-style:italic;">${data.note}</p>` : ''}
+    <p style="margin:0 0 20px;text-align:center;">
+      <a href="${data.loginUrl}" style="${greenBtn}">Log in and pay</a>
+    </p>
+    <p style="font-size:13px;color:#888;margin:0;">
+      Questions? Just reply to this email or contact us at info@pitchingperformancelab.com.
+    </p>
+  `);
+}
+
+/**
  * Staff reinstate / welcome notification.
  *
  * Sent when an existing user is (re)added to the staff roster via

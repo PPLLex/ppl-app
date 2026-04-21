@@ -2,10 +2,22 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../utils/prisma';
 import { ApiError } from '../utils/apiError';
 import { authenticate } from '../middleware/auth';
+import { createAuditLog } from '../services/auditService';
+import {
+  sendEmail,
+  buildReturningAthleteAlertEmail,
+  buildOnboardingFeeRequestEmail,
+} from '../services/emailService';
+import { LocationRole, Role } from '@prisma/client';
 import Stripe from 'stripe';
 import { config } from '../config';
 
 const router = Router();
+
+function param(req: Request, name: string): string {
+  const val = req.params[name];
+  return Array.isArray(val) ? val[0] : val;
+}
 
 // Initialize Stripe (will be null if key not configured yet)
 const stripe = config.stripe.secretKey
@@ -103,6 +115,20 @@ router.post('/status', authenticate, async (req: Request, res: Response, next: N
       },
     });
 
+    // If this was a "returning" self-selection, alert admins + coordinators at
+    // the athlete's home location so they can verify and decide whether to
+    // charge the $300 fee anyway. Fire-and-forget — don't block the registration
+    // response on email delivery.
+    if (isReturning) {
+      notifyReturningAthleteSignup({
+        userId,
+        athleteProfileId: athleteProfile.id,
+        onboardingRecordId: onboardingRecord.id,
+      }).catch((err) =>
+        console.error('[onboarding] returning-athlete alert failed:', err)
+      );
+    }
+
     res.status(201).json({
       success: true,
       data: {
@@ -114,6 +140,252 @@ router.post('/status', authenticate, async (req: Request, res: Response, next: N
     next(error);
   }
 });
+
+/**
+ * Fire the returning-athlete alert email to admins + coordinators at the
+ * athlete's home location. Non-blocking; logs errors but doesn't throw.
+ */
+async function notifyReturningAthleteSignup(args: {
+  userId: string;
+  athleteProfileId: string;
+  onboardingRecordId: string;
+}) {
+  const user = await prisma.user.findUnique({
+    where: { id: args.userId },
+    select: {
+      fullName: true,
+      email: true,
+      phone: true,
+      homeLocationId: true,
+      homeLocation: { select: { id: true, name: true } },
+    },
+  });
+  if (!user) return;
+
+  // Who to notify:
+  //   - All ADMINs globally
+  //   - All staff with PITCHING_COORDINATOR or YOUTH_COORDINATOR at the
+  //     athlete's home location
+  const [admins, coordinators] = await Promise.all([
+    prisma.user.findMany({
+      where: { role: Role.ADMIN },
+      select: { id: true, fullName: true, email: true },
+    }),
+    user.homeLocationId
+      ? prisma.staffLocation.findMany({
+          where: {
+            locationId: user.homeLocationId,
+            roles: {
+              hasSome: [LocationRole.PITCHING_COORDINATOR, LocationRole.YOUTH_COORDINATOR],
+            },
+          },
+          select: {
+            staff: { select: { id: true, fullName: true, email: true, role: true } },
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  // Dedupe by email (an admin who's also a coordinator would otherwise get two).
+  const recipientsMap = new Map<
+    string,
+    { id: string; fullName: string; email: string }
+  >();
+  for (const a of admins) recipientsMap.set(a.email, a);
+  for (const c of coordinators) {
+    if (c.staff && !recipientsMap.has(c.staff.email)) {
+      recipientsMap.set(c.staff.email, {
+        id: c.staff.id,
+        fullName: c.staff.fullName,
+        email: c.staff.email,
+      });
+    }
+  }
+  const recipients = Array.from(recipientsMap.values());
+
+  const reviewUrl = `${config.frontendUrl}/admin/onboarding-reviews`;
+  const locationName = user.homeLocation?.name || 'Unassigned';
+
+  await Promise.allSettled(
+    recipients.map((r) =>
+      sendEmail({
+        to: r.email,
+        subject: `Returning athlete needs review — ${user.fullName}`,
+        text:
+          `A new signup claims to be a returning PPL athlete — the $300 onboarding fee was ` +
+          `skipped. Please review at ${reviewUrl} and decide whether to charge the fee. ` +
+          `Only one admin can charge (atomic claim — no double-billing).`,
+        html: buildReturningAthleteAlertEmail({
+          recipientFirstName: r.fullName.split(' ')[0],
+          athleteName: user.fullName,
+          athleteEmail: user.email,
+          athletePhone: user.phone,
+          locationName,
+          reviewUrl,
+        }),
+      })
+    )
+  );
+}
+
+/**
+ * GET /api/onboarding/admin/pending-reviews
+ * Admin/staff-only: list of returning athletes whose onboarding fee has been
+ * skipped (feeStatus=NOT_APPLICABLE based on self-reported returning status)
+ * and hasn't been reviewed/charged yet. Use this to populate the admin UI.
+ */
+router.get(
+  '/admin/pending-reviews',
+  authenticate,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (req.user!.role !== 'ADMIN' && req.user!.role !== 'STAFF') {
+        throw ApiError.forbidden('Admin or staff access required');
+      }
+
+      // Returning athletes whose onboarding record is still in the
+      // NOT_APPLICABLE fee state — meaning no one has acted on them yet.
+      const records = await prisma.onboardingRecord.findMany({
+        where: {
+          feeStatus: 'NOT_APPLICABLE',
+          onboardingStatus: 'RETURNING',
+        },
+        include: {
+          athlete: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              user: {
+                select: {
+                  id: true,
+                  fullName: true,
+                  email: true,
+                  phone: true,
+                  createdAt: true,
+                  homeLocation: { select: { id: true, name: true } },
+                },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      const data = records.map((r) => ({
+        onboardingRecordId: r.id,
+        athleteProfileId: r.athleteId,
+        createdAt: r.createdAt,
+        selfReportedStatus: r.selfReportedStatus,
+        athlete: {
+          id: r.athlete.user.id,
+          fullName: r.athlete.user.fullName,
+          email: r.athlete.user.email,
+          phone: r.athlete.user.phone,
+          createdAt: r.athlete.user.createdAt,
+          location: r.athlete.user.homeLocation,
+        },
+      }));
+
+      res.json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/onboarding/admin/charge-fee/:recordId
+ * Admin-only: flip a returning athlete's NOT_APPLICABLE fee to REQUIRED and
+ * email them a pay link. ATOMIC — uses an updateMany with a where-clause
+ * filter so only one admin's click succeeds. Subsequent clicks see 409.
+ */
+router.post(
+  '/admin/charge-fee/:recordId',
+  authenticate,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (req.user!.role !== 'ADMIN') {
+        throw ApiError.forbidden('Only admins can charge the onboarding fee');
+      }
+
+      const recordId = param(req, 'recordId');
+      const { note } = req.body as { note?: string };
+
+      // Atomic claim: updateMany returns count — if 0, someone else already
+      // acted on this record (or it was never in the right state).
+      const claim = await prisma.onboardingRecord.updateMany({
+        where: {
+          id: recordId,
+          feeStatus: 'NOT_APPLICABLE',
+          onboardingStatus: 'RETURNING',
+        },
+        data: {
+          feeStatus: 'REQUIRED',
+          onboardingFeeCents: 30000,
+        },
+      });
+
+      if (claim.count === 0) {
+        throw ApiError.conflict(
+          'This onboarding fee has already been processed by another admin — no action taken.'
+        );
+      }
+
+      // Load the athlete for the email
+      const record = await prisma.onboardingRecord.findUnique({
+        where: { id: recordId },
+        include: {
+          athlete: {
+            select: {
+              user: { select: { id: true, fullName: true, email: true } },
+            },
+          },
+        },
+      });
+
+      if (record?.athlete?.user) {
+        const u = record.athlete.user;
+        const loginUrl = `${config.frontendUrl}/login?next=${encodeURIComponent('/register?step=payment')}`;
+        sendEmail({
+          to: u.email,
+          subject: 'Complete your PPL onboarding — $300 fee',
+          text:
+            `Hey ${u.fullName.split(' ')[0]}, we need to collect the one-time $300 ` +
+            `PPL onboarding fee before your account is activated. Log in to pay: ${loginUrl}` +
+            (note ? `\n\nNote from PPL: ${note}` : ''),
+          html: buildOnboardingFeeRequestEmail({
+            athleteFirstName: u.fullName.split(' ')[0],
+            loginUrl,
+            note: note || null,
+          }),
+        }).catch((err) =>
+          console.error('[onboarding] fee-request email failed:', err)
+        );
+      }
+
+      await createAuditLog({
+        action: 'ONBOARDING_FEE_CHARGED_BY_ADMIN',
+        userId: req.user!.userId,
+        resourceType: 'OnboardingRecord',
+        resourceId: recordId,
+        changes: {
+          athleteUserId: record?.athlete?.user?.id,
+          athleteEmail: record?.athlete?.user?.email,
+          feeStatus: 'NOT_APPLICABLE → REQUIRED',
+          note: note || null,
+        },
+      });
+
+      res.json({
+        success: true,
+        message: `Fee marked as required. ${record?.athlete?.user?.fullName || 'Athlete'} has been emailed a pay link.`,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 /**
  * POST /api/onboarding/checkout

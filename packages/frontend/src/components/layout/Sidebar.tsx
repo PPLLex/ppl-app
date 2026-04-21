@@ -98,6 +98,7 @@ const adminNav: NavItem[] = [
   { label: 'Check In', href: '/admin/checkin', icon: <Icons.Shield /> },
   { label: 'Schedule', href: '/admin/schedule', icon: <Icons.Calendar /> },
   { label: 'Members', href: '/admin/members', icon: <Icons.Users /> },
+  { label: 'Onboarding Reviews', href: '/admin/onboarding-reviews', icon: <Icons.Shield /> },
   { label: 'Staff', href: '/admin/staff', icon: <Icons.UserGroup /> },
   { label: 'Revenue', href: '/admin/revenue', icon: <Icons.Chart /> },
   { label: 'Billing', href: '/admin/billing', icon: <Icons.CreditCard /> },

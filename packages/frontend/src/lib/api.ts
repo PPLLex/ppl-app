@@ -569,6 +569,33 @@ class ApiClient {
     }>('/onboarding/me');
   }
 
+  async getPendingOnboardingReviews() {
+    return this.request<Array<{
+      onboardingRecordId: string;
+      athleteProfileId: string;
+      createdAt: string;
+      selfReportedStatus: string;
+      athlete: {
+        id: string;
+        fullName: string;
+        email: string;
+        phone: string | null;
+        createdAt: string;
+        location: { id: string; name: string } | null;
+      };
+    }>>('/onboarding/admin/pending-reviews');
+  }
+
+  async chargeOnboardingFee(recordId: string, note?: string) {
+    return this.request<{ message: string }>(
+      `/onboarding/admin/charge-fee/${recordId}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ note: note || undefined }),
+      }
+    );
+  }
+
   // Account / Profile
   async getProfile() {
     return this.request<UserProfile>('/account/profile');
