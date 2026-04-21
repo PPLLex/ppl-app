@@ -290,6 +290,86 @@ router.post('/:id/rooms', authenticate, requireAdmin, async (req: Request, res: 
 });
 
 /**
+ * PATCH /api/locations/:id/rooms/:roomId
+ * Admin-only: edit an existing room. Supports renaming, toggling active,
+ * and re-ordering. All fields are optional — only supplied fields are updated.
+ */
+router.patch(
+  '/:id/rooms/:roomId',
+  authenticate,
+  requireAdmin,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const locationId = param(req, 'id');
+      const roomId = param(req, 'roomId');
+      const { name, sortOrder, isActive } = req.body;
+
+      // Ensure the room belongs to the specified location — prevents an admin
+      // from accidentally editing a room at a different facility.
+      const room = await prisma.room.findUnique({ where: { id: roomId } });
+      if (!room) throw ApiError.notFound('Room not found');
+      if (room.locationId !== locationId) {
+        throw ApiError.badRequest('Room does not belong to this location');
+      }
+
+      if (name !== undefined && (typeof name !== 'string' || !name.trim())) {
+        throw ApiError.badRequest('Room name cannot be empty');
+      }
+
+      const updated = await prisma.room.update({
+        where: { id: roomId },
+        data: {
+          ...(name !== undefined && { name: name.trim() }),
+          ...(sortOrder !== undefined && { sortOrder }),
+          ...(isActive !== undefined && { isActive }),
+        },
+      });
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * DELETE /api/locations/:id/rooms/:roomId
+ * Admin-only: soft-deactivate a room (isActive=false) rather than hard-deleting
+ * so existing bookings and history that reference the room stay intact.
+ * If you really want it gone, first deactivate, then manually clean up.
+ */
+router.delete(
+  '/:id/rooms/:roomId',
+  authenticate,
+  requireAdmin,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const locationId = param(req, 'id');
+      const roomId = param(req, 'roomId');
+
+      const room = await prisma.room.findUnique({ where: { id: roomId } });
+      if (!room) throw ApiError.notFound('Room not found');
+      if (room.locationId !== locationId) {
+        throw ApiError.badRequest('Room does not belong to this location');
+      }
+
+      const updated = await prisma.room.update({
+        where: { id: roomId },
+        data: { isActive: false },
+      });
+
+      res.json({
+        success: true,
+        data: updated,
+        message: 'Room deactivated. Existing bookings are preserved.',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
  * PUT /api/locations/:locationId/clients/:clientId
  * Admin-only: reassign a client's home location
  */

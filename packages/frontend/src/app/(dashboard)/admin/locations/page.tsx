@@ -39,6 +39,7 @@ export default function AdminLocationsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showRoomModal, setShowRoomModal] = useState<string | null>(null);
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
+  const [editingRoom, setEditingRoom] = useState<{ locationId: string; room: Room } | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const loadLocations = useCallback(async () => {
@@ -129,12 +130,20 @@ export default function AdminLocationsPage() {
                 {loc.rooms && loc.rooms.length > 0 ? (
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
                     {loc.rooms.map((room: Room) => (
-                      <div key={room.id} className="bg-background rounded-lg p-3">
-                        <p className="font-semibold text-foreground text-sm">{room.name}</p>
+                      <button
+                        key={room.id}
+                        onClick={() => setEditingRoom({ locationId: loc.id, room })}
+                        className="bg-background rounded-lg p-3 text-left hover:bg-surface-hover transition-colors group relative"
+                        title="Click to edit"
+                      >
+                        <p className="font-semibold text-foreground text-sm pr-5">{room.name}</p>
                         <p className="text-xs text-muted mt-0.5">
                           {room.isActive ? 'Active' : 'Inactive'}
                         </p>
-                      </div>
+                        <span className="absolute top-2 right-2 text-muted opacity-0 group-hover:opacity-100 transition-opacity text-xs">
+                          ✎
+                        </span>
+                      </button>
                     ))}
                   </div>
                 ) : (
@@ -166,6 +175,20 @@ export default function AdminLocationsPage() {
           onSaved={() => {
             setEditingLocation(null);
             setMessage({ type: 'success', text: 'Location updated!' });
+            loadLocations();
+          }}
+        />
+      )}
+
+      {/* Edit Room Modal */}
+      {editingRoom && (
+        <EditRoomModal
+          locationId={editingRoom.locationId}
+          room={editingRoom.room}
+          onClose={() => setEditingRoom(null)}
+          onSaved={(msg) => {
+            setEditingRoom(null);
+            setMessage({ type: 'success', text: msg });
             loadLocations();
           }}
         />
@@ -349,6 +372,123 @@ function LocationModal({
           <button type="submit" disabled={isSubmitting} className="ppl-btn ppl-btn-primary w-full justify-center">
             {isSubmitting ? 'Saving...' : location ? 'Update Location' : 'Create Location'}
           </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function EditRoomModal({
+  locationId,
+  room,
+  onClose,
+  onSaved,
+}: {
+  locationId: string;
+  room: Room;
+  onClose: () => void;
+  onSaved: (message: string) => void;
+}) {
+  const [name, setName] = useState(room.name);
+  const [isActive, setIsActive] = useState(room.isActive !== false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeactivating, setIsDeactivating] = useState(false);
+  const [error, setError] = useState('');
+
+  const nameChanged = name.trim() !== room.name.trim();
+  const activeChanged = isActive !== (room.isActive !== false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) { setError('Room name is required'); return; }
+    if (!nameChanged && !activeChanged) { onClose(); return; }
+    setIsSubmitting(true);
+    setError('');
+    try {
+      await api.updateRoom(locationId, room.id, {
+        ...(nameChanged && { name: name.trim() }),
+        ...(activeChanged && { isActive }),
+      });
+      onSaved('Room updated!');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to update room');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeactivate = async () => {
+    if (!confirm(`Deactivate "${room.name}"? Existing bookings stay intact, but no new ones can be scheduled in this room.`)) return;
+    setIsDeactivating(true);
+    setError('');
+    try {
+      await api.deactivateRoom(locationId, room.id);
+      onSaved('Room deactivated.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to deactivate room');
+      setIsDeactivating(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+      <div className="ppl-card w-full max-w-md">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-foreground">Edit Room</h2>
+          <button onClick={onClose} className="text-muted hover:text-foreground text-xl">&times;</button>
+        </div>
+        {error && (
+          <div className="mb-3 p-2 bg-danger/10 border border-danger/20 rounded-lg text-sm text-danger">{error}</div>
+        )}
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="text-xs font-medium text-muted block mb-1">Room Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="ppl-input"
+              required
+              autoFocus
+            />
+            <p className="text-[11px] text-muted mt-1">
+              This is what clients, coaches, and admins see next to every session in this room.
+            </p>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={isActive}
+              onChange={(e) => setIsActive(e.target.checked)}
+              className="accent-highlight"
+            />
+            Active — available for new sessions
+          </label>
+          <div className="flex gap-2 pt-2">
+            <button
+              type="button"
+              onClick={handleDeactivate}
+              disabled={isSubmitting || isDeactivating || room.isActive === false}
+              className="text-xs text-danger hover:text-danger/80 font-medium px-3 py-1.5 rounded-lg border border-danger/30 hover:bg-danger/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {isDeactivating ? 'Deactivating...' : 'Deactivate'}
+            </button>
+            <div className="flex-1" />
+            <button
+              type="button"
+              onClick={onClose}
+              className="ppl-btn ppl-btn-secondary"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting || isDeactivating || (!nameChanged && !activeChanged)}
+              className="ppl-btn ppl-btn-primary"
+            >
+              {isSubmitting ? 'Saving...' : 'Save'}
+            </button>
+          </div>
         </form>
       </div>
     </div>

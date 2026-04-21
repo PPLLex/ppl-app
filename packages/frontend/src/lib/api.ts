@@ -129,6 +129,23 @@ class ApiClient {
     });
   }
 
+  async updateRoom(
+    locationId: string,
+    roomId: string,
+    data: { name?: string; sortOrder?: number; isActive?: boolean }
+  ) {
+    return this.request<Room>(`/locations/${locationId}/rooms/${roomId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deactivateRoom(locationId: string, roomId: string) {
+    return this.request<Room>(`/locations/${locationId}/rooms/${roomId}`, {
+      method: 'DELETE',
+    });
+  }
+
   async reassignClientLocation(locationId: string, clientId: string) {
     return this.request(`/locations/${locationId}/clients/${clientId}`, {
       method: 'PUT',
@@ -400,6 +417,12 @@ class ApiClient {
 
   async removeStaffMember(id: string) {
     return this.request(`/staff/${id}`, { method: 'DELETE' });
+  }
+
+  async sendStaffWelcomeEmail(id: string) {
+    return this.request<{ message: string }>(`/staff/${id}/send-welcome-email`, {
+      method: 'POST',
+    });
   }
 
   // Public staff invite (no auth)

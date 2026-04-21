@@ -281,6 +281,123 @@ export function buildCoachInviteEmail(
 }
 
 /**
+ * Staff reinstate / welcome notification.
+ *
+ * Sent when an existing user is (re)added to the staff roster via
+ * POST /api/staff/invite's reinstate branch. Different from an invite email —
+ * the person already has a working login, so we're just telling them they're
+ * back on the team, showing their assigned locations/roles, and nudging them
+ * to finish their profile (photo + phone).
+ */
+export function buildStaffReinstateEmail(data: {
+  fullName: string;
+  assignments: { locationName: string; roleLabels: string[] }[];
+  loginUrl: string;
+  profileUrl: string;
+  needsPhone: boolean;
+  needsAvatar: boolean;
+}): string {
+  const locationRows = data.assignments
+    .map(
+      (a) =>
+        detailRow(
+          a.locationName,
+          `<span style="color:#95C83C;">${a.roleLabels.join(', ')}</span>`
+        )
+    )
+    .join('');
+
+  const profileTodos: string[] = [];
+  if (data.needsAvatar) profileTodos.push('Add a profile photo');
+  if (data.needsPhone) profileTodos.push('Add a phone number');
+
+  const todoBlock = profileTodos.length
+    ? `
+    <div style="background:#1A1A1A;border-radius:8px;padding:20px;margin:0 0 20px;border:1px solid #2A2A2A;border-left:4px solid #95C83C;">
+      <p style="margin:0 0 12px;color:#F5F5F5;font-weight:600;">A couple of things to wrap up</p>
+      ${profileTodos
+        .map(
+          (t) =>
+            `<p style="margin:0 0 6px;color:#CCC;font-size:14px;">&middot; ${t}</p>`
+        )
+        .join('')}
+      <p style="margin:12px 0 0;text-align:center;">
+        <a href="${data.profileUrl}" style="${greenBtn}">Finish my profile</a>
+      </p>
+    </div>`
+    : '';
+
+  return buildPPLEmail('Welcome to the PPL staff', `
+    <p style="margin:0 0 16px;color:#CCC;font-size:16px;">
+      Hey ${data.fullName.split(' ')[0]}, you've been added to the PPL staff roster.
+    </p>
+    <p style="margin:0 0 16px;color:#CCC;">
+      Your existing login still works — no new password or setup needed. Here's what you have access to:
+    </p>
+    <div style="background:#1A1A1A;border-radius:8px;padding:16px;margin:0 0 20px;border:1px solid #2A2A2A;">
+      <table cellpadding="0" cellspacing="0" style="width:100%;">${locationRows}</table>
+    </div>
+    ${todoBlock}
+    <p style="margin:0 0 20px;text-align:center;">
+      <a href="${data.loginUrl}" style="${greenBtn}">Open the PPL app</a>
+    </p>
+    <p style="font-size:13px;color:#888;margin:0;">
+      Questions? Just reply to this email.
+    </p>
+  `);
+}
+
+/**
+ * Send the staff reinstate/welcome notification.
+ * Safe to call multiple times — the email is informational, not a one-shot invite.
+ */
+export async function sendStaffReinstateEmail(args: {
+  to: string;
+  fullName: string;
+  assignments: { locationName: string; roleLabels: string[] }[];
+  frontendUrl: string;
+  needsPhone: boolean;
+  needsAvatar: boolean;
+}): Promise<void> {
+  const html = buildStaffReinstateEmail({
+    fullName: args.fullName,
+    assignments: args.assignments,
+    loginUrl: args.frontendUrl,
+    profileUrl: `${args.frontendUrl}/profile`,
+    needsPhone: args.needsPhone,
+    needsAvatar: args.needsAvatar,
+  });
+
+  const lines = [
+    `Hey ${args.fullName.split(' ')[0]}, you've been added to the PPL staff roster.`,
+    '',
+    'Your existing login still works. Access:',
+    ...args.assignments.map(
+      (a) => `  - ${a.locationName}: ${a.roleLabels.join(', ')}`
+    ),
+    '',
+    args.needsAvatar || args.needsPhone
+      ? `When you get a sec, finish your profile at ${args.frontendUrl}/profile${
+          args.needsAvatar && args.needsPhone
+            ? ' — add a profile photo and phone number.'
+            : args.needsAvatar
+            ? ' — add a profile photo.'
+            : ' — add a phone number.'
+        }`
+      : '',
+    '',
+    `Open the app: ${args.frontendUrl}`,
+  ].filter((l) => l !== '');
+
+  await sendEmail({
+    to: args.to,
+    subject: 'Welcome to the PPL staff',
+    text: lines.join('\n'),
+    html,
+  });
+}
+
+/**
  * Send a coach invite email (convenience wrapper).
  */
 export async function sendCoachInviteEmail(

@@ -3,6 +3,8 @@ import { prisma } from '../utils/prisma';
 import { ApiError } from '../utils/apiError';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { createAuditLog } from '../services/auditService';
+import { sendStaffReinstateEmail } from '../services/emailService';
+import { config } from '../config';
 import { Role, LocationRole } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
@@ -213,11 +215,37 @@ router.post('/invite', async (req: Request, res: Response, next: NextFunction) =
         changes: { fullName, email, role: userRole, locations: roleSummary },
       });
 
+      // Fire the welcome/reinstate notification email. We don't block the API
+      // response on it — email should be best-effort, not a blocker for the
+      // admin action. Errors get logged and the admin can always hit the
+      // manual resend endpoint if anything went wrong.
+      const existingUserFull = await prisma.user.findUnique({
+        where: { id: reinstated.id },
+        select: { avatarUrl: true, phone: true },
+      });
+      const needsAvatar = !existingUserFull?.avatarUrl;
+      const needsPhone = !existingUserFull?.phone;
+
+      sendStaffReinstateEmail({
+        to: reinstated.email,
+        fullName: reinstated.fullName,
+        assignments: locations.map((l: any) => ({
+          locationName:
+            validLocations.find((vl) => vl.id === l.locationId)?.name || l.locationId,
+          roleLabels: l.roles.map((r: string) => ROLE_LABELS[r] || r),
+        })),
+        frontendUrl: config.frontendUrl,
+        needsPhone,
+        needsAvatar,
+      }).catch((err) => {
+        console.error('Failed to send staff reinstate email:', err);
+      });
+
       res.status(200).json({
         success: true,
         data: reinstated,
         reinstated: true,
-        message: `${fullName} reinstated as staff. Their existing login still works — no invite email sent.`,
+        message: `${fullName} reinstated as staff. Welcome email sent — their existing login still works.`,
       });
       return;
     }
@@ -280,6 +308,85 @@ router.delete('/invites/:id', async (req: Request, res: Response, next: NextFunc
     next(error);
   }
 });
+
+/**
+ * POST /api/staff/:id/send-welcome-email
+ * Admin-only: (re)send the staff welcome/reinstate notification to an existing
+ * staff user. Useful when the automatic email bounced, was lost, or the admin
+ * wants to ping the person again with their current access summary.
+ */
+router.post(
+  '/:id/send-welcome-email',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = param(req, 'id');
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          phone: true,
+          avatarUrl: true,
+          role: true,
+          staffLocations: {
+            select: {
+              roles: true,
+              location: { select: { id: true, name: true } },
+            },
+          },
+        },
+      });
+
+      if (!user) throw ApiError.notFound('Staff member not found');
+      if (user.role !== Role.STAFF && user.role !== Role.ADMIN) {
+        throw ApiError.badRequest(
+          'Cannot send welcome email — this user is not currently a staff or admin'
+        );
+      }
+      if (user.staffLocations.length === 0) {
+        throw ApiError.badRequest(
+          'Cannot send welcome email — this user has no location assignments'
+        );
+      }
+
+      const assignments = user.staffLocations.map((sl) => ({
+        locationName: sl.location.name,
+        roleLabels: sl.roles.map((r) => ROLE_LABELS[r] || r),
+      }));
+
+      await sendStaffReinstateEmail({
+        to: user.email,
+        fullName: user.fullName,
+        assignments,
+        frontendUrl: config.frontendUrl,
+        needsPhone: !user.phone,
+        needsAvatar: !user.avatarUrl,
+      });
+
+      await createAuditLog({
+        action: 'STAFF_WELCOME_RESENT',
+        userId: req.user!.userId,
+        resourceType: 'User',
+        resourceId: user.id,
+        changes: {
+          to: user.email,
+          assignments: assignments
+            .map((a) => `${a.locationName}: ${a.roleLabels.join(', ')}`)
+            .join('; '),
+        },
+      });
+
+      res.json({
+        success: true,
+        message: `Welcome email sent to ${user.fullName} (${user.email}).`,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 /**
  * PUT /api/staff/:id/role
