@@ -166,7 +166,7 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
                 </div>
               )}
               <div>
-                <h2 className="font-bold text-foreground text-sm leading-tight">{branding.businessName}</h2>
+                <h2 className="font-bold text-foreground text-xs leading-tight">{branding.businessName}</h2>
                 {branding.tagline && (
                   <p className="text-xs text-muted leading-tight">{branding.tagline}</p>
                 )}
@@ -199,7 +199,7 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
                 onClick={handleNavClick}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                   isActive
-                    ? 'bg-highlight/25 text-highlight-text border border-highlight/40'
+                    ? 'bg-highlight/25 text-foreground border border-highlight/40'
                     : 'text-muted hover:text-foreground hover:bg-surface-hover'
                 }`}
               >
