@@ -187,7 +187,11 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
         {/* Navigation */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+            // Dashboard items (role root paths) should only match exactly, not every sub-route
+            const isDashboard = item.label === 'Dashboard';
+            const isActive = isDashboard
+              ? pathname === item.href || pathname === item.href + '/dashboard'
+              : pathname === item.href || pathname.startsWith(item.href + '/');
             return (
               <Link
                 key={item.href}
@@ -195,7 +199,7 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
                 onClick={handleNavClick}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                   isActive
-                    ? 'bg-highlight/15 text-accent-text'
+                    ? 'bg-highlight/25 text-highlight-text border border-highlight/40'
                     : 'text-muted hover:text-foreground hover:bg-surface-hover'
                 }`}
               >
