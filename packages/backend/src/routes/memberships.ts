@@ -9,7 +9,10 @@ import {
   cancelSubscription,
   createCardUpdateSession,
   retryPayment,
+  getOrCreateStripePrice,
+  stripe,
 } from '../services/stripeService';
+import { config } from '../config';
 import {
   Role,
   MembershipStatus,
@@ -64,6 +67,195 @@ router.get('/plans/:id', async (req: Request, res: Response, next: NextFunction)
     next(error);
   }
 });
+
+/**
+ * GET /api/memberships/config-health
+ * Admin-only: report whether the critical billing integrations are configured
+ * in the currently-running server. Reveals presence + basic shape ONLY — never
+ * the secret values themselves. Use this to confirm Stripe/SMTP/Twilio env
+ * vars landed on the server after a deploy.
+ */
+router.get(
+  '/config-health',
+  authenticate,
+  requireAdmin,
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const k = config.stripe.secretKey;
+      const w = config.stripe.webhookSecret;
+      const stripeMode = !k
+        ? 'missing'
+        : k.startsWith('sk_live')
+        ? 'live'
+        : k.startsWith('sk_test')
+        ? 'test'
+        : 'unknown';
+
+      let stripeConnectionOk: boolean | null = null;
+      let stripeConnectionError: string | null = null;
+      if (k) {
+        try {
+          await stripe.accounts.retrieve();
+          stripeConnectionOk = true;
+        } catch (err: any) {
+          stripeConnectionOk = false;
+          stripeConnectionError = err?.message || 'unknown error';
+        }
+      }
+
+      // We store the Stripe Price against the plan via Stripe metadata
+      // (ppl_plan_id), not a column on MembershipPlan. Query Stripe to find
+      // how many active plans are already wired. If Stripe can't connect,
+      // we report "unknown" rather than fail the whole health check.
+      const plansList = await prisma.membershipPlan.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true },
+      });
+
+      let plansMissingStripe: number | null = null;
+      if (stripeConnectionOk) {
+        try {
+          let missing = 0;
+          for (const p of plansList) {
+            const found = await stripe.prices.search({
+              query: `metadata["ppl_plan_id"]:"${p.id}" active:"true"`,
+            });
+            if (found.data.length === 0) missing++;
+          }
+          plansMissingStripe = missing;
+        } catch {
+          plansMissingStripe = null;
+        }
+      }
+
+      res.json({
+        success: true,
+        data: {
+          nodeEnv: config.nodeEnv,
+          stripe: {
+            mode: stripeMode,
+            webhookSecretSet: !!w && w !== 'whsec_placeholder',
+            connectionOk: stripeConnectionOk,
+            connectionError: stripeConnectionError,
+          },
+          smtp: {
+            hostSet: !!config.smtp.host,
+            userSet: !!config.smtp.user,
+            passSet: !!config.smtp.pass,
+            fromSet: !!config.smtp.from,
+          },
+          twilio: {
+            accountSidSet: !!config.twilio.accountSid,
+            authTokenSet: !!config.twilio.authToken,
+            phoneNumberSet: !!config.twilio.phoneNumber,
+          },
+          plans: {
+            active: plansList.length,
+            activeMissingStripePrice: plansMissingStripe,
+          },
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/memberships/sync-stripe-prices
+ * Admin-only: for every active plan without a stripePriceId, create (or find)
+ * the matching Stripe product + weekly recurring price and write the price ID
+ * back to the database. Safe to re-run — skips plans that already have a price
+ * ID, and Stripe-side we search by metadata before creating to avoid duplicates.
+ */
+router.post(
+  '/sync-stripe-prices',
+  authenticate,
+  requireAdmin,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!config.stripe.secretKey) {
+        throw ApiError.badRequest(
+          'STRIPE_SECRET_KEY is not set on the backend. Add it to the Railway/Render env before syncing.'
+        );
+      }
+
+      const syncPlans = await prisma.membershipPlan.findMany({
+        where: { isActive: true },
+        orderBy: { name: 'asc' },
+      });
+
+      const syncResults: Array<{
+        plan: string;
+        action: 'existed' | 'created' | 'failed';
+        stripePriceId?: string;
+        error?: string;
+      }> = [];
+
+      for (const plan of syncPlans) {
+        try {
+          // Ask Stripe if a price already exists for this plan (search by
+          // metadata) — distinguishes "already set up" from "we just created
+          // it" in the result for a clearer admin report.
+          const existing = await stripe.prices.search({
+            query: `metadata["ppl_plan_id"]:"${plan.id}" active:"true"`,
+          });
+
+          if (existing.data.length > 0) {
+            syncResults.push({
+              plan: plan.name,
+              action: 'existed',
+              stripePriceId: existing.data[0].id,
+            });
+            continue;
+          }
+
+          const priceId = await getOrCreateStripePrice(plan.id);
+          syncResults.push({
+            plan: plan.name,
+            action: 'created',
+            stripePriceId: priceId,
+          });
+        } catch (err: any) {
+          syncResults.push({
+            plan: plan.name,
+            action: 'failed',
+            error: err?.message || 'unknown error',
+          });
+        }
+      }
+
+      await createAuditLog({
+        action: 'STRIPE_PRICES_SYNCED',
+        userId: req.user!.userId,
+        resourceType: 'MembershipPlan',
+        resourceId: 'all',
+        changes: {
+          summary: syncResults
+            .map(
+              (r) =>
+                `${r.plan}: ${r.action}${r.stripePriceId ? ` (${r.stripePriceId})` : ''}${r.error ? ` — ${r.error}` : ''}`
+            )
+            .join('; '),
+        },
+      });
+
+      const createdCount = syncResults.filter((r) => r.action === 'created').length;
+      const failedCount = syncResults.filter((r) => r.action === 'failed').length;
+
+      res.json({
+        success: failedCount === 0,
+        data: syncResults,
+        message:
+          failedCount > 0
+            ? `Synced ${createdCount}, ${failedCount} failed. See data for details.`
+            : `All ${syncPlans.length} active plans are now connected to Stripe (${createdCount} new, ${syncPlans.length - createdCount} already wired).`,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 /**
  * POST /api/memberships/plans
