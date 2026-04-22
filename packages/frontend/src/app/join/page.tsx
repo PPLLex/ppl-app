@@ -27,7 +27,7 @@ const STEPS = ['Account', 'Details', 'Plan', 'Payment'];
 const AGE_GROUPS = [
   { value: 'youth', label: 'Youth', desc: 'Ages 12 & Under' },
   { value: 'ms_hs', label: 'Middle School / High School', desc: 'Ages 13-18' },
-  { value: 'college', label: 'College', desc: 'College athletes' },
+  { value: 'college', label: 'College', desc: 'Current College Players or Incoming College Freshmen' },
 ];
 
 /* ------------------------------------------------------------------ */

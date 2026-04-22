@@ -50,8 +50,8 @@ const LEVEL_LABEL: Record<PlayingLevel, string> = {
 const LEVEL_DESC: Record<PlayingLevel, string> = {
   youth: 'Ages 12 & Under',
   ms_hs: 'Ages 13–18',
-  college: 'College athletes',
-  pro: 'Professional athletes',
+  college: 'Current College Players or Incoming College Freshmen',
+  pro: 'MLB, MiLB, or Independent',
 };
 
 export default function RegisterPage() {
@@ -547,17 +547,23 @@ function RegisterForm() {
                 </div>
               </div>
 
-              <form onSubmit={handleStep2Submit} className="space-y-5">
+              <form onSubmit={handleStep2Submit} className="space-y-6">
                 {/* ─── ATHLETE SECTION ─────────────────────────── */}
-                <section className="rounded-xl border-2 border-highlight/40 bg-highlight/5 p-4 shadow-sm">
-                  <div className="flex items-center gap-2 mb-3 pb-2 border-b border-highlight/20">
-                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-highlight text-on-accent text-xs font-bold">
-                      1
+                <section className="rounded-xl overflow-hidden border-2 border-emerald-500/70 bg-emerald-500/[0.06] shadow-lg shadow-emerald-500/10">
+                  {/* Bold banner header */}
+                  <div className="flex items-center gap-2.5 px-4 py-2.5 bg-emerald-500 text-white">
+                    <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="8" r="4" />
+                      <path d="M20 21a8 8 0 1 0-16 0" />
+                    </svg>
+                    <span className="text-xs font-extrabold uppercase tracking-[0.15em]">
+                      Step 1 — Athlete
                     </span>
-                    <h3 className="text-sm font-bold text-foreground uppercase tracking-wide">
-                      Athlete Information
-                    </h3>
                   </div>
+                  <div className="p-4 space-y-3">
+                    <p className="text-[11px] text-muted -mt-1">
+                      The person who will be training at PPL.
+                    </p>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs text-muted block mb-1">Athlete first name</label>
@@ -614,24 +620,35 @@ function RegisterForm() {
                       required
                     />
                   </div>
+                  </div>
                 </section>
 
                 {/* ─── PARENT / GUARDIAN SECTION ───────────────── */}
                 {(needsParent || isCollege) && (
-                  <section className="rounded-xl border-2 border-accent-text/40 bg-accent-text/5 p-4 shadow-sm">
-                    <div className="flex items-center gap-2 mb-3 pb-2 border-b border-accent-text/20">
-                      <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-accent-text text-on-accent text-xs font-bold">
-                        2
+                  <section className="rounded-xl overflow-hidden border-2 border-amber-500/70 bg-amber-500/[0.06] shadow-lg shadow-amber-500/10">
+                    {/* Bold banner header */}
+                    <div className="flex items-center gap-2.5 px-4 py-2.5 bg-amber-500 text-black">
+                      <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                        <circle cx="9" cy="7" r="4" />
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                      </svg>
+                      <span className="text-xs font-extrabold uppercase tracking-[0.15em]">
+                        Step 2 — Parent / Guardian
                       </span>
-                      <h3 className="text-sm font-bold text-foreground uppercase tracking-wide">
-                        Parent / Guardian
-                      </h3>
                       {isCollege && (
-                        <span className="text-[11px] text-muted font-normal normal-case tracking-normal">
-                          (optional for College)
+                        <span className="ml-auto text-[10px] font-semibold normal-case tracking-normal bg-black/15 px-2 py-0.5 rounded">
+                          optional for College
                         </span>
                       )}
                     </div>
+                    <div className="p-4 space-y-3">
+                      <p className="text-[11px] text-muted -mt-1">
+                        {needsParent
+                          ? "The parent or legal guardian responsible for this account."
+                          : "Who should we contact if we can't reach the athlete?"}
+                      </p>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="text-xs text-muted block mb-1">Parent/guardian first name</label>
@@ -679,6 +696,7 @@ function RegisterForm() {
                         className="ppl-input"
                         required={needsParent}
                       />
+                    </div>
                     </div>
                   </section>
                 )}
