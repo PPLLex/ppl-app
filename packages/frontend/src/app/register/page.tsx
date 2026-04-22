@@ -544,7 +544,16 @@ function RegisterForm() {
               Pitching Performance Lab
             </span>
           </h1>
-          <p className="mt-3 text-center font-accent italic font-black uppercase tracking-[0.04em] text-base sm:text-lg text-foreground/90">
+          <p
+            className="mt-3 text-center font-accent italic font-black uppercase tracking-[0.02em] text-2xl sm:text-3xl text-foreground leading-none"
+            style={{
+              // Belt-and-suspenders: bypass Tailwind utility entirely and go
+              // straight at the CSS var next/font registered on <html>.
+              fontFamily: 'var(--font-transducer), Impact, "Arial Black", sans-serif',
+              fontWeight: 900,
+              fontStyle: 'italic',
+            }}
+          >
             {stepHeading}
           </p>
         </div>
