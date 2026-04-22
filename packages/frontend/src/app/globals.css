@@ -180,15 +180,20 @@ html {
   font-weight: 400;
 }
 
-/* Form field labels — higher contrast, semi-bold, slight tracking so they
-   actually read like a UI label and not muted afterthought text. */
+/* Form field labels — Transducer Black Italic, uppercase. Intentionally
+   small (12px) so the display face doesn't overpower the input itself;
+   italic + tracking give it the "sports-brand UI" feel that matches the
+   step heading. */
 .ppl-label {
   display: block;
-  font-size: 0.8125rem;      /* 13px — larger than previous 12px */
-  font-weight: 600;
-  color: #e5e5e5;            /* near-foreground, not muted */
-  letter-spacing: 0.02em;
-  margin-bottom: 0.375rem;
+  font-family: var(--font-transducer), Impact, "Arial Black", sans-serif;
+  font-weight: 900;
+  font-style: italic;
+  font-size: 0.75rem;        /* 12px — display fonts visually read larger */
+  color: #e5e5e5;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;    /* more tracking — keeps caps breathing room */
+  margin-bottom: 0.4rem;
 }
 
 .ppl-badge {
