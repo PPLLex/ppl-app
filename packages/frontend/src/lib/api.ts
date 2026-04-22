@@ -25,8 +25,23 @@ class ApiClient {
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
     const token = this.getToken();
+    // Declare which org the frontend is currently acting as. The backend's
+    // orgContext middleware double-checks this against the domain + user's
+    // memberships. See ARCHITECTURE.md.
+    let orgSlug = 'ppl';
+    if (typeof window !== 'undefined') {
+      try {
+        // Dynamic import keeps the server build lean and avoids circulars.
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { getCurrentOrgSlug } = require('@/contexts/OrgContext');
+        orgSlug = getCurrentOrgSlug();
+      } catch {
+        /* fallback to 'ppl' */
+      }
+    }
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
+      'X-Organization': orgSlug,
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     };
