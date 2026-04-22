@@ -40,11 +40,13 @@
   /* Fonts — typography system.
      font-sans    → Manrope (all body / UI)
      font-mono    → JetBrains Mono (numeric/code)
-     font-display → Bank Gothic (headline/brand only; all-caps square font,
-                    not legible below ~14px so never use for body copy) */
+     font-display → Bank Gothic (headline/brand; all-caps square)
+     font-accent  → Transducer Black / BlackOblique (punchy display,
+                    sporty italic — ideal for short uppercase sub-headings) */
   --font-sans: var(--font-manrope), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-display: var(--font-bank-gothic), "Copperplate Gothic Bold", "Impact", sans-serif;
+  --font-accent: var(--font-transducer), "Impact", "Arial Black", sans-serif;
 }
 
 /* ============================================================
@@ -152,23 +154,41 @@ html {
 
 .ppl-input {
   width: 100%;
-  padding: 0.625rem 0.875rem;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
+  padding: 0.7rem 0.95rem;
+  background: #1a1a1a;                       /* subtly brighter than bg */
+  border: 1.5px solid #3a3a3a;               /* clearer, more present border */
+  border-radius: 10px;
   color: var(--color-foreground);
-  font-size: 0.875rem;
+  font-size: 0.95rem;
+  font-weight: 500;
   outline: none;
-  transition: border-color 150ms ease;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+
+.ppl-input:hover {
+  border-color: #525252;
 }
 
 .ppl-input:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 20%, transparent);
+  background: #1f1f1f;
+  box-shadow: 0 0 0 3px rgba(94, 158, 80, 0.25);
 }
 
 .ppl-input::placeholder {
-  color: var(--color-muted);
+  color: #6b6b6b;                            /* more visible than muted */
+  font-weight: 400;
+}
+
+/* Form field labels — higher contrast, semi-bold, slight tracking so they
+   actually read like a UI label and not muted afterthought text. */
+.ppl-label {
+  display: block;
+  font-size: 0.8125rem;      /* 13px — larger than previous 12px */
+  font-weight: 600;
+  color: #e5e5e5;            /* near-foreground, not muted */
+  letter-spacing: 0.02em;
+  margin-bottom: 0.375rem;
 }
 
 .ppl-badge {

@@ -544,7 +544,9 @@ function RegisterForm() {
               Pitching Performance Lab
             </span>
           </h1>
-          <p className="text-sm text-muted mt-2 text-center">{stepHeading}</p>
+          <p className="mt-3 text-center font-accent italic font-black uppercase tracking-[0.04em] text-base sm:text-lg text-foreground/90">
+            {stepHeading}
+          </p>
         </div>
 
         {/* Progress indicator */}
@@ -657,7 +659,7 @@ function RegisterForm() {
                     </p>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs text-muted block mb-1">
+                      <label className="ppl-label">
                         Athlete first name<span className="text-[#95C83C] ml-0.5">*</span>
                       </label>
                       <input
@@ -669,7 +671,7 @@ function RegisterForm() {
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-muted block mb-1">
+                      <label className="ppl-label">
                         Athlete last name<span className="text-[#95C83C] ml-0.5">*</span>
                       </label>
                       <input
@@ -683,7 +685,7 @@ function RegisterForm() {
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs text-muted block mb-1">
+                      <label className="ppl-label">
                         Date of birth<span className="text-[#95C83C] ml-0.5">*</span>
                       </label>
                       <input
@@ -695,7 +697,7 @@ function RegisterForm() {
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-muted block mb-1">
+                      <label className="ppl-label">
                         Athlete email<span className="text-[#95C83C] ml-0.5">*</span>
                       </label>
                       <input
@@ -709,7 +711,7 @@ function RegisterForm() {
                     </div>
                   </div>
                   <div className="mt-3">
-                    <label className="text-xs text-muted block mb-1">
+                    <label className="ppl-label">
                       Athlete phone<span className="text-[#95C83C] ml-0.5">*</span>
                     </label>
                     <input
@@ -835,7 +837,7 @@ function RegisterForm() {
                       </p>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-xs text-muted block mb-1">
+                        <label className="ppl-label">
                           Parent/guardian first name
                           {parentRequired && <span className="text-[#5E9E50] ml-0.5">*</span>}
                         </label>
@@ -848,7 +850,7 @@ function RegisterForm() {
                         />
                       </div>
                       <div>
-                        <label className="text-xs text-muted block mb-1">
+                        <label className="ppl-label">
                           Parent/guardian last name
                           {parentRequired && <span className="text-[#5E9E50] ml-0.5">*</span>}
                         </label>
@@ -862,7 +864,7 @@ function RegisterForm() {
                       </div>
                     </div>
                     <div className="mt-3">
-                      <label className="text-xs text-muted block mb-1">
+                      <label className="ppl-label">
                         Parent/guardian email
                         {parentRequired && <span className="text-[#5E9E50] ml-0.5">*</span>}
                       </label>
@@ -881,7 +883,7 @@ function RegisterForm() {
                       )}
                     </div>
                     <div className="mt-3">
-                      <label className="text-xs text-muted block mb-1">
+                      <label className="ppl-label">
                         Parent/guardian phone
                         {parentRequired && <span className="text-[#5E9E50] ml-0.5">*</span>}
                       </label>

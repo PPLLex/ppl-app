@@ -37,6 +37,20 @@ const bankGothic = localFont({
   ],
 });
 
+// Accent display font — Transducer (Chad-licensed, self-hosted). Big bold
+// italic with a sporty, performance-driven look. Great for short punchy
+// sub-headings like "WHAT'S YOUR PLAYING LEVEL?" where we want personality
+// the brand heading (Bank Gothic) doesn't carry alone. Always pair with
+// UPPERCASE — it's a display face and looks cramped in mixed case.
+const transducer = localFont({
+  variable: "--font-transducer",
+  display: "swap",
+  src: [
+    { path: "../../public/fonts/Transducer-Black.otf", weight: "900", style: "normal" },
+    { path: "../../public/fonts/Transducer-BlackOblique.otf", weight: "900", style: "italic" },
+  ],
+});
+
 export const metadata: Metadata = {
   title: "PPL — Pitching Performance Lab",
   description: "Book sessions, manage your membership, and train with PPL.",
@@ -50,7 +64,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${manrope.variable} ${jetbrainsMono.variable} ${bankGothic.variable} h-full antialiased`}
+      className={`${manrope.variable} ${jetbrainsMono.variable} ${bankGothic.variable} ${transducer.variable} h-full antialiased`}
     >
       <head>
         <link rel="manifest" href="/manifest.json" />
