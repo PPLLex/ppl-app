@@ -500,7 +500,7 @@ function RegisterForm() {
 
   const stepHeading = (() => {
     switch (step) {
-      case 1: return 'What level are you playing at?';
+      case 1: return "What's Your Playing Level?";
       case 2: return 'Who\u2019s on this account?';
       case 3: return 'Have you trained at PPL before?';
       case 4: return 'Where and how will you train?';
@@ -535,7 +535,9 @@ function RegisterForm() {
               <span className="text-white text-3xl font-bold">P</span>
             </div>
           )}
-          <h1 className="text-2xl font-bold text-foreground">Join {branding.businessName || 'PPL'}</h1>
+          <h1 className="text-base sm:text-lg font-bold text-foreground whitespace-nowrap">
+            Get Started with Pitching Performance Lab
+          </h1>
           <p className="text-muted mt-1">{stepHeading}</p>
         </div>
 
@@ -695,6 +697,67 @@ function RegisterForm() {
                   </div>
                 </section>
 
+                {/* ─── MS/HS SELF-MANAGEMENT GATE (between sections) ─────
+                    Appears right after athlete info so solo athletes don't have
+                    to scroll past the parent section first. Two checkboxes, second
+                    only revealed after the first — a deliberately harder gate
+                    than College because most MS/HS athletes DO have a parent
+                    on the account. */}
+                {isMsHs && (
+                  <div className="space-y-2.5 rounded-xl border border-border bg-surface/60 p-3">
+                    <p className="text-[11px] text-muted leading-snug">
+                      Most MS/HS athletes register with a parent or guardian.
+                      If you&apos;re managing this account by yourself, tick both boxes
+                      below — otherwise please complete the parent/guardian fields
+                      in Step&nbsp;2.
+                    </p>
+                    <label className="flex gap-3 p-3 rounded-lg border border-border bg-background cursor-pointer hover:border-amber-500/50 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={msHsSoloAck1}
+                        onChange={(e) => setMsHsSoloAck1(e.target.checked)}
+                        className="mt-0.5 accent-amber-500"
+                      />
+                      <span className="text-xs text-foreground/90 leading-snug">
+                        I&apos;m managing this account myself — I understand I&apos;m responsible
+                        for my own scheduling, cancellations, and billing.
+                      </span>
+                    </label>
+                    {msHsSoloAck1 && (
+                      <label className="flex gap-3 p-3 rounded-lg border-2 border-amber-500/60 bg-amber-500/10 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={msHsSoloAck2}
+                          onChange={(e) => setMsHsSoloAck2(e.target.checked)}
+                          className="mt-0.5 accent-amber-500"
+                        />
+                        <span className="text-xs text-foreground leading-snug">
+                          <strong>Are you 100% sure?</strong> All billing reminders,
+                          payment issues, and cancellation windows will go to you — not to a parent.
+                        </span>
+                      </label>
+                    )}
+                  </div>
+                )}
+
+                {/* ─── COLLEGE SELF-MANAGEMENT GATE (between sections) ───
+                    Moved above the parent section so the athlete can opt out
+                    before scrolling through optional parent fields. */}
+                {isCollege && !parentEmail.trim() && (
+                  <label className="flex gap-3 p-3 rounded-xl border border-border bg-surface/60 cursor-pointer hover:border-amber-500/50 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={collegeOptOut}
+                      onChange={(e) => setCollegeOptOut(e.target.checked)}
+                      className="mt-0.5 accent-highlight"
+                    />
+                    <span className="text-xs text-foreground/90 leading-snug">
+                      I&apos;m managing this account myself — I understand I&apos;m responsible
+                      for my own scheduling, cancellations, and billing.
+                    </span>
+                  </label>
+                )}
+
                 {/* ─── PARENT / GUARDIAN SECTION ───────────────── */}
                 {showsParentSection && (
                   <section className="rounded-xl overflow-hidden border-2 border-amber-500/70 bg-amber-500/[0.06] shadow-lg shadow-amber-500/10">
@@ -783,62 +846,6 @@ function RegisterForm() {
                     </div>
                     </div>
                   </section>
-                )}
-
-                {/* MS/HS two-step self-management gate.
-                    We intentionally make this harder than College — MS/HS athletes
-                    almost always have a parent on the account. Requiring two boxes
-                    prevents accidental solo registrations. */}
-                {isMsHs && (
-                  <div className="space-y-2.5 rounded-xl border border-border bg-surface/60 p-3">
-                    <p className="text-[11px] text-muted leading-snug">
-                      Most MS/HS athletes register with a parent or guardian.
-                      If you&apos;re managing this account by yourself, tick both boxes
-                      below — otherwise please complete the parent/guardian fields above.
-                    </p>
-                    <label className="flex gap-3 p-3 rounded-lg border border-border bg-background cursor-pointer hover:border-amber-500/50 transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={msHsSoloAck1}
-                        onChange={(e) => setMsHsSoloAck1(e.target.checked)}
-                        className="mt-0.5 accent-amber-500"
-                      />
-                      <span className="text-xs text-foreground/90 leading-snug">
-                        I&apos;m managing this account myself — I understand I&apos;m responsible
-                        for my own scheduling, cancellations, and billing.
-                      </span>
-                    </label>
-                    {msHsSoloAck1 && (
-                      <label className="flex gap-3 p-3 rounded-lg border-2 border-amber-500/60 bg-amber-500/10 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={msHsSoloAck2}
-                          onChange={(e) => setMsHsSoloAck2(e.target.checked)}
-                          className="mt-0.5 accent-amber-500"
-                        />
-                        <span className="text-xs text-foreground leading-snug">
-                          <strong>Are you 100% sure?</strong> All billing reminders,
-                          payment issues, and cancellation windows will go to you — not to a parent.
-                        </span>
-                      </label>
-                    )}
-                  </div>
-                )}
-
-                {/* College-only self-management acknowledgment */}
-                {isCollege && !parentEmail.trim() && (
-                  <label className="flex gap-3 p-3 rounded-xl border border-border bg-surface cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={collegeOptOut}
-                      onChange={(e) => setCollegeOptOut(e.target.checked)}
-                      className="mt-0.5 accent-highlight"
-                    />
-                    <span className="text-xs text-foreground/90 leading-snug">
-                      I&apos;m managing this account myself — I understand I&apos;m responsible
-                      for my own scheduling, cancellations, and billing.
-                    </span>
-                  </label>
                 )}
 
                 {/* Password (primary login) */}
