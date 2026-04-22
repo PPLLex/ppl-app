@@ -46,39 +46,39 @@ enum BillingDay {
 }
 
 enum LocationRole {
-  OWNER                  // Full revenue, settings, manage staff at this location
-  PITCHING_COORDINATOR   // Regular pitching coordinator — revenue splits, member data
-  YOUTH_COORDINATOR      // Youth pitching coordinator — revenue splits, member data
-  COACH                  // See schedule and their own assigned clients only
-  TRAINER                // General trainer — similar to coach
+  OWNER // Full revenue, settings, manage staff at this location
+  PITCHING_COORDINATOR // Regular pitching coordinator — revenue splits, member data
+  YOUTH_COORDINATOR // Youth pitching coordinator — revenue splits, member data
+  COACH // See schedule and their own assigned clients only
+  TRAINER // General trainer — similar to coach
 }
 
 // --- Family & Onboarding enums ---
 
 enum AccountType {
-  INDIVIDUAL      // Single athlete, self-managed
-  FAMILY          // Parent managing 1+ athlete children
-  PARTNER_SCHOOL  // School team — lump-sum billing, no individual payments
+  INDIVIDUAL // Single athlete, self-managed
+  FAMILY // Parent managing 1+ athlete children
+  PARTNER_SCHOOL // School team — lump-sum billing, no individual payments
 }
 
 enum AthleteRelationType {
-  SELF        // College athlete managing their own account
-  CHILD       // Parent's child
+  SELF // College athlete managing their own account
+  CHILD // Parent's child
   TEAM_MEMBER // Part of a partner school team
 }
 
 enum OnboardingStatus {
-  NEW             // First time at PPL — owes $300 onboarding fee
-  RETURNING       // Has trained before — no fee
-  PARTNER_SCHOOL  // School athlete — no fee
+  NEW // First time at PPL — owes $300 onboarding fee
+  RETURNING // Has trained before — no fee
+  PARTNER_SCHOOL // School athlete — no fee
 }
 
 enum OnboardingFeeStatus {
-  REQUIRED        // Fee owed, not yet paid
-  PROCESSING      // Stripe checkout in progress
-  PAID            // Fee collected
-  WAIVED          // Manually waived by admin
-  NOT_APPLICABLE  // Returning athlete or partner school — no fee
+  REQUIRED // Fee owed, not yet paid
+  PROCESSING // Stripe checkout in progress
+  PAID // Fee collected
+  WAIVED // Manually waived by admin
+  NOT_APPLICABLE // Returning athlete or partner school — no fee
 }
 
 enum TrainingDeliveryPreference {
@@ -98,7 +98,7 @@ enum SchoolInvoiceStatus {
 enum CoachInviteStatus {
   NOT_SENT
   SENT
-  ACCEPTED      // Coach opened the link and submitted roster
+  ACCEPTED // Coach opened the link and submitted roster
   EXPIRED
 }
 
@@ -169,6 +169,56 @@ enum NotificationStatus {
 }
 
 // ============================================================
+// ORGANIZATIONS — top-level tenant layer
+// ============================================================
+// Every business entity lives under an Organization. PPL is the first org,
+// HPL and Renewed Performance come online as separate brands. Apps share
+// the same backend + DB; each app reads org context from its domain or the
+// user's memberships and filters all queries by organizationId. See
+// ARCHITECTURE.md at the repo root for the rules and phases.
+//
+// The four seeded orgs use their slugs as primary keys (not UUIDs) so code
+// and SQL can reference them readably:
+//   - "ppl"                  Pitching Performance Lab
+//   - "hpl"                  Hitting Performance Lab
+//   - "hpl-youth"            HPL Youth (sub-brand, may consolidate into hpl)
+//   - "renewed-performance"  Renewed Performance (screenings, no client memberships)
+
+model Organization {
+  id        String  @id // slug used as ID: "ppl", "hpl", ...
+  name      String // "Pitching Performance Lab"
+  shortName String // "PPL"
+  tagline   String?
+
+  // Branding
+  logoUrl      String?
+  logoData     String? // base64 fallback
+  primaryColor String  @default("#5E9E50")
+  accentColor  String  @default("#95C83C")
+
+  // Domain routing — used by the frontend OrgContext to pick the active org
+  primaryDomain     String?  @unique // e.g., "app.pitchingperformancelab.com"
+  additionalDomains String[] @default([])
+
+  // Stripe — charges for this org's memberships land on this account.
+  // Joint memberships are charged once on the originating app's Stripe account
+  // and reconciled via the revenue ledger (see services/revenueLedger.ts).
+  stripeAccountId String?
+
+  // Defaults used when creating sessions/rooms in this org
+  defaultCapacity         Int @default(8)
+  sessionDurationMinutes  Int @default(60)
+  registrationCutoffHours Int @default(1)
+  cancellationCutoffHours Int @default(6)
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("organizations")
+}
+
+// ============================================================
 // LOCATIONS
 // ============================================================
 
@@ -178,27 +228,32 @@ model Location {
   address        String?
   phone          String?
   timezone       String   @default("America/Chicago")
-  operatingHours Json?    // { monday: { open: "06:00", close: "21:00" }, ... }
-  closedDay      String?  // e.g., "sunday"
-  kioskPin       String?  // 4-6 digit PIN for self-service kiosk check-in
+  operatingHours Json? // { monday: { open: "06:00", close: "21:00" }, ... }
+  closedDay      String? // e.g., "sunday"
+  kioskPin       String? // 4-6 digit PIN for self-service kiosk check-in
+  // See ARCHITECTURE.md — every org-tagged table defaults to "ppl" so existing
+  // rows land on PPL when the column is added, and Organization FK is added
+  // in a follow-up migration once the 4 orgs are seeded.
+  organizationId String   @default("ppl")
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   // Relations
-  users              User[]
-  staffLocations     StaffLocation[]
-  rooms              Room[]
-  sessions           Session[]
-  clientMemberships  ClientMembership[]
-  conversations      Conversation[]
-  auditLogs          AuditLog[]
-  families           Family[]
-  schoolTeams        SchoolTeam[]
-  scheduleTemplates     ScheduleTemplate[]
-  sessionTypeConfigs    SessionTypeConfig[]
-  attendanceViolations  AttendanceViolation[]
+  users                User[]
+  staffLocations       StaffLocation[]
+  rooms                Room[]
+  sessions             Session[]
+  clientMemberships    ClientMembership[]
+  conversations        Conversation[]
+  auditLogs            AuditLog[]
+  families             Family[]
+  schoolTeams          SchoolTeam[]
+  scheduleTemplates    ScheduleTemplate[]
+  sessionTypeConfigs   SessionTypeConfig[]
+  attendanceViolations AttendanceViolation[]
 
+  @@index([organizationId])
   @@map("locations")
 }
 
@@ -207,43 +262,43 @@ model Location {
 // ============================================================
 
 model User {
-  id               String   @id @default(uuid())
-  email            String   @unique
-  passwordHash     String?  // Optional — null for OAuth-only accounts
+  id               String  @id @default(uuid())
+  email            String  @unique
+  passwordHash     String? // Optional — null for OAuth-only accounts
   fullName         String
   phone            String?
-  role             Role     @default(CLIENT)
+  role             Role    @default(CLIENT)
   homeLocationId   String?
-  isActive         Boolean  @default(true)
-  stripeCustomerId String?  @unique
+  isActive         Boolean @default(true)
+  stripeCustomerId String? @unique
 
   // Family & account type fields
-  accountType      AccountType @default(INDIVIDUAL)
-  isParent         Boolean     @default(false)
-  parentUserId     String?     // Self-ref: college athletes who opt out of adding a parent
+  accountType  AccountType @default(INDIVIDUAL)
+  isParent     Boolean     @default(false)
+  parentUserId String? // Self-ref: college athletes who opt out of adding a parent
 
   // OAuth fields
-  authProvider      String?  // "email", "google", "apple" — primary auth method
-  googleId          String?  @unique
-  appleId           String?  @unique
-  avatarUrl         String?
+  authProvider String? // "email", "google", "apple" — primary auth method
+  googleId     String? @unique
+  appleId      String? @unique
+  avatarUrl    String?
 
   // Magic link fields
-  magicLinkToken    String?  @unique
-  magicLinkExpiry   DateTime?
+  magicLinkToken  String?   @unique
+  magicLinkExpiry DateTime?
 
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  homeLocation       Location?          @relation(fields: [homeLocationId], references: [id])
-  parentUser         User?              @relation("ParentChild", fields: [parentUserId], references: [id])
-  childUsers         User[]             @relation("ParentChild")
+  homeLocation       Location?           @relation(fields: [homeLocationId], references: [id])
+  parentUser         User?               @relation("ParentChild", fields: [parentUserId], references: [id])
+  childUsers         User[]              @relation("ParentChild")
   clientProfile      ClientProfile?
-  family             Family?            @relation("FamilyParent")
-  athleteProfile     AthleteProfile?    @relation("AthleteUser")
+  family             Family?             @relation("FamilyParent")
+  athleteProfile     AthleteProfile?     @relation("AthleteUser")
   staffLocations     StaffLocation[]
-  coachedSessions    Session[]          @relation("SessionCoach")
+  coachedSessions    Session[]           @relation("SessionCoach")
   bookings           Booking[]
   clientMemberships  ClientMembership[]
   weeklyCredits      WeeklyCredit[]
@@ -256,29 +311,29 @@ model User {
   auditLogs          AuditLog[]
 
   // Coach Notes relations
-  athleteNotes       CoachNote[]       @relation("AthleteNotes")
-  coachNotes         CoachNote[]       @relation("CoachNotes")
-  athleteDigests     NoteDigest[]      @relation("AthleteDigests")
-  digestRecipients   DigestRecipient[] @relation("DigestRecipients")
+  athleteNotes     CoachNote[]       @relation("AthleteNotes")
+  coachNotes       CoachNote[]       @relation("CoachNotes")
+  athleteDigests   NoteDigest[]      @relation("AthleteDigests")
+  digestRecipients DigestRecipient[] @relation("DigestRecipients")
 
   // Goals & Forms relations
-  athleteGoals       Goal[]            @relation("AthleteGoals")
-  coachGoals         Goal[]            @relation("CoachGoals")
-  createdForms       FormTemplate[]    @relation("CreatedForms")
-  formResponses      FormResponse[]    @relation("FormResponses")
+  athleteGoals  Goal[]         @relation("AthleteGoals")
+  coachGoals    Goal[]         @relation("CoachGoals")
+  createdForms  FormTemplate[] @relation("CreatedForms")
+  formResponses FormResponse[] @relation("FormResponses")
 
   // Programming relations
-  coachPrograms      Program[]         @relation("CoachPrograms")
-  athletePrograms    Program[]         @relation("AthletePrograms")
+  coachPrograms   Program[] @relation("CoachPrograms")
+  athletePrograms Program[] @relation("AthletePrograms")
 
   // Metrics relations
-  athleteMetrics     AthleteMetric[]   @relation("AthleteMetrics")
-  staffCoachMetrics  AthleteMetric[]   @relation("StaffCoachMetrics")
+  athleteMetrics    AthleteMetric[] @relation("AthleteMetrics")
+  staffCoachMetrics AthleteMetric[] @relation("StaffCoachMetrics")
 
   // Schedule template & violation relations
-  scheduleTemplates         ScheduleTemplate[]      @relation("TemplateCoach")
-  attendanceViolations      AttendanceViolation[]   @relation("ViolationClient")
-  assessedViolations        AttendanceViolation[]   @relation("ViolationAssessor")
+  scheduleTemplates    ScheduleTemplate[]    @relation("TemplateCoach")
+  attendanceViolations AttendanceViolation[] @relation("ViolationClient")
+  assessedViolations   AttendanceViolation[] @relation("ViolationAssessor")
 
   @@index([homeLocationId])
   @@index([role])
@@ -287,9 +342,9 @@ model User {
 }
 
 model ClientProfile {
-  id                    String   @id @default(uuid())
-  userId                String   @unique
-  ageGroup              String?  // "youth", "ms_hs", "college"
+  id                    String                      @id @default(uuid())
+  userId                String                      @unique
+  ageGroup              String? // "youth", "ms_hs", "college"
   dateOfBirth           DateTime?
   emergencyContactName  String?
   emergencyContactPhone String?
@@ -297,8 +352,8 @@ model ClientProfile {
   trainingPreference    TrainingDeliveryPreference?
   notes                 String?
   waiverSignedAt        DateTime?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
 
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -307,12 +362,12 @@ model ClientProfile {
 }
 
 model StaffLocation {
-  id           String         @id @default(uuid())
-  staffId      String
-  locationId   String
-  roles        LocationRole[] @default([COACH])
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  id         String         @id @default(uuid())
+  staffId    String
+  locationId String
+  roles      LocationRole[] @default([COACH])
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
 
   // Relations
   staff    User     @relation(fields: [staffId], references: [id], onDelete: Cascade)
@@ -330,7 +385,7 @@ model StaffInvite {
   phone     String?
   token     String    @unique @default(uuid())
   role      Role      @default(STAFF)
-  locations Json      // [{locationId, roles: ['PITCHING_COORDINATOR', ...]}]
+  locations Json // [{locationId, roles: ['PITCHING_COORDINATOR', ...]}]
   expiresAt DateTime
   usedAt    DateTime?
   invitedBy String?
@@ -365,6 +420,7 @@ model Room {
 
 model Session {
   id                      String      @id @default(uuid())
+  organizationId          String      @default("ppl")
   locationId              String
   roomId                  String?
   coachId                 String?
@@ -374,8 +430,8 @@ model Session {
   endTime                 DateTime
   maxCapacity             Int         @default(8)
   currentEnrolled         Int         @default(0)
-  recurringRule           String?     // iCal RRULE format
-  recurringGroupId        String?     // links recurring instances
+  recurringRule           String? // iCal RRULE format
+  recurringGroupId        String? // links recurring instances
   registrationCutoffHours Int         @default(2)
   cancellationCutoffHours Int         @default(4)
   isActive                Boolean     @default(true)
@@ -383,12 +439,13 @@ model Session {
   updatedAt               DateTime    @updatedAt
 
   // Relations
-  location Location  @relation(fields: [locationId], references: [id])
-  room     Room?     @relation(fields: [roomId], references: [id])
-  coach    User?     @relation("SessionCoach", fields: [coachId], references: [id])
-  bookings              Booking[]
-  attendanceViolations  AttendanceViolation[]
+  location             Location              @relation(fields: [locationId], references: [id])
+  room                 Room?                 @relation(fields: [roomId], references: [id])
+  coach                User?                 @relation("SessionCoach", fields: [coachId], references: [id])
+  bookings             Booking[]
+  attendanceViolations AttendanceViolation[]
 
+  @@index([organizationId, startTime])
   @@index([locationId, startTime])
   @@index([coachId])
   @@index([sessionType])
@@ -408,8 +465,8 @@ model Booking {
   updatedAt          DateTime      @updatedAt
 
   // Relations
-  client             User               @relation(fields: [clientId], references: [id])
-  session            Session            @relation(fields: [sessionId], references: [id])
+  client             User                @relation(fields: [clientId], references: [id])
+  session            Session             @relation(fields: [sessionId], references: [id])
   creditTransactions CreditTransaction[]
   coachNotes         CoachNote[]
 
@@ -424,36 +481,36 @@ model Booking {
 // ============================================================
 
 enum ViolationType {
-  NO_SIGNUP       // Showed up without booking ($20 fine)
-  WRONG_TIME      // Showed up at incorrect session time ($10 fine)
+  NO_SIGNUP // Showed up without booking ($20 fine)
+  WRONG_TIME // Showed up at incorrect session time ($10 fine)
 }
 
 enum ViolationStatus {
-  PENDING         // Fine assessed, not yet paid
-  PAID            // Fine collected via Stripe
-  WAIVED          // Admin waived the fine
+  PENDING // Fine assessed, not yet paid
+  PAID // Fine collected via Stripe
+  WAIVED // Admin waived the fine
 }
 
 model AttendanceViolation {
-  id            String          @id @default(uuid())
-  clientId      String
-  sessionId     String?         // Which session they walked into (null if no specific session)
-  locationId    String
-  type          ViolationType
-  amountCents   Int             // 2000 = $20, 1000 = $10
-  status        ViolationStatus @default(PENDING)
-  notes         String?         // Coach/admin notes on what happened
-  assessedById  String          // Staff/admin who logged it
-  paidAt        DateTime?
-  waivedAt      DateTime?
-  waivedById    String?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  id           String          @id @default(uuid())
+  clientId     String
+  sessionId    String? // Which session they walked into (null if no specific session)
+  locationId   String
+  type         ViolationType
+  amountCents  Int // 2000 = $20, 1000 = $10
+  status       ViolationStatus @default(PENDING)
+  notes        String? // Coach/admin notes on what happened
+  assessedById String // Staff/admin who logged it
+  paidAt       DateTime?
+  waivedAt     DateTime?
+  waivedById   String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
 
-  client     User      @relation("ViolationClient", fields: [clientId], references: [id])
-  session    Session?  @relation(fields: [sessionId], references: [id])
-  location   Location  @relation(fields: [locationId], references: [id])
-  assessedBy User      @relation("ViolationAssessor", fields: [assessedById], references: [id])
+  client     User     @relation("ViolationClient", fields: [clientId], references: [id])
+  session    Session? @relation(fields: [sessionId], references: [id])
+  location   Location @relation(fields: [locationId], references: [id])
+  assessedBy User     @relation("ViolationAssessor", fields: [assessedById], references: [id])
 
   @@index([clientId])
   @@index([sessionId])
@@ -465,27 +522,29 @@ model AttendanceViolation {
 /// Each entry is "every Monday at 3pm in Room A, College Pitching".
 /// A cron job uses these to auto-generate Session rows 2 weeks ahead.
 model ScheduleTemplate {
-  id              String      @id @default(uuid())
-  locationId      String
-  roomId          String?
-  coachId         String?
-  title           String
-  sessionType     SessionType
-  dayOfWeek       Int         // 0=Sunday … 6=Saturday
-  startHour       Int         // 0-23
-  startMinute     Int         @default(0)
-  durationMinutes Int         @default(60)
-  maxCapacity     Int         @default(8)
-  registrationCutoffHours Int @default(2)
-  cancellationCutoffHours Int @default(4)
-  isActive        Boolean     @default(true)
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  id                      String      @id @default(uuid())
+  organizationId          String      @default("ppl")
+  locationId              String
+  roomId                  String?
+  coachId                 String?
+  title                   String
+  sessionType             SessionType
+  dayOfWeek               Int // 0=Sunday … 6=Saturday
+  startHour               Int // 0-23
+  startMinute             Int         @default(0)
+  durationMinutes         Int         @default(60)
+  maxCapacity             Int         @default(8)
+  registrationCutoffHours Int         @default(2)
+  cancellationCutoffHours Int         @default(4)
+  isActive                Boolean     @default(true)
+  createdAt               DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
 
   location Location @relation(fields: [locationId], references: [id])
   room     Room?    @relation(fields: [roomId], references: [id])
   coach    User?    @relation("TemplateCoach", fields: [coachId], references: [id])
 
+  @@index([organizationId])
   @@index([locationId, dayOfWeek])
   @@map("schedule_templates")
 }
@@ -496,14 +555,15 @@ model ScheduleTemplate {
 
 model SessionTypeConfig {
   id                      String      @id @default(uuid())
+  organizationId          String      @default("ppl")
   locationId              String
   sessionType             SessionType
-  label                   String      // Display name, e.g. "College Pitching"
+  label                   String // Display name, e.g. "College Pitching"
   maxCapacity             Int         @default(8)
   durationMinutes         Int         @default(60)
   registrationCutoffHours Int         @default(2)
   cancellationCutoffHours Int         @default(4)
-  color                   String?     // Hex color for calendar display, e.g. "#10B981"
+  color                   String? // Hex color for calendar display, e.g. "#10B981"
   isActive                Boolean     @default(true)
   createdAt               DateTime    @default(now())
   updatedAt               DateTime    @updatedAt
@@ -511,6 +571,7 @@ model SessionTypeConfig {
   location Location @relation(fields: [locationId], references: [id])
 
   @@unique([locationId, sessionType])
+  @@index([organizationId])
   @@map("session_type_configs")
 }
 
@@ -520,11 +581,12 @@ model SessionTypeConfig {
 
 model MembershipPlan {
   id              String   @id @default(uuid())
-  name            String   // "Unlimited College Pitching", "Youth 1x/Week", etc.
+  organizationId  String   @default("ppl")
+  name            String // "Unlimited College Pitching", "Youth 1x/Week", etc.
   slug            String   @unique
-  ageGroup        String   // "college", "ms_hs", "youth"
-  sessionsPerWeek Int?     // null = unlimited
-  priceCents      Int      // e.g., 8500 = $85.00
+  ageGroup        String // "college", "ms_hs", "youth"
+  sessionsPerWeek Int? // null = unlimited
+  priceCents      Int // e.g., 8500 = $85.00
   billingCycle    String   @default("weekly")
   description     String?
   isActive        Boolean  @default(true)
@@ -534,6 +596,7 @@ model MembershipPlan {
   // Relations
   clientMemberships ClientMembership[]
 
+  @@index([organizationId])
   @@map("membership_plans")
 }
 
@@ -542,7 +605,7 @@ model ClientMembership {
   clientId             String
   planId               String
   locationId           String
-  athleteId            String?          // Links to AthleteProfile — null for legacy memberships
+  athleteId            String? // Links to AthleteProfile — null for legacy memberships
   status               MembershipStatus @default(ACTIVE)
   stripeSubscriptionId String?          @unique
   stripePriceId        String?
@@ -555,10 +618,10 @@ model ClientMembership {
   updatedAt            DateTime         @updatedAt
 
   // Relations
-  client        User              @relation(fields: [clientId], references: [id])
-  plan          MembershipPlan    @relation(fields: [planId], references: [id])
-  location      Location          @relation(fields: [locationId], references: [id])
-  athlete       AthleteProfile?   @relation(fields: [athleteId], references: [id])
+  client        User            @relation(fields: [clientId], references: [id])
+  plan          MembershipPlan  @relation(fields: [planId], references: [id])
+  location      Location        @relation(fields: [locationId], references: [id])
+  athlete       AthleteProfile? @relation(fields: [athleteId], references: [id])
   weeklyCredits WeeklyCredit[]
   payments      Payment[]
 
@@ -569,15 +632,19 @@ model ClientMembership {
 }
 
 model WeeklyCredit {
-  id           String   @id @default(uuid())
-  clientId     String
-  membershipId String
-  creditsTotal Int
-  creditsUsed  Int      @default(0)
-  weekStartDate DateTime
-  weekEndDate  DateTime
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String   @id @default(uuid())
+  // org is direct here because joint memberships split credits into pools
+  // tagged per-org (1 PPL credit + 1 HPL credit, never cross-spendable).
+  // Filtering credits by org is a hot path.
+  organizationId String   @default("ppl")
+  clientId       String
+  membershipId   String
+  creditsTotal   Int
+  creditsUsed    Int      @default(0)
+  weekStartDate  DateTime
+  weekEndDate    DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   // Relations
   client     User             @relation(fields: [clientId], references: [id])
@@ -585,14 +652,15 @@ model WeeklyCredit {
 
   @@unique([clientId, membershipId, weekStartDate])
   @@index([clientId, weekStartDate])
+  @@index([organizationId, weekStartDate])
   @@map("weekly_credits")
 }
 
 model CreditTransaction {
   id              String   @id @default(uuid())
   clientId        String
-  transactionType String   // "usage", "refund", "revoke", "restore"
-  amount          Int      // positive = added, negative = used/revoked
+  transactionType String // "usage", "refund", "revoke", "restore"
+  amount          Int // positive = added, negative = used/revoked
   bookingId       String?
   paymentId       String?
   notes           String?
@@ -658,8 +726,8 @@ model CardChangeRequest {
 model Conversation {
   id           String   @id @default(uuid())
   locationId   String?
-  participants Json     // array of user IDs
-  type         String   // "client_coach", "client_admin"
+  participants Json // array of user IDs
+  type         String // "client_coach", "client_admin"
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -691,16 +759,16 @@ model Message {
 // ============================================================
 
 model Notification {
-  id        String             @id @default(uuid())
+  id        String              @id @default(uuid())
   userId    String
   type      NotificationType
   title     String
   body      String
   channel   NotificationChannel
-  status    NotificationStatus @default(PENDING)
-  metadata  Json?              // extra data (booking ID, payment amount, etc.)
+  status    NotificationStatus  @default(PENDING)
+  metadata  Json? // extra data (booking ID, payment amount, etc.)
   sentAt    DateTime?
-  createdAt DateTime           @default(now())
+  createdAt DateTime            @default(now())
 
   // Relations
   user User @relation(fields: [userId], references: [id])
@@ -718,7 +786,7 @@ model PushToken {
   id         String   @id @default(uuid())
   userId     String
   token      String   @unique // FCM device token
-  deviceInfo String?  // "Chrome on Windows", "Safari on iPhone", etc.
+  deviceInfo String? // "Chrome on Windows", "Safari on iPhone", etc.
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -750,13 +818,13 @@ enum TrainingCategory {
 model CoachNote {
   id               String           @id @default(uuid())
   athleteId        String
-  coachId          String?          // PPL staff coach (null if school coach)
-  schoolCoachId    String?          // Partner school coach (null if PPL staff)
+  coachId          String? // PPL staff coach (null if school coach)
+  schoolCoachId    String? // Partner school coach (null if PPL staff)
   trainingCategory TrainingCategory
-  rawContent       String           // original note from coach
-  cleanedContent   String?          // AI-cleaned version (grammar, profanity filtered)
+  rawContent       String // original note from coach
+  cleanedContent   String? // AI-cleaned version (grammar, profanity filtered)
   sessionDate      DateTime         @default(now())
-  bookingId        String?          // optional link to a specific booking
+  bookingId        String? // optional link to a specific booking
   isVisible        Boolean          @default(true) // can be hidden if needed
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
@@ -776,15 +844,15 @@ model CoachNote {
 
 // Weekly email digest tracking
 model NoteDigest {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   athleteId   String
   weekStart   DateTime
   weekEnd     DateTime
   emailSentAt DateTime?
-  recipients  Json     // array of email addresses that received this digest
-  noteIds     Json     // array of CoachNote IDs included
-  htmlContent String?  // rendered email content for audit
-  createdAt   DateTime @default(now())
+  recipients  Json // array of email addresses that received this digest
+  noteIds     Json // array of CoachNote IDs included
+  htmlContent String? // rendered email content for audit
+  createdAt   DateTime  @default(now())
 
   // Relations
   athlete User @relation("AthleteDigests", fields: [athleteId], references: [id])
@@ -800,7 +868,7 @@ model DigestRecipient {
   athleteId String
   email     String
   name      String?
-  relation  String?  // "parent", "coach", "guardian", etc.
+  relation  String? // "parent", "coach", "guardian", etc.
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -817,8 +885,8 @@ model DigestRecipient {
 // ============================================================
 
 enum GoalType {
-  SHORT_TERM  // weeks
-  LONG_TERM   // months/season
+  SHORT_TERM // weeks
+  LONG_TERM // months/season
 }
 
 enum GoalStatus {
@@ -830,7 +898,7 @@ enum GoalStatus {
 model Goal {
   id          String     @id @default(uuid())
   athleteId   String
-  coachId     String?    // coach who set it, or null if self-set
+  coachId     String? // coach who set it, or null if self-set
   type        GoalType
   title       String
   description String?
@@ -855,15 +923,15 @@ model Goal {
 // ============================================================
 
 model FormTemplate {
-  id          String   @id @default(uuid())
-  createdById String
-  title       String
-  description String?
-  fields      Json     // array of field definitions: [{name, type, label, required, options}]
-  isOnboarding Boolean @default(false) // if true, new athletes must fill it out
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(uuid())
+  createdById  String
+  title        String
+  description  String?
+  fields       Json // array of field definitions: [{name, type, label, required, options}]
+  isOnboarding Boolean  @default(false) // if true, new athletes must fill it out
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   // Relations
   createdBy User           @relation("CreatedForms", fields: [createdById], references: [id])
@@ -873,12 +941,12 @@ model FormTemplate {
 }
 
 model FormResponse {
-  id         String   @id @default(uuid())
-  formId     String
-  athleteId  String
-  answers    Json     // { fieldName: answer, ... }
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(uuid())
+  formId    String
+  athleteId String
+  answers   Json // { fieldName: answer, ... }
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
   form    FormTemplate @relation(fields: [formId], references: [id])
@@ -913,9 +981,9 @@ model Program {
   updatedAt   DateTime      @updatedAt
 
   // Relations
-  coach    User          @relation("CoachPrograms", fields: [coachId], references: [id])
-  athlete  User          @relation("AthletePrograms", fields: [athleteId], references: [id])
-  weeks    ProgramWeek[]
+  coach   User          @relation("CoachPrograms", fields: [coachId], references: [id])
+  athlete User          @relation("AthletePrograms", fields: [athleteId], references: [id])
+  weeks   ProgramWeek[]
 
   @@index([coachId])
   @@index([athleteId, status])
@@ -926,13 +994,13 @@ model ProgramWeek {
   id        String   @id @default(uuid())
   programId String
   weekNum   Int
-  title     String?  // "Week 1 — Foundation", etc.
+  title     String? // "Week 1 — Foundation", etc.
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  program  Program      @relation(fields: [programId], references: [id], onDelete: Cascade)
-  days     ProgramDay[]
+  program Program      @relation(fields: [programId], references: [id], onDelete: Cascade)
+  days    ProgramDay[]
 
   @@unique([programId, weekNum])
   @@map("program_weeks")
@@ -941,8 +1009,8 @@ model ProgramWeek {
 model ProgramDay {
   id        String   @id @default(uuid())
   weekId    String
-  dayNum    Int      // 1-7
-  title     String?  // "Monday — Throwing Day"
+  dayNum    Int // 1-7
+  title     String? // "Monday — Throwing Day"
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -956,19 +1024,19 @@ model ProgramDay {
 }
 
 model ProgramExercise {
-  id           String   @id @default(uuid())
-  dayId        String
-  sortOrder    Int      @default(0)
-  exerciseId   String?  // link to exercise library, or null for custom
-  customName   String?  // if not from library
-  sets         Int?
-  reps         String?  // "10" or "8-12" or "AMRAP"
-  intensity    String?  // "65%" or "RPE 7" or "Max Effort"
-  restSeconds  Int?
-  tempo        String?  // "3-1-1-0"
-  notes        String?  // coach instructions
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String   @id @default(uuid())
+  dayId       String
+  sortOrder   Int      @default(0)
+  exerciseId  String? // link to exercise library, or null for custom
+  customName  String? // if not from library
+  sets        Int?
+  reps        String? // "10" or "8-12" or "AMRAP"
+  intensity   String? // "65%" or "RPE 7" or "Max Effort"
+  restSeconds Int?
+  tempo       String? // "3-1-1-0"
+  notes       String? // coach instructions
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   // Relations
   day      ProgramDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
@@ -982,8 +1050,8 @@ model ProgramExercise {
 model Exercise {
   id          String   @id @default(uuid())
   name        String
-  category    String   // "throwing", "arm_care", "strength", "mobility", "conditioning"
-  equipment   String?  // "plyo_ball", "band", "dumbbell", etc.
+  category    String // "throwing", "arm_care", "strength", "mobility", "conditioning"
+  equipment   String? // "plyo_ball", "band", "dumbbell", etc.
   description String?
   videoUrl    String?
   isActive    Boolean  @default(true)
@@ -1003,43 +1071,43 @@ model Exercise {
 
 model Family {
   id                String   @id @default(uuid())
-  parentUserId      String   @unique   // The parent/guardian User
-  stripeCustomerId  String?  @unique   // One Stripe customer per family
+  parentUserId      String   @unique // The parent/guardian User
+  stripeCustomerId  String?  @unique // One Stripe customer per family
   primaryLocationId String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   // Relations
-  parent           User              @relation("FamilyParent", fields: [parentUserId], references: [id])
-  primaryLocation  Location?         @relation(fields: [primaryLocationId], references: [id])
-  athletes         AthleteProfile[]
+  parent          User             @relation("FamilyParent", fields: [parentUserId], references: [id])
+  primaryLocation Location?        @relation(fields: [primaryLocationId], references: [id])
+  athletes        AthleteProfile[]
 
   @@map("families")
 }
 
 model AthleteProfile {
-  id                      String                      @id @default(uuid())
-  userId                  String                      @unique  // The athlete's own User account
-  familyId                String?                     // null for INDIVIDUAL or PARTNER_SCHOOL
-  schoolTeamId            String?                     // null unless PARTNER_SCHOOL
-  relationToParent        AthleteRelationType          @default(SELF)
-  firstName               String
-  lastName                String
-  dateOfBirth             DateTime?
-  ageGroup                String?                     // "youth", "ms_hs", "college"
-  trainingDeliveryPref    TrainingDeliveryPreference?
-  lastAgeMovedUpAlert     DateTime?                   // Last time we sent the "move up" notification
-  parentOptOut            Boolean                     @default(false) // College athlete opted out of adding parent
-  parentOptOutAckedAt     DateTime?                   // When they acknowledged responsibility
-  createdAt               DateTime                    @default(now())
-  updatedAt               DateTime                    @updatedAt
+  id                   String                      @id @default(uuid())
+  userId               String                      @unique // The athlete's own User account
+  familyId             String? // null for INDIVIDUAL or PARTNER_SCHOOL
+  schoolTeamId         String? // null unless PARTNER_SCHOOL
+  relationToParent     AthleteRelationType         @default(SELF)
+  firstName            String
+  lastName             String
+  dateOfBirth          DateTime?
+  ageGroup             String? // "youth", "ms_hs", "college"
+  trainingDeliveryPref TrainingDeliveryPreference?
+  lastAgeMovedUpAlert  DateTime? // Last time we sent the "move up" notification
+  parentOptOut         Boolean                     @default(false) // College athlete opted out of adding parent
+  parentOptOutAckedAt  DateTime? // When they acknowledged responsibility
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
 
   // Relations
-  user               User               @relation("AthleteUser", fields: [userId], references: [id], onDelete: Cascade)
-  family             Family?            @relation(fields: [familyId], references: [id])
-  schoolTeam         SchoolTeam?        @relation(fields: [schoolTeamId], references: [id])
-  onboardingRecord   OnboardingRecord?
-  memberships        ClientMembership[]
+  user             User               @relation("AthleteUser", fields: [userId], references: [id], onDelete: Cascade)
+  family           Family?            @relation(fields: [familyId], references: [id])
+  schoolTeam       SchoolTeam?        @relation(fields: [schoolTeamId], references: [id])
+  onboardingRecord OnboardingRecord?
+  memberships      ClientMembership[]
 
   outsideCoachLinks OutsideCoachLink[]
 
@@ -1059,18 +1127,18 @@ model AthleteProfile {
  * They CANNOT book, edit, or see scheduling info — just performance data.
  */
 model OutsideCoachLink {
-  id            String   @id @default(uuid())
-  athleteId     String
-  coachName     String   // Full name of the outside coach
-  coachEmail    String   // Email for reports / login
-  coachPhone    String?
-  organization  String?  // "Central High School", "Louisville Sluggers Travel", etc.
-  coachRole     String?  // "Head Coach", "Pitching Coach", "Travel Coach", etc.
-  isActive      Boolean  @default(true)
-  invitedAt     DateTime @default(now())
-  acceptedAt    DateTime? // When the coach claimed their account
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String    @id @default(uuid())
+  athleteId    String
+  coachName    String // Full name of the outside coach
+  coachEmail   String // Email for reports / login
+  coachPhone   String?
+  organization String? // "Central High School", "Louisville Sluggers Travel", etc.
+  coachRole    String? // "Head Coach", "Pitching Coach", "Travel Coach", etc.
+  isActive     Boolean   @default(true)
+  invitedAt    DateTime  @default(now())
+  acceptedAt   DateTime? // When the coach claimed their account
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   // Relations
   athlete AthleteProfile @relation(fields: [athleteId], references: [id], onDelete: Cascade)
@@ -1081,24 +1149,28 @@ model OutsideCoachLink {
 }
 
 model OnboardingRecord {
-  id                    String              @id @default(uuid())
-  athleteId             String              @unique
-  onboardingStatus      OnboardingStatus    @default(NEW)
-  feeStatus             OnboardingFeeStatus @default(REQUIRED)
-  onboardingFeeCents    Int                 @default(30000) // $300.00
-  stripePaymentId       String?             // Stripe PI for the onboarding fee
-  stripeCheckoutId      String?             // Stripe Checkout Session ID
-  isYouthGraduate       Boolean             @default(false)  // Graduated from PPL Youth → still NEW but gets special messaging
-  hadFreeAssessment     Boolean             @default(false)  // Did a free assessment but never trained
-  qualifyingAnswers     Json?               // { "trainedBefore": false, "lastTrainedDate": null, ... }
-  selfReportedStatus    String?             // What the athlete selected: "new", "returning", "youth_graduate", "free_assessment"
-  completedAt           DateTime?
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
+  id                 String              @id @default(uuid())
+  // Which org's onboarding fee was paid — matters because Renewed Performance
+  // will be paid per-athlete by whichever org onboarded them.
+  organizationId     String              @default("ppl")
+  athleteId          String              @unique
+  onboardingStatus   OnboardingStatus    @default(NEW)
+  feeStatus          OnboardingFeeStatus @default(REQUIRED)
+  onboardingFeeCents Int                 @default(30000) // $300.00
+  stripePaymentId    String? // Stripe PI for the onboarding fee
+  stripeCheckoutId   String? // Stripe Checkout Session ID
+  isYouthGraduate    Boolean             @default(false) // Graduated from PPL Youth → still NEW but gets special messaging
+  hadFreeAssessment  Boolean             @default(false) // Did a free assessment but never trained
+  qualifyingAnswers  Json? // { "trainedBefore": false, "lastTrainedDate": null, ... }
+  selfReportedStatus String? // What the athlete selected: "new", "returning", "youth_graduate", "free_assessment"
+  completedAt        DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
   // Relations
   athlete AthleteProfile @relation(fields: [athleteId], references: [id], onDelete: Cascade)
 
+  @@index([organizationId])
   @@map("onboarding_records")
 }
 
@@ -1107,33 +1179,33 @@ model OnboardingRecord {
 // ============================================================
 
 model SchoolTeam {
-  id                  String   @id @default(uuid())
-  name                String                         // "Lexington Catholic Baseball"
-  slug                String   @unique               // "lexington-catholic" — used in signup URL
-  primaryLocationId   String?
-  brandLogoUrl        String?                        // Uploaded school logo
-  brandColors         Json?                          // { primary: "#1a3e72", secondary: "#c4a34d" }
-  signupUrl           String?  @unique               // Generated: /join/team/lexington-catholic
+  id                String  @id @default(uuid())
+  name              String // "Lexington Catholic Baseball"
+  slug              String  @unique // "lexington-catholic" — used in signup URL
+  primaryLocationId String?
+  brandLogoUrl      String? // Uploaded school logo
+  brandColors       Json? // { primary: "#1a3e72", secondary: "#c4a34d" }
+  signupUrl         String? @unique // Generated: /join/team/lexington-catholic
 
   // Coach info
-  coachName           String?
-  coachEmail          String?
-  coachPhone          String?
-  coachInviteToken    String?  @unique               // Unique token for coach roster form link
-  coachInviteStatus   CoachInviteStatus @default(NOT_SENT)
-  coachInviteSentAt   DateTime?
-  rosterSubmittedAt   DateTime?                      // When coach finished submitting the roster
+  coachName         String?
+  coachEmail        String?
+  coachPhone        String?
+  coachInviteToken  String?           @unique // Unique token for coach roster form link
+  coachInviteStatus CoachInviteStatus @default(NOT_SENT)
+  coachInviteSentAt DateTime?
+  rosterSubmittedAt DateTime? // When coach finished submitting the roster
 
   // Billing contact (may differ from coach)
   paymentContactName  String?
   paymentContactEmail String?
-  totalAnnualBudget   Int?                           // cents — total the school pays
+  totalAnnualBudget   Int? // cents — total the school pays
   isActive            Boolean  @default(true)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
   // Relations
-  primaryLocation Location?          @relation(fields: [primaryLocationId], references: [id])
+  primaryLocation Location?        @relation(fields: [primaryLocationId], references: [id])
   athletes        AthleteProfile[]
   invoices        SchoolInvoice[]
   contracts       SchoolContract[]
@@ -1145,21 +1217,21 @@ model SchoolTeam {
 }
 
 model SchoolInvoice {
-  id               String              @id @default(uuid())
-  schoolTeamId     String
-  stripeInvoiceId  String?             @unique
-  description      String?                            // "Fall 2026 Remote Programming — 25 athletes"
-  totalCents       Int
-  paidCents        Int                 @default(0)
-  status           SchoolInvoiceStatus @default(DRAFT)
-  dueDate          DateTime?
-  sentAt           DateTime?
-  paidAt           DateTime?
-  periodStart      DateTime?
-  periodEnd        DateTime?
-  notes            String?
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  id              String              @id @default(uuid())
+  schoolTeamId    String
+  stripeInvoiceId String?             @unique
+  description     String? // "Fall 2026 Remote Programming — 25 athletes"
+  totalCents      Int
+  paidCents       Int                 @default(0)
+  status          SchoolInvoiceStatus @default(DRAFT)
+  dueDate         DateTime?
+  sentAt          DateTime?
+  paidAt          DateTime?
+  periodStart     DateTime?
+  periodEnd       DateTime?
+  notes           String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 
   // Relations
   schoolTeam SchoolTeam @relation(fields: [schoolTeamId], references: [id])
@@ -1169,21 +1241,21 @@ model SchoolInvoice {
 }
 
 model SchoolContract {
-  id               String         @id @default(uuid())
-  schoolTeamId     String
-  title            String                              // "PPL Remote Training Agreement — Fall 2026"
-  terms            String                              // Full contract text / terms
-  startDate        DateTime
-  endDate          DateTime
-  totalValueCents  Int?                                // Total contract value
-  status           ContractStatus @default(DRAFT)
-  signatureToken   String?        @unique              // Token for the signing link
-  signedByName     String?                             // Name of person who signed
-  signedByEmail    String?
-  signedAt         DateTime?
-  sentAt           DateTime?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  id              String         @id @default(uuid())
+  schoolTeamId    String
+  title           String // "PPL Remote Training Agreement — Fall 2026"
+  terms           String // Full contract text / terms
+  startDate       DateTime
+  endDate         DateTime
+  totalValueCents Int? // Total contract value
+  status          ContractStatus @default(DRAFT)
+  signatureToken  String?        @unique // Token for the signing link
+  signedByName    String? // Name of person who signed
+  signedByEmail   String?
+  signedAt        DateTime?
+  sentAt          DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   // Relations
   schoolTeam SchoolTeam @relation(fields: [schoolTeamId], references: [id])
@@ -1198,37 +1270,37 @@ model SchoolContract {
 // ============================================================
 
 model SchoolCoach {
-  id              String          @id @default(uuid())
-  schoolTeamId    String
-  email           String          @unique
-  passwordHash    String
-  fullName        String
-  phone           String?
-  role            SchoolCoachRole @default(HEAD_COACH)
-  title           String?         // "Director of Pitching", "Head Baseball Coach", etc.
+  id           String          @id @default(uuid())
+  schoolTeamId String
+  email        String          @unique
+  passwordHash String
+  fullName     String
+  phone        String?
+  role         SchoolCoachRole @default(HEAD_COACH)
+  title        String? // "Director of Pitching", "Head Baseball Coach", etc.
 
   // Access control — admin checks these boxes per coach
-  canViewDashboard    Boolean @default(true)
-  canTakeNotes        Boolean @default(true)
-  canViewPrograms     Boolean @default(true)
-  canViewGoals        Boolean @default(true)
-  canViewMetrics      Boolean @default(true)
-  canMessageAthletes  Boolean @default(false)
+  canViewDashboard      Boolean @default(true)
+  canTakeNotes          Boolean @default(true)
+  canViewPrograms       Boolean @default(true)
+  canViewGoals          Boolean @default(true)
+  canViewMetrics        Boolean @default(true)
+  canMessageAthletes    Boolean @default(false)
   receivesWeeklySummary Boolean @default(true)
 
   // Push notification subscription (for PWA)
-  pushSubscription  Json?           // Web Push subscription object
-  notifyReminders   Boolean @default(true)
+  pushSubscription Json? // Web Push subscription object
+  notifyReminders  Boolean @default(true)
 
-  lastLoginAt     DateTime?
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  lastLoginAt DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   // Relations
-  schoolTeam      SchoolTeam      @relation(fields: [schoolTeamId], references: [id])
-  athleteNotes    CoachNote[]     @relation("SchoolCoachNotes")
-  athleteMetrics  AthleteMetric[] @relation("SchoolCoachMetrics")
+  schoolTeam     SchoolTeam      @relation(fields: [schoolTeamId], references: [id])
+  athleteNotes   CoachNote[]     @relation("SchoolCoachNotes")
+  athleteMetrics AthleteMetric[] @relation("SchoolCoachMetrics")
 
   @@index([schoolTeamId])
   @@index([email])
@@ -1240,23 +1312,23 @@ model SchoolCoach {
 // ============================================================
 
 model AthleteMetric {
-  id              String     @id @default(uuid())
-  athleteId       String
-  schoolCoachId   String?    // null if logged by PPL staff
-  staffCoachId    String?    // null if logged by school coach
-  metricType      MetricType
-  value           Float      // the measurement value
-  unit            String?    // "mph", "rpm", "/10", "lbs", etc.
-  customLabel     String?    // label when metricType is CUSTOM
-  sessionDate     DateTime   @default(now())
-  notes           String?
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  id            String     @id @default(uuid())
+  athleteId     String
+  schoolCoachId String? // null if logged by PPL staff
+  staffCoachId  String? // null if logged by school coach
+  metricType    MetricType
+  value         Float // the measurement value
+  unit          String? // "mph", "rpm", "/10", "lbs", etc.
+  customLabel   String? // label when metricType is CUSTOM
+  sessionDate   DateTime   @default(now())
+  notes         String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 
   // Relations
-  athlete      User         @relation("AthleteMetrics", fields: [athleteId], references: [id])
-  schoolCoach  SchoolCoach? @relation("SchoolCoachMetrics", fields: [schoolCoachId], references: [id])
-  staffCoach   User?        @relation("StaffCoachMetrics", fields: [staffCoachId], references: [id])
+  athlete     User         @relation("AthleteMetrics", fields: [athleteId], references: [id])
+  schoolCoach SchoolCoach? @relation("SchoolCoachMetrics", fields: [schoolCoachId], references: [id])
+  staffCoach  User?        @relation("StaffCoachMetrics", fields: [staffCoachId], references: [id])
 
   @@index([athleteId, metricType])
   @@index([athleteId, createdAt])
@@ -1272,10 +1344,10 @@ model AuditLog {
   id           String   @id @default(uuid())
   userId       String?
   locationId   String?
-  action       String   // "session.created", "session.updated", "booking.cancelled", etc.
-  resourceType String   // "session", "booking", "membership", etc.
+  action       String // "session.created", "session.updated", "booking.cancelled", etc.
+  resourceType String // "session", "booking", "membership", etc.
   resourceId   String?
-  changes      Json?    // { before: {...}, after: {...} }
+  changes      Json? // { before: {...}, after: {...} }
   ipAddress    String?
   createdAt    DateTime @default(now())
 
@@ -1294,18 +1366,18 @@ model AuditLog {
 // ============================================================
 
 model OrgSettings {
-  id               String   @id @default("ppl")  // singleton row
-  businessName     String   @default("Pitching Performance Lab")
-  tagline          String   @default("Train like a pro.")
-  logoData         String?  // base64 data URI for the logo image
-  primaryColor     String   @default("#166534")
-  accentColor      String   @default("#4ade80")
+  id           String  @id @default("ppl") // singleton row
+  businessName String  @default("Pitching Performance Lab")
+  tagline      String  @default("Train like a pro.")
+  logoData     String? // base64 data URI for the logo image
+  primaryColor String  @default("#166534")
+  accentColor  String  @default("#4ade80")
 
   // Session defaults
-  defaultCapacity          Int @default(8)
-  sessionDurationMinutes   Int @default(60)
-  registrationCutoffHours  Int @default(1)
-  cancellationCutoffHours  Int @default(6)
+  defaultCapacity         Int @default(8)
+  sessionDurationMinutes  Int @default(60)
+  registrationCutoffHours Int @default(1)
+  cancellationCutoffHours Int @default(6)
 
   updatedAt DateTime @updatedAt
 
