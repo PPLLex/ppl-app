@@ -45,9 +45,13 @@ async function getOrCreateSettings() {
 
 /**
  * GET /api/settings/branding
- * Admin: get current branding + session defaults.
+ * Public: returns logo, business name, colors, session defaults.
+ *
+ * Intentionally unauthenticated — branding data is shown on every public
+ * page (login, register, join, etc.) so the logo and colors appear before
+ * the user has signed in. Write routes (PUT/POST/DELETE) remain admin-only.
  */
-router.get('/branding', authenticate, requireAdmin, async (_req: Request, res: Response, next: NextFunction) => {
+router.get('/branding', async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const settings = await getOrCreateSettings();
     res.json({ data: settings });

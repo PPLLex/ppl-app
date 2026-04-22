@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import Link from 'next/link';
 
 export default function MagicLinkPage() {
@@ -16,6 +17,7 @@ export default function MagicLinkPage() {
 function MagicLinkVerifier() {
   const searchParams = useSearchParams();
   const { verifyMagicLink } = useAuth();
+  const { branding } = useTheme();
   const [status, setStatus] = useState<'verifying' | 'error'>('verifying');
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -39,9 +41,20 @@ function MagicLinkVerifier() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm text-center">
-        <div className="inline-flex items-center justify-center w-20 h-20 rounded-full ppl-gradient mb-6">
-          <span className="text-white text-3xl font-bold">P</span>
-        </div>
+        {branding.logoData ? (
+          <div className="inline-flex items-center justify-center w-24 h-24 rounded-2xl overflow-hidden mb-6 shadow-lg shadow-emerald-900/20 ring-1 ring-border">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={branding.logoData}
+              alt={branding.businessName}
+              className="w-full h-full object-contain bg-white/5"
+            />
+          </div>
+        ) : (
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full ppl-gradient mb-6">
+            <span className="text-white text-3xl font-bold">P</span>
+          </div>
+        )}
 
         {status === 'verifying' && (
           <>

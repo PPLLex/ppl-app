@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { api, Location, MembershipPlan } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Script from 'next/script';
@@ -37,6 +38,7 @@ function JoinFlow() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { loginWithGoogle, routeByRole, user, refreshUser } = useAuth();
+  const { branding } = useTheme();
 
   // OAuth returning users land on step=2
   const oauthProvider = searchParams.get('oauth');
@@ -279,10 +281,21 @@ function JoinFlow() {
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full ppl-gradient mb-4">
-            <span className="text-white text-3xl font-bold">P</span>
-          </div>
-          <h1 className="text-2xl font-bold text-foreground">Join PPL</h1>
+          {branding.logoData ? (
+            <div className="inline-flex items-center justify-center w-24 h-24 rounded-2xl overflow-hidden mb-4 shadow-lg shadow-emerald-900/20 ring-1 ring-border">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={branding.logoData}
+                alt={branding.businessName}
+                className="w-full h-full object-contain bg-white/5"
+              />
+            </div>
+          ) : (
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full ppl-gradient mb-4">
+              <span className="text-white text-3xl font-bold">P</span>
+            </div>
+          )}
+          <h1 className="text-2xl font-bold text-foreground">Join {branding.businessName || 'PPL'}</h1>
           <p className="text-muted mt-1">
             {step === 1 && 'Create your account to start training'}
             {step === 2 && 'Tell us a bit about yourself'}

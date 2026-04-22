@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { api, Location, MembershipPlan, SubscribeResult } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Script from 'next/script';
@@ -66,6 +67,7 @@ function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { loginWithGoogle } = useAuth();
+  const { branding } = useTheme();
 
   // URL params — let the user return to the right step after a $300 Stripe
   // Checkout redirect, and let OAuth users jump into onboarding mid-flow.
@@ -460,10 +462,21 @@ function RegisterForm() {
       <div className="w-full max-w-md">
         {/* Logo + title */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full ppl-gradient mb-4">
-            <span className="text-white text-3xl font-bold">P</span>
-          </div>
-          <h1 className="text-2xl font-bold text-foreground">Join PPL</h1>
+          {branding.logoData ? (
+            <div className="inline-flex items-center justify-center w-24 h-24 rounded-2xl overflow-hidden mb-4 shadow-lg shadow-emerald-900/20 ring-1 ring-border">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={branding.logoData}
+                alt={branding.businessName}
+                className="w-full h-full object-contain bg-white/5"
+              />
+            </div>
+          ) : (
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full ppl-gradient mb-4">
+              <span className="text-white text-3xl font-bold">P</span>
+            </div>
+          )}
+          <h1 className="text-2xl font-bold text-foreground">Join {branding.businessName || 'PPL'}</h1>
           <p className="text-muted mt-1">{stepHeading}</p>
         </div>
 
