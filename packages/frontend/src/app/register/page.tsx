@@ -48,7 +48,7 @@ const LEVEL_LABEL: Record<PlayingLevel, string> = {
 };
 
 const LEVEL_DESC: Record<PlayingLevel, string> = {
-  youth: '12 and under',
+  youth: 'Ages 12 & under',
   ms_hs: 'Ages 13–18',
   college: 'College athletes',
   pro: 'Professional athletes',
@@ -203,11 +203,20 @@ function RegisterForm() {
     e.preventDefault();
     setError('');
 
+    // ──────────────────────────────────────────────────────────
+    // Athlete required fields
+    // ──────────────────────────────────────────────────────────
     if (!athleteFirstName.trim() || !athleteLastName.trim()) {
       setError("Please enter the athlete's first and last name.");
       return;
     }
 
+    // ──────────────────────────────────────────────────────────
+    // Parent/guardian required fields
+    //   • Youth / MS-HS → parent ALWAYS required
+    //   • College → parent required UNLESS self-management opt-out
+    //   • Pro → no parent section
+    // ──────────────────────────────────────────────────────────
     if (needsParent) {
       if (!parentFirstName.trim() || !parentLastName.trim()) {
         setError("Please enter the parent/guardian's first and last name.");
@@ -221,7 +230,7 @@ function RegisterForm() {
         setError("Please enter a parent/guardian phone number.");
         return;
       }
-    } else {
+    } else if (isCollege) {
       if (!athleteEmail.trim()) {
         setError("Please enter the athlete's email — this will be the login.");
         return;
@@ -230,14 +239,80 @@ function RegisterForm() {
         setError("Please enter the athlete's phone number.");
         return;
       }
-      if (isCollege && !parentEmail.trim() && !collegeOptOut) {
+      const anyParentField =
+        parentFirstName.trim() ||
+        parentLastName.trim() ||
+        parentEmail.trim() ||
+        parentPhone.trim();
+      if (anyParentField) {
+        // Partial parent info — require all of it.
+        if (
+          !parentFirstName.trim() ||
+          !parentLastName.trim() ||
+          !parentEmail.trim() ||
+          !parentPhone.trim()
+        ) {
+          setError(
+            'Please fill in ALL parent/guardian fields, or leave them blank and tick the self-management box below.'
+          );
+          return;
+        }
+      } else if (!collegeOptOut) {
         setError(
-          'Either provide a parent/guardian email OR tick the self-management box below.'
+          'Either provide parent/guardian information OR tick the self-management box below.'
+        );
+        return;
+      }
+    } else {
+      // Pro — solo only
+      if (!athleteEmail.trim()) {
+        setError("Please enter the athlete's email — this will be the login.");
+        return;
+      }
+      if (!athletePhone.trim()) {
+        setError("Please enter the athlete's phone number.");
+        return;
+      }
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // Athlete ≠ Parent/Guardian — block duplicate identity
+    //   Runs only when a parent/guardian is actually attached.
+    // ──────────────────────────────────────────────────────────
+    const parentAttached =
+      needsParent || (isCollege && parentEmail.trim().length > 0);
+    if (parentAttached) {
+      const aName = `${athleteFirstName.trim().toLowerCase()} ${athleteLastName.trim().toLowerCase()}`;
+      const pName = `${parentFirstName.trim().toLowerCase()} ${parentLastName.trim().toLowerCase()}`;
+      if (aName && pName && aName === pName) {
+        setError(
+          'The athlete and parent/guardian cannot have the same name. Please enter separate information for each.'
+        );
+        return;
+      }
+
+      const aEmail = athleteEmail.trim().toLowerCase();
+      const pEmail = parentEmail.trim().toLowerCase();
+      if (aEmail && pEmail && aEmail === pEmail) {
+        setError(
+          'The athlete and parent/guardian must have different email addresses.'
+        );
+        return;
+      }
+
+      const aPhoneDigits = athletePhone.replace(/\D/g, '');
+      const pPhoneDigits = parentPhone.replace(/\D/g, '');
+      if (aPhoneDigits && pPhoneDigits && aPhoneDigits === pPhoneDigits) {
+        setError(
+          'The athlete and parent/guardian must have different phone numbers.'
         );
         return;
       }
     }
 
+    // ──────────────────────────────────────────────────────────
+    // Password
+    // ──────────────────────────────────────────────────────────
     if (password.length < 8) {
       setError('Password must be at least 8 characters.');
       return;
@@ -473,14 +548,19 @@ function RegisterForm() {
               </div>
 
               <form onSubmit={handleStep2Submit} className="space-y-5">
-                {/* Athlete block */}
-                <section>
-                  <h3 className="text-sm font-semibold text-foreground mb-2">
-                    {needsParent ? "Your athlete" : 'Athlete information'}
-                  </h3>
+                {/* ─── ATHLETE SECTION ─────────────────────────── */}
+                <section className="rounded-xl border-2 border-highlight/40 bg-highlight/5 p-4 shadow-sm">
+                  <div className="flex items-center gap-2 mb-3 pb-2 border-b border-highlight/20">
+                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-highlight text-on-accent text-xs font-bold">
+                      1
+                    </span>
+                    <h3 className="text-sm font-bold text-foreground uppercase tracking-wide">
+                      Athlete Information
+                    </h3>
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs text-muted block mb-1">First name</label>
+                      <label className="text-xs text-muted block mb-1">Athlete first name</label>
                       <input
                         type="text"
                         value={athleteFirstName}
@@ -490,7 +570,7 @@ function RegisterForm() {
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-muted block mb-1">Last name</label>
+                      <label className="text-xs text-muted block mb-1">Athlete last name</label>
                       <input
                         type="text"
                         value={athleteLastName}
@@ -502,53 +582,59 @@ function RegisterForm() {
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs text-muted block mb-1">Date of birth <span className="opacity-70">(optional)</span></label>
+                      <label className="text-xs text-muted block mb-1">Date of birth</label>
                       <input
                         type="date"
                         value={athleteDob}
                         onChange={(e) => setAthleteDob(e.target.value)}
                         className="ppl-input"
-                      />
-                    </div>
-                    {playingLevel !== 'youth' && (
-                      <div>
-                        <label className="text-xs text-muted block mb-1">
-                          Email {needsParent && <span className="opacity-70">(optional)</span>}
-                        </label>
-                        <input
-                          type="email"
-                          value={athleteEmail}
-                          onChange={(e) => setAthleteEmail(e.target.value)}
-                          className="ppl-input"
-                          placeholder="athlete@example.com"
-                          required={!needsParent}
-                        />
-                      </div>
-                    )}
-                  </div>
-                  {!needsParent && (
-                    <div className="mt-3">
-                      <label className="text-xs text-muted block mb-1">Phone</label>
-                      <input
-                        type="tel"
-                        value={athletePhone}
-                        onChange={(e) => setAthletePhone(e.target.value)}
-                        className="ppl-input"
                         required
                       />
                     </div>
-                  )}
+                    <div>
+                      <label className="text-xs text-muted block mb-1">Athlete email</label>
+                      <input
+                        type="email"
+                        value={athleteEmail}
+                        onChange={(e) => setAthleteEmail(e.target.value)}
+                        className="ppl-input"
+                        placeholder="athlete@example.com"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <label className="text-xs text-muted block mb-1">Athlete phone</label>
+                    <input
+                      type="tel"
+                      value={athletePhone}
+                      onChange={(e) => setAthletePhone(e.target.value)}
+                      className="ppl-input"
+                      placeholder={needsParent ? "Use parent's cell if athlete has none" : ''}
+                      required
+                    />
+                  </div>
                 </section>
 
-                {/* Parent block — always shown for youth/ms_hs; collapsible for college */}
+                {/* ─── PARENT / GUARDIAN SECTION ───────────────── */}
                 {(needsParent || isCollege) && (
-                  <section>
-                    <h3 className="text-sm font-semibold text-foreground mb-2">
-                      Parent or guardian {isCollege && <span className="text-xs text-muted font-normal">(optional for College)</span>}
-                    </h3>
+                  <section className="rounded-xl border-2 border-accent-text/40 bg-accent-text/5 p-4 shadow-sm">
+                    <div className="flex items-center gap-2 mb-3 pb-2 border-b border-accent-text/20">
+                      <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-accent-text text-on-accent text-xs font-bold">
+                        2
+                      </span>
+                      <h3 className="text-sm font-bold text-foreground uppercase tracking-wide">
+                        Parent / Guardian
+                      </h3>
+                      {isCollege && (
+                        <span className="text-[11px] text-muted font-normal normal-case tracking-normal">
+                          (optional for College)
+                        </span>
+                      )}
+                    </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-xs text-muted block mb-1">First name</label>
+                        <label className="text-xs text-muted block mb-1">Parent/guardian first name</label>
                         <input
                           type="text"
                           value={parentFirstName}
@@ -558,7 +644,7 @@ function RegisterForm() {
                         />
                       </div>
                       <div>
-                        <label className="text-xs text-muted block mb-1">Last name</label>
+                        <label className="text-xs text-muted block mb-1">Parent/guardian last name</label>
                         <input
                           type="text"
                           value={parentLastName}
@@ -569,7 +655,7 @@ function RegisterForm() {
                       </div>
                     </div>
                     <div className="mt-3">
-                      <label className="text-xs text-muted block mb-1">Email</label>
+                      <label className="text-xs text-muted block mb-1">Parent/guardian email</label>
                       <input
                         type="email"
                         value={parentEmail}
@@ -585,7 +671,7 @@ function RegisterForm() {
                       )}
                     </div>
                     <div className="mt-3">
-                      <label className="text-xs text-muted block mb-1">Phone</label>
+                      <label className="text-xs text-muted block mb-1">Parent/guardian phone</label>
                       <input
                         type="tel"
                         value={parentPhone}
