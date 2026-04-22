@@ -536,8 +536,16 @@ function RegisterForm() {
               <span className="text-white text-6xl font-bold">P</span>
             </div>
           )}
-          <h1 className="font-display text-xl sm:text-2xl font-bold tracking-[0.08em] text-foreground uppercase text-center leading-tight">
-            Get Started with<br className="hidden sm:block" /> Pitching Performance Lab
+          <h1 className="font-display font-bold tracking-[0.08em] text-foreground uppercase text-center leading-tight">
+            {/* Two spans forced onto their own lines so "Pitching Performance Lab"
+                can never wrap to a 3rd line. text-sm on base phones (≥340px),
+                scales up on larger viewports. Both lines stay the same size. */}
+            <span className="block whitespace-nowrap text-sm sm:text-base md:text-lg">
+              Get Started With
+            </span>
+            <span className="block whitespace-nowrap text-sm sm:text-base md:text-lg mt-0.5">
+              Pitching Performance Lab
+            </span>
           </h1>
           <p className="text-sm text-muted mt-2 text-center">{stepHeading}</p>
         </div>

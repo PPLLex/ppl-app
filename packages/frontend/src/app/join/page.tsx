@@ -295,8 +295,13 @@ function JoinFlow() {
               <span className="text-white text-6xl font-bold">P</span>
             </div>
           )}
-          <h1 className="font-display text-sm sm:text-base font-bold tracking-[0.08em] uppercase text-foreground whitespace-nowrap text-center">
-            Get Started with {branding.businessName || 'Pitching Performance Lab'}
+          <h1 className="font-display font-bold tracking-[0.08em] text-foreground uppercase text-center leading-tight">
+            <span className="block whitespace-nowrap text-sm sm:text-base md:text-lg">
+              Get Started With
+            </span>
+            <span className="block whitespace-nowrap text-sm sm:text-base md:text-lg mt-0.5">
+              {branding.businessName || 'Pitching Performance Lab'}
+            </span>
           </h1>
           <p className="text-muted mt-1">
             {step === 1 && 'Create your account to start training'}
