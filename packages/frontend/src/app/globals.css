@@ -189,11 +189,12 @@ html {
   font-family: var(--font-transducer), Impact, "Arial Black", sans-serif;
   font-weight: 900;
   font-style: italic;
-  font-size: 0.75rem;        /* 12px — display fonts visually read larger */
+  font-size: 0.625rem;       /* 10px — small on purpose; Transducer Black Italic
+                                visually reads 1–2px larger than the set size */
   color: #e5e5e5;
   text-transform: uppercase;
-  letter-spacing: 0.05em;    /* more tracking — keeps caps breathing room */
-  margin-bottom: 0.4rem;
+  letter-spacing: 0.06em;    /* slightly more tracking at tiny size */
+  margin-bottom: 0.35rem;
 }
 
 .ppl-badge {
