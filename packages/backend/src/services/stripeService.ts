@@ -112,16 +112,20 @@ export async function getOrCreateStripePrice(planId: string): Promise<string> {
     metadata: { ppl_plan_id: planId },
   });
 
-  // Create weekly recurring price
+  // Recurring interval driven by plan.billingCycle — weekly plans billed
+  // every 7 days, monthly plans (Pro tiers) billed every 30-ish days.
+  const interval: 'week' | 'month' =
+    plan.billingCycle === 'monthly' ? 'month' : 'week';
+
   const price = await stripe.prices.create({
     product: product.id,
     unit_amount: plan.priceCents,
     currency: 'usd',
     recurring: {
-      interval: 'week',
+      interval,
       interval_count: 1,
     },
-    metadata: { ppl_plan_id: planId },
+    metadata: { ppl_plan_id: planId, billing_cycle: plan.billingCycle },
   });
 
   return price.id;

@@ -173,6 +173,19 @@ of "amount owed to RP this month".
 `app.hittingperformancelab.com`, same backend. `SessionType` enum expanded
 for hitting session types. Joint membership bundles go live.
 
+**Phase 5 — Pro perks / discount credits.** Pro tier athletes can earn
+discounts on their monthly membership by doing things that help PPL grow:
+social media posts, Google reviews, helping run group sessions, giving
+private lessons at the facility. Each earned credit is a row in
+`ProPerkCredit` with a reason code, dollar amount, admin approver, proof
+link/notes, and an `appliedToInvoiceId` that is null until it's applied.
+At billing time, the stripeService looks up unapplied credits for the Pro
+athlete and issues a one-time invoice line-item discount equal to the sum
+(capped at the invoice total). Needs a simple admin UI to log a new credit
+and a Pro-facing "credits on your account" view. Reason codes (not final):
+`SOCIAL_MEDIA_POST`, `GOOGLE_REVIEW`, `COACHED_GROUP_SESSION`,
+`TAUGHT_PRIVATE_LESSON`, `OTHER`.
+
 ---
 
 ## File organization

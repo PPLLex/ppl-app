@@ -81,17 +81,42 @@ async function main() {
   // 3. MEMBERSHIP PLANS
   // ============================================================
   const planDefs = [
-    { id: 'plan-unlimited-college', name: 'Unlimited College Pitching', slug: 'unlimited-college-pitching', ageGroup: 'college', sessionsPerWeek: null, priceCents: 8500, description: 'Unlimited training sessions for college athletes.' },
-    { id: 'plan-unlimited-pitching', name: 'Unlimited Pitching', slug: 'unlimited-pitching', ageGroup: 'ms_hs', sessionsPerWeek: null, priceCents: 8500, description: 'Unlimited training sessions for ages 13+.' },
-    { id: 'plan-1x-pitching', name: '1x/Week Pitching', slug: '1x-week-pitching', ageGroup: 'ms_hs', sessionsPerWeek: 1, priceCents: 7000, description: 'One training session per week for ages 13+.' },
-    { id: 'plan-youth-1x', name: 'Youth 1x/Week', slug: 'youth-1x-week', ageGroup: 'youth', sessionsPerWeek: 1, priceCents: 5500, description: 'One session per week for ages 12 and under.' },
-    { id: 'plan-youth-2x', name: 'Youth 2x/Week', slug: 'youth-2x-week', ageGroup: 'youth', sessionsPerWeek: 2, priceCents: 7000, description: 'Two sessions per week for ages 12 and under.' },
+    // ── Weekly tiers (Youth / MS-HS / College) ──────────────────────────────
+    { id: 'plan-unlimited-college', name: 'Unlimited College Pitching', slug: 'unlimited-college-pitching', ageGroup: 'college', sessionsPerWeek: null, priceCents: 8500, billingCycle: 'weekly', description: 'Unlimited training sessions for college athletes.' },
+    { id: 'plan-unlimited-pitching', name: 'Unlimited Pitching', slug: 'unlimited-pitching', ageGroup: 'ms_hs', sessionsPerWeek: null, priceCents: 8500, billingCycle: 'weekly', description: 'Unlimited training sessions for ages 13+.' },
+    { id: 'plan-1x-pitching', name: '1x/Week Pitching', slug: '1x-week-pitching', ageGroup: 'ms_hs', sessionsPerWeek: 1, priceCents: 7000, billingCycle: 'weekly', description: 'One training session per week for ages 13+.' },
+    { id: 'plan-youth-1x', name: 'Youth 1x/Week', slug: 'youth-1x-week', ageGroup: 'youth', sessionsPerWeek: 1, priceCents: 5500, billingCycle: 'weekly', description: 'One session per week for ages 12 and under.' },
+    { id: 'plan-youth-2x', name: 'Youth 2x/Week', slug: 'youth-2x-week', ageGroup: 'youth', sessionsPerWeek: 2, priceCents: 7000, billingCycle: 'weekly', description: 'Two sessions per week for ages 12 and under.' },
+
+    // ── Pro tier (MONTHLY billing) ──────────────────────────────────────────
+    // Pros get perks: facility access, custom programming, or hands-on coaching.
+    // Discount incentives (social posts / Google reviews / coaching help) are
+    // tracked separately via the ProPerkCredit system — see ARCHITECTURE.md.
+    { id: 'plan-pro-facility-access', name: 'Pro — Facility Access', slug: 'pro-facility-access', ageGroup: 'pro', sessionsPerWeek: null, priceCents: 10000, billingCycle: 'monthly', description: 'Monthly self-directed facility access for pro athletes. No coaching sessions included.' },
+    { id: 'plan-pro-programming', name: 'Pro — Programming', slug: 'pro-programming', ageGroup: 'pro', sessionsPerWeek: 0, priceCents: 10000, billingCycle: 'monthly', description: 'Custom monthly programming delivered to you. No facility access.' },
+    { id: 'plan-pro-programming-access', name: 'Pro — Programming + Access', slug: 'pro-programming-access', ageGroup: 'pro', sessionsPerWeek: null, priceCents: 25000, billingCycle: 'monthly', description: 'Custom monthly programming plus unlimited facility access.' },
+    { id: 'plan-pro-programming-training', name: 'Pro — Programming + Training', slug: 'pro-programming-training', ageGroup: 'pro', sessionsPerWeek: null, priceCents: 40000, billingCycle: 'monthly', description: 'Custom programming plus hands-on coaching sessions with PPL staff.' },
   ];
 
   for (const plan of planDefs) {
-    await prisma.membershipPlan.upsert({ where: { id: plan.id }, update: {}, create: plan });
+    // Use update to keep existing plan prices + descriptions fresh on re-seed.
+    // (Previous seed used empty `update: {}` which meant price bumps required
+    // a manual SQL update in prod.)
+    await prisma.membershipPlan.upsert({
+      where: { id: plan.id },
+      update: {
+        name: plan.name,
+        slug: plan.slug,
+        ageGroup: plan.ageGroup,
+        sessionsPerWeek: plan.sessionsPerWeek,
+        priceCents: plan.priceCents,
+        billingCycle: plan.billingCycle,
+        description: plan.description,
+      },
+      create: plan,
+    });
   }
-  console.log('✅ Membership plans (5)');
+  console.log(`✅ Membership plans (${planDefs.length})`);
 
   // ============================================================
   // 4. ADMIN

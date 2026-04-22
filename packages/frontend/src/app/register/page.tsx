@@ -489,9 +489,6 @@ function RegisterForm() {
   // --------------------------------------------------------------------
   const relevantPlans = plans.filter((p) => {
     if (!playingLevel) return true;
-    // Match ageGroup to playingLevel. Pro athletes currently use the ms_hs
-    // plans (Unlimited / 1x week) until we split out a pro tier.
-    if (playingLevel === 'pro') return p.ageGroup === 'ms_hs' || p.ageGroup === 'college';
     return p.ageGroup === playingLevel;
   });
 
@@ -1103,7 +1100,9 @@ function RegisterForm() {
                         <div className="text-xl font-bold text-accent-text">
                           ${(plan.priceCents / 100).toFixed(0)}
                         </div>
-                        <div className="text-[11px] text-muted">/ week</div>
+                        <div className="text-[11px] text-muted">
+                          / {plan.billingCycle === 'monthly' ? 'mo' : 'week'}
+                        </div>
                       </div>
                     </div>
                   </button>
