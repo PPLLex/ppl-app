@@ -54,8 +54,12 @@ class ApiClient {
     const data = await response.json();
 
     if (!response.ok) {
-      // Token expired or invalid — clear it and redirect to login
-      if (response.status === 401 && typeof window !== 'undefined') {
+      // Token expired or invalid — clear it and redirect to login.
+      // IMPORTANT: only force a redirect if we actually SENT a token. A 401 on
+      // an unauthenticated public call (e.g., branding before it's cached, or
+      // a momentary backend misroute) would otherwise pull the user into an
+      // infinite /register → /login → /register pulsate loop on mobile.
+      if (response.status === 401 && typeof window !== 'undefined' && token) {
         localStorage.removeItem('ppl_token');
         window.location.href = '/login?expired=true';
         throw new ApiError(401, 'Session expired. Please log in again.');

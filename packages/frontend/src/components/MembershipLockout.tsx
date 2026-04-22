@@ -3,7 +3,7 @@
 import Link from 'next/link';
 
 /**
- * MembershipLockout â "Dummy Mode" UI
+ * MembershipLockout — "Dummy Mode" UI
  *
  * Displayed when the API returns a 403 with a membership-related message.
  * The client can only access payment/membership pages from here.

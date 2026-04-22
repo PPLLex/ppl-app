@@ -107,7 +107,7 @@ export default function MemberDetailPage() {
       {/* Back + Header */}
       <div className="mb-6">
         <Link href="/admin/members" className="text-sm text-muted hover:text-accent-text transition-colors">
-          â Back to Members
+          ← Back to Members
         </Link>
         <div className="flex items-start justify-between mt-2">
           <div>
@@ -137,7 +137,7 @@ export default function MemberDetailPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Left Column â Profile + Notes */}
+        {/* Left Column — Profile + Notes */}
         <div className="lg:col-span-1 space-y-4">
           {/* Profile Info */}
           <div className="ppl-card">
@@ -225,7 +225,7 @@ export default function MemberDetailPage() {
           </div>
         </div>
 
-        {/* Right Column â Membership + Bookings + Payments */}
+        {/* Right Column — Membership + Bookings + Payments */}
         <div className="lg:col-span-2 space-y-4">
           {/* Membership */}
           <div className="ppl-card">

@@ -134,8 +134,9 @@ function RegisterForm() {
   // Parent fields are REQUIRED when:
   //   • Youth — always
   //   • MS/HS — unless the two opt-out boxes are both ticked
-  //   • College — never required (they can opt out with a single ack)
-  const parentRequired = isYouth || (isMsHs && !msHsOptedOut);
+  //   • College — unless the single opt-out box is ticked
+  const parentRequired =
+    isYouth || (isMsHs && !msHsOptedOut) || (isCollege && !collegeOptOut);
 
   // Backwards-compat flag used by the rest of the code that cares whether
   // a parent account is being attached at all.
@@ -535,10 +536,10 @@ function RegisterForm() {
               <span className="text-white text-6xl font-bold">P</span>
             </div>
           )}
-          <h1 className="font-display text-sm sm:text-base font-bold tracking-[0.08em] text-foreground whitespace-nowrap uppercase text-center">
-            Get Started with Pitching Performance Lab
+          <h1 className="font-display text-xl sm:text-2xl font-bold tracking-[0.08em] text-foreground uppercase text-center leading-tight">
+            Get Started with<br className="hidden sm:block" /> Pitching Performance Lab
           </h1>
-          <p className="text-muted mt-1 text-center">{stepHeading}</p>
+          <p className="text-sm text-muted mt-2 text-center">{stepHeading}</p>
         </div>
 
         {/* Progress indicator */}
@@ -622,10 +623,20 @@ function RegisterForm() {
               </div>
 
               <form onSubmit={handleStep2Submit} className="space-y-6">
-                {/* ─── ATHLETE SECTION ─────────────────────────── */}
-                <section className="rounded-xl overflow-hidden border-2 border-emerald-500/70 bg-emerald-500/[0.06] shadow-lg shadow-emerald-500/10">
+                {/* ─── ATHLETE SECTION — PPL light green (#95C83C accent) ─── */}
+                <section
+                  className="rounded-xl overflow-hidden border-2 shadow-lg"
+                  style={{
+                    borderColor: 'color-mix(in srgb, var(--color-accent) 70%, transparent)',
+                    backgroundColor: 'color-mix(in srgb, var(--color-accent) 8%, transparent)',
+                    boxShadow: '0 10px 24px -12px color-mix(in srgb, var(--color-accent) 30%, transparent)',
+                  }}
+                >
                   {/* Bold banner header */}
-                  <div className="flex items-center gap-2.5 px-4 py-2.5 bg-emerald-500 text-white">
+                  <div
+                    className="flex items-center gap-2.5 px-4 py-2.5 text-black"
+                    style={{ backgroundColor: 'var(--color-accent)' }}
+                  >
                     <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <circle cx="12" cy="8" r="4" />
                       <path d="M20 21a8 8 0 1 0-16 0" />
@@ -640,7 +651,9 @@ function RegisterForm() {
                     </p>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs text-muted block mb-1">Athlete first name</label>
+                      <label className="text-xs text-muted block mb-1">
+                        Athlete first name<span className="text-[color:var(--color-accent)] ml-0.5">*</span>
+                      </label>
                       <input
                         type="text"
                         value={athleteFirstName}
@@ -650,7 +663,9 @@ function RegisterForm() {
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-muted block mb-1">Athlete last name</label>
+                      <label className="text-xs text-muted block mb-1">
+                        Athlete last name<span className="text-[color:var(--color-accent)] ml-0.5">*</span>
+                      </label>
                       <input
                         type="text"
                         value={athleteLastName}
@@ -662,7 +677,9 @@ function RegisterForm() {
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs text-muted block mb-1">Date of birth</label>
+                      <label className="text-xs text-muted block mb-1">
+                        Date of birth<span className="text-[color:var(--color-accent)] ml-0.5">*</span>
+                      </label>
                       <input
                         type="date"
                         value={athleteDob}
@@ -672,7 +689,9 @@ function RegisterForm() {
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-muted block mb-1">Athlete email</label>
+                      <label className="text-xs text-muted block mb-1">
+                        Athlete email<span className="text-[color:var(--color-accent)] ml-0.5">*</span>
+                      </label>
                       <input
                         type="email"
                         value={athleteEmail}
@@ -684,7 +703,9 @@ function RegisterForm() {
                     </div>
                   </div>
                   <div className="mt-3">
-                    <label className="text-xs text-muted block mb-1">Athlete phone</label>
+                    <label className="text-xs text-muted block mb-1">
+                      Athlete phone<span className="text-[color:var(--color-accent)] ml-0.5">*</span>
+                    </label>
                     <input
                       type="tel"
                       value={athletePhone}
@@ -711,12 +732,12 @@ function RegisterForm() {
                       below — otherwise please complete the parent/guardian fields
                       in Step&nbsp;2.
                     </p>
-                    <label className="flex gap-3 p-3 rounded-lg border border-border bg-background cursor-pointer hover:border-amber-500/50 transition-colors">
+                    <label className="flex gap-3 p-3 rounded-lg border border-border bg-background cursor-pointer hover:border-[color:var(--color-primary)]/50 transition-colors">
                       <input
                         type="checkbox"
                         checked={msHsSoloAck1}
                         onChange={(e) => setMsHsSoloAck1(e.target.checked)}
-                        className="mt-0.5 accent-amber-500"
+                        className="mt-0.5 accent-[color:var(--color-primary)]"
                       />
                       <span className="text-xs text-foreground/90 leading-snug">
                         I&apos;m managing this account myself — I understand I&apos;m responsible
@@ -724,12 +745,18 @@ function RegisterForm() {
                       </span>
                     </label>
                     {msHsSoloAck1 && (
-                      <label className="flex gap-3 p-3 rounded-lg border-2 border-amber-500/60 bg-amber-500/10 cursor-pointer">
+                      <label
+                        className="flex gap-3 p-3 rounded-lg border-2 cursor-pointer"
+                        style={{
+                          borderColor: 'color-mix(in srgb, var(--color-primary) 60%, transparent)',
+                          backgroundColor: 'color-mix(in srgb, var(--color-primary) 10%, transparent)',
+                        }}
+                      >
                         <input
                           type="checkbox"
                           checked={msHsSoloAck2}
                           onChange={(e) => setMsHsSoloAck2(e.target.checked)}
-                          className="mt-0.5 accent-amber-500"
+                          className="mt-0.5 accent-[color:var(--color-primary)]"
                         />
                         <span className="text-xs text-foreground leading-snug">
                           <strong>Are you 100% sure?</strong> All billing reminders,
@@ -740,16 +767,19 @@ function RegisterForm() {
                   </div>
                 )}
 
-                {/* ─── COLLEGE SELF-MANAGEMENT GATE (between sections) ───
-                    Moved above the parent section so the athlete can opt out
-                    before scrolling through optional parent fields. */}
-                {isCollege && !parentEmail.trim() && (
-                  <label className="flex gap-3 p-3 rounded-xl border border-border bg-surface/60 cursor-pointer hover:border-amber-500/50 transition-colors">
+                {/* ─── COLLEGE SELF-MANAGEMENT GATE ───
+                    Shown whenever playing level is College. Parent/Guardian
+                    starts MANDATORY; checking this box fades + deactivates
+                    the parent section above. */}
+                {isCollege && (
+                  <label
+                    className="flex gap-3 p-3 rounded-xl border border-border bg-surface/60 cursor-pointer hover:border-[color:var(--color-primary)]/50 transition-colors"
+                  >
                     <input
                       type="checkbox"
                       checked={collegeOptOut}
                       onChange={(e) => setCollegeOptOut(e.target.checked)}
-                      className="mt-0.5 accent-highlight"
+                      className="mt-0.5 accent-[color:var(--color-primary)]"
                     />
                     <span className="text-xs text-foreground/90 leading-snug">
                       I&apos;m managing this account myself — I understand I&apos;m responsible
@@ -758,11 +788,23 @@ function RegisterForm() {
                   </label>
                 )}
 
-                {/* ─── PARENT / GUARDIAN SECTION ───────────────── */}
+                {/* ─── PARENT / GUARDIAN SECTION — PPL dark green (#5E9E50 primary) ─── */}
                 {showsParentSection && (
-                  <section className="rounded-xl overflow-hidden border-2 border-amber-500/70 bg-amber-500/[0.06] shadow-lg shadow-amber-500/10">
+                  <section
+                    className={`rounded-xl overflow-hidden border-2 shadow-lg transition-opacity duration-300 ${
+                      parentRequired ? 'opacity-100' : 'opacity-30'
+                    }`}
+                    style={{
+                      borderColor: 'color-mix(in srgb, var(--color-primary) 70%, transparent)',
+                      backgroundColor: 'color-mix(in srgb, var(--color-primary) 8%, transparent)',
+                      boxShadow: '0 10px 24px -12px color-mix(in srgb, var(--color-primary) 30%, transparent)',
+                    }}
+                  >
                     {/* Bold banner header */}
-                    <div className="flex items-center gap-2.5 px-4 py-2.5 bg-amber-500 text-black">
+                    <div
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-white"
+                      style={{ backgroundColor: 'var(--color-primary)' }}
+                    >
                       <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                         <circle cx="9" cy="7" r="4" />
@@ -773,8 +815,8 @@ function RegisterForm() {
                         Step 2 — Parent / Guardian
                       </span>
                       {!parentRequired && (
-                        <span className="ml-auto text-[10px] font-semibold normal-case tracking-normal bg-black/15 px-2 py-0.5 rounded">
-                          {isCollege ? 'optional for College' : 'optional — solo mode'}
+                        <span className="ml-auto text-[10px] font-semibold normal-case tracking-normal bg-white/15 px-2 py-0.5 rounded">
+                          not required — solo mode
                         </span>
                       )}
                     </div>
@@ -788,7 +830,7 @@ function RegisterForm() {
                       <div>
                         <label className="text-xs text-muted block mb-1">
                           Parent/guardian first name
-                          {parentRequired && <span className="text-amber-500 ml-0.5">*</span>}
+                          {parentRequired && <span className="text-[color:var(--color-primary-text)] ml-0.5">*</span>}
                         </label>
                         <input
                           type="text"
@@ -801,7 +843,7 @@ function RegisterForm() {
                       <div>
                         <label className="text-xs text-muted block mb-1">
                           Parent/guardian last name
-                          {parentRequired && <span className="text-amber-500 ml-0.5">*</span>}
+                          {parentRequired && <span className="text-[color:var(--color-primary-text)] ml-0.5">*</span>}
                         </label>
                         <input
                           type="text"
@@ -815,7 +857,7 @@ function RegisterForm() {
                     <div className="mt-3">
                       <label className="text-xs text-muted block mb-1">
                         Parent/guardian email
-                        {parentRequired && <span className="text-amber-500 ml-0.5">*</span>}
+                        {parentRequired && <span className="text-[color:var(--color-primary-text)] ml-0.5">*</span>}
                       </label>
                       <input
                         type="email"
@@ -834,7 +876,7 @@ function RegisterForm() {
                     <div className="mt-3">
                       <label className="text-xs text-muted block mb-1">
                         Parent/guardian phone
-                        {parentRequired && <span className="text-amber-500 ml-0.5">*</span>}
+                        {parentRequired && <span className="text-[color:var(--color-primary-text)] ml-0.5">*</span>}
                       </label>
                       <input
                         type="tel"

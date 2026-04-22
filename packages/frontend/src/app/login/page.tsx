@@ -43,7 +43,7 @@ function LoginForm() {
     try {
       const result = await loginWithGoogle(response.credential);
       if (result.isNewUser) {
-        // New user â redirect to onboarding to pick location/age group
+        // New user — redirect to onboarding to pick location/age group
         window.location.href = '/register?oauth=google&step=2';
       }
     } catch (err: unknown) {
@@ -143,7 +143,7 @@ function LoginForm() {
               <span className="text-white text-6xl font-bold">P</span>
             </div>
           )}
-          <h1 className="font-display text-base sm:text-lg font-bold tracking-[0.08em] uppercase text-foreground whitespace-nowrap text-center">
+          <h1 className="font-display text-xl sm:text-2xl font-bold tracking-[0.08em] uppercase text-foreground text-center leading-tight">
             {branding.businessName || 'Pitching Performance Lab'}
           </h1>
           <p className="text-muted mt-2 text-center">Sign in to your account</p>
@@ -161,7 +161,7 @@ function LoginForm() {
             </div>
           )}
 
-          {/* ââ Social Sign-In Buttons ââ */}
+          {/* —— Social Sign-In Buttons —— */}
           <div className="space-y-3 mb-6">
             {/* Google Sign-In */}
             <div id="google-signin-btn" className="flex justify-center [&>div]:!w-full" />
@@ -182,7 +182,7 @@ function LoginForm() {
             </button>
           </div>
 
-          {/* ââ Divider ââ */}
+          {/* —— Divider —— */}
           <div className="relative mb-6">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-border" />
@@ -192,7 +192,7 @@ function LoginForm() {
             </div>
           </div>
 
-          {/* ââ Magic Link / Password Toggle ââ */}
+          {/* —— Magic Link / Password Toggle —— */}
           {authMode === 'credentials' ? (
             <>
               <form onSubmit={handleCredentialLogin} className="space-y-4">
@@ -221,7 +221,7 @@ function LoginForm() {
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="â¢â¢â¢â¢â¢â¢â¢â¢"
+                    placeholder="••••••••"
                     className="ppl-input"
                     required
                     autoComplete="current-password"

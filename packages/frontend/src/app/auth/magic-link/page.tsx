@@ -25,7 +25,7 @@ function MagicLinkVerifier() {
     const token = searchParams.get('token');
     if (!token) {
       setStatus('error');
-      setErrorMessage('Invalid link â no token provided.');
+      setErrorMessage('Invalid link — no token provided.');
       return;
     }
 

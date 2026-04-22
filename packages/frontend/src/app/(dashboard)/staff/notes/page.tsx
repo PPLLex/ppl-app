@@ -130,7 +130,7 @@ export default function StaffNotesPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left â Note Form */}
+        {/* Left — Note Form */}
         <div className="ppl-card">
           <h2 className="text-lg font-semibold text-foreground mb-4">New Note</h2>
 
@@ -237,7 +237,7 @@ export default function StaffNotesPage() {
           </form>
         </div>
 
-        {/* Right â Recent Notes */}
+        {/* Right — Recent Notes */}
         <div className="ppl-card">
           <h2 className="text-lg font-semibold text-foreground mb-4">Recent Notes</h2>
 

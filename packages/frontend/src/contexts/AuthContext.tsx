@@ -84,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const res = await api.googleAuth({ idToken });
     if (!res.data) throw new Error('Google authentication failed');
 
-    // If new user, don't auto-route â let the caller decide (they may need onboarding)
+    // If new user, don't auto-route — let the caller decide (they may need onboarding)
     localStorage.setItem('ppl_token', res.data.token);
     setUser(res.data.user);
 
