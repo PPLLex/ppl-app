@@ -143,10 +143,10 @@ function LoginForm() {
               <span className="text-white text-3xl font-bold">P</span>
             </div>
           )}
-          <h1 className="text-2xl font-bold text-foreground">
+          <h1 className="font-display text-base sm:text-lg font-bold tracking-[0.08em] uppercase text-foreground whitespace-nowrap">
             {branding.businessName || 'Pitching Performance Lab'}
           </h1>
-          <p className="text-muted mt-1">Sign in to your account</p>
+          <p className="text-muted mt-2">Sign in to your account</p>
         </div>
 
         <div className="ppl-card">

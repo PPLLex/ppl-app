@@ -1,18 +1,40 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Manrope, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { OrgProvider } from "@/contexts/OrgContext";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Body / UI font — Manrope. Geometric bones to echo Bank Gothic, rounded
+// terminals for warmth and mobile readability. Used for every non-display
+// piece of text in the app.
+const manrope = Manrope({
+  variable: "--font-manrope",
   subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700", "800"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+// Monospace — numeric-heavy UI (session counts, velo if we ever surface it).
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains",
   subsets: ["latin"],
+  display: "swap",
+});
+
+// Display / headline font — Bank Gothic (Chad-licensed, self-hosted).
+// Used ONLY for brand-carrying headings: page titles, section banners.
+// NEVER for body copy — Bank Gothic is all-caps square and hurts readability
+// below ~14px.
+const bankGothic = localFont({
+  variable: "--font-bank-gothic",
+  display: "swap",
+  src: [
+    { path: "../../public/fonts/BankGothic-Light.otf", weight: "300", style: "normal" },
+    { path: "../../public/fonts/BankGothic-Medium.ttf", weight: "500", style: "normal" },
+    { path: "../../public/fonts/BankGothic-Bold.ttf", weight: "700", style: "normal" },
+  ],
 });
 
 export const metadata: Metadata = {
@@ -28,7 +50,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${manrope.variable} ${jetbrainsMono.variable} ${bankGothic.variable} h-full antialiased`}
     >
       <head>
         <link rel="manifest" href="/manifest.json" />
@@ -36,7 +58,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col font-sans">
         <OrgProvider>
           <ThemeProvider>
             <AuthProvider>{children}</AuthProvider>

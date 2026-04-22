@@ -295,7 +295,9 @@ function JoinFlow() {
               <span className="text-white text-3xl font-bold">P</span>
             </div>
           )}
-          <h1 className="text-2xl font-bold text-foreground">Join {branding.businessName || 'PPL'}</h1>
+          <h1 className="font-display text-sm sm:text-base font-bold tracking-[0.08em] uppercase text-foreground whitespace-nowrap">
+            Get Started with {branding.businessName || 'Pitching Performance Lab'}
+          </h1>
           <p className="text-muted mt-1">
             {step === 1 && 'Create your account to start training'}
             {step === 2 && 'Tell us a bit about yourself'}

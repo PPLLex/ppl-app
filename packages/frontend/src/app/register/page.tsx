@@ -535,7 +535,7 @@ function RegisterForm() {
               <span className="text-white text-3xl font-bold">P</span>
             </div>
           )}
-          <h1 className="text-base sm:text-lg font-bold text-foreground whitespace-nowrap">
+          <h1 className="font-display text-sm sm:text-base font-bold tracking-[0.08em] text-foreground whitespace-nowrap uppercase">
             Get Started with Pitching Performance Lab
           </h1>
           <p className="text-muted mt-1">{stepHeading}</p>
@@ -630,7 +630,7 @@ function RegisterForm() {
                       <circle cx="12" cy="8" r="4" />
                       <path d="M20 21a8 8 0 1 0-16 0" />
                     </svg>
-                    <span className="text-xs font-extrabold uppercase tracking-[0.15em]">
+                    <span className="font-display text-sm font-bold uppercase tracking-[0.15em]">
                       Step 1 — Athlete
                     </span>
                   </div>
@@ -769,7 +769,7 @@ function RegisterForm() {
                         <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
                         <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                       </svg>
-                      <span className="text-xs font-extrabold uppercase tracking-[0.15em]">
+                      <span className="font-display text-sm font-bold uppercase tracking-[0.15em]">
                         Step 2 — Parent / Guardian
                       </span>
                       {!parentRequired && (

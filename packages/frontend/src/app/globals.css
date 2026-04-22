@@ -37,9 +37,14 @@
   --color-danger: #EF4444;
   --color-warning: #F59E0B;
 
-  /* Fonts */
-  --font-sans: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
-  --font-mono: var(--font-geist-mono), monospace;
+  /* Fonts — typography system.
+     font-sans    → Manrope (all body / UI)
+     font-mono    → JetBrains Mono (numeric/code)
+     font-display → Bank Gothic (headline/brand only; all-caps square font,
+                    not legible below ~14px so never use for body copy) */
+  --font-sans: var(--font-manrope), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display: var(--font-bank-gothic), "Copperplate Gothic Bold", "Impact", sans-serif;
 }
 
 /* ============================================================

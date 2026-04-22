@@ -181,7 +181,7 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
                 </div>
               )}
               <div>
-                <h2 className="font-bold text-foreground text-xs leading-tight">{branding.businessName}</h2>
+                <h2 className="font-display font-bold text-foreground text-[11px] tracking-[0.08em] uppercase leading-tight">{branding.businessName}</h2>
                 {branding.tagline && (
                   <p className="text-xs text-muted leading-tight">{branding.tagline}</p>
                 )}
