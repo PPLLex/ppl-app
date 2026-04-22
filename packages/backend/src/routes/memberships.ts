@@ -187,25 +187,48 @@ router.post(
 
       const syncResults: Array<{
         plan: string;
-        action: 'existed' | 'created' | 'failed';
+        action: 'existed' | 'created' | 'updated' | 'failed';
         stripePriceId?: string;
         error?: string;
       }> = [];
 
       for (const plan of syncPlans) {
         try {
-          // Ask Stripe if a price already exists for this plan (search by
-          // metadata) — distinguishes "already set up" from "we just created
-          // it" in the result for a clearer admin report.
+          // Look up any existing active Stripe price for this plan.
           const existing = await stripe.prices.search({
             query: `metadata["ppl_plan_id"]:"${plan.id}" active:"true"`,
           });
 
           if (existing.data.length > 0) {
+            const current = existing.data[0];
+            const expectedInterval: 'week' | 'month' =
+              plan.billingCycle === 'monthly' ? 'month' : 'week';
+
+            // Stripe prices are IMMUTABLE — the amount and recurring interval
+            // can't be edited on an existing price. If either has drifted from
+            // what the plan says today, archive the old price and create a new
+            // one. This is what lets Chad change a price in seed.ts + redeploy
+            // and have Stripe stay in sync without manual cleanup.
+            const priceMatches =
+              current.unit_amount === plan.priceCents &&
+              current.recurring?.interval === expectedInterval;
+
+            if (priceMatches) {
+              syncResults.push({
+                plan: plan.name,
+                action: 'existed',
+                stripePriceId: current.id,
+              });
+              continue;
+            }
+
+            // Archive stale price, then fall through to create a fresh one.
+            await stripe.prices.update(current.id, { active: false });
+            const newPriceId = await getOrCreateStripePrice(plan.id);
             syncResults.push({
               plan: plan.name,
-              action: 'existed',
-              stripePriceId: existing.data[0].id,
+              action: 'updated',
+              stripePriceId: newPriceId,
             });
             continue;
           }
@@ -241,15 +264,17 @@ router.post(
       });
 
       const createdCount = syncResults.filter((r) => r.action === 'created').length;
+      const updatedCount = syncResults.filter((r) => r.action === 'updated').length;
       const failedCount = syncResults.filter((r) => r.action === 'failed').length;
+      const existedCount = syncResults.filter((r) => r.action === 'existed').length;
 
       res.json({
         success: failedCount === 0,
         data: syncResults,
         message:
           failedCount > 0
-            ? `Synced ${createdCount}, ${failedCount} failed. See data for details.`
-            : `All ${syncPlans.length} active plans are now connected to Stripe (${createdCount} new, ${syncPlans.length - createdCount} already wired).`,
+            ? `Synced: ${createdCount} created, ${updatedCount} price-updated, ${existedCount} already current, ${failedCount} failed. See data for details.`
+            : `All ${syncPlans.length} active plans synced (${createdCount} new, ${updatedCount} updated, ${existedCount} already current).`,
       });
     } catch (error) {
       next(error);

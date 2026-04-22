@@ -94,8 +94,8 @@ async function main() {
     // tracked separately via the ProPerkCredit system — see ARCHITECTURE.md.
     { id: 'plan-pro-facility-access', name: 'Pro — Facility Access', slug: 'pro-facility-access', ageGroup: 'pro', sessionsPerWeek: null, priceCents: 10000, billingCycle: 'monthly', description: 'Monthly self-directed facility access for pro athletes. No coaching sessions included.' },
     { id: 'plan-pro-programming', name: 'Pro — Programming', slug: 'pro-programming', ageGroup: 'pro', sessionsPerWeek: 0, priceCents: 10000, billingCycle: 'monthly', description: 'Custom monthly programming delivered to you. No facility access.' },
-    { id: 'plan-pro-programming-access', name: 'Pro — Programming + Access', slug: 'pro-programming-access', ageGroup: 'pro', sessionsPerWeek: null, priceCents: 25000, billingCycle: 'monthly', description: 'Custom monthly programming plus unlimited facility access.' },
-    { id: 'plan-pro-programming-training', name: 'Pro — Programming + Training', slug: 'pro-programming-training', ageGroup: 'pro', sessionsPerWeek: null, priceCents: 40000, billingCycle: 'monthly', description: 'Custom programming plus hands-on coaching sessions with PPL staff.' },
+    { id: 'plan-pro-programming-access', name: 'Pro — Programming + Access', slug: 'pro-programming-access', ageGroup: 'pro', sessionsPerWeek: null, priceCents: 17500, billingCycle: 'monthly', description: 'Custom monthly programming plus unlimited facility access.' },
+    { id: 'plan-pro-programming-training', name: 'Pro — Programming + Training', slug: 'pro-programming-training', ageGroup: 'pro', sessionsPerWeek: null, priceCents: 8500, billingCycle: 'weekly', description: 'Custom programming plus hands-on coaching sessions with PPL staff.' },
   ];
 
   for (const plan of planDefs) {
