@@ -101,6 +101,10 @@ function RegisterForm() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [collegeOptOut, setCollegeOptOut] = useState(false);
+  // MS/HS has a harder opt-out than College — TWO acknowledgments required,
+  // because we really do expect most MS/HS kids to have a parent on the account.
+  const [msHsSoloAck1, setMsHsSoloAck1] = useState(false);
+  const [msHsSoloAck2, setMsHsSoloAck2] = useState(false);
 
   // Step 3 / 4 / 5
   const [athleteSelection, setAthleteSelection] = useState<AthleteSelection | ''>('');
@@ -116,15 +120,40 @@ function RegisterForm() {
   const [googleLoaded, setGoogleLoaded] = useState(false);
 
   // Derived — who's on the account and who's primary
-  const needsParent = playingLevel === 'youth' || playingLevel === 'ms_hs';
+  const isYouth = playingLevel === 'youth';
+  const isMsHs = playingLevel === 'ms_hs';
   const isCollege = playingLevel === 'college';
   const isPro = playingLevel === 'pro';
-  const hasParent = needsParent || (isCollege && !collegeOptOut && parentEmail.trim().length > 0);
+
+  // MS/HS opt-out gate: must tick BOTH acknowledgments to go solo
+  const msHsOptedOut = isMsHs && msHsSoloAck1 && msHsSoloAck2;
+
+  // Parent section is visible whenever a parent/guardian MIGHT be attached
+  const showsParentSection = isYouth || isMsHs || isCollege;
+
+  // Parent fields are REQUIRED when:
+  //   • Youth — always
+  //   • MS/HS — unless the two opt-out boxes are both ticked
+  //   • College — never required (they can opt out with a single ack)
+  const parentRequired = isYouth || (isMsHs && !msHsOptedOut);
+
+  // Backwards-compat flag used by the rest of the code that cares whether
+  // a parent account is being attached at all.
+  const hasParent =
+    parentRequired ||
+    (isCollege && !collegeOptOut && parentEmail.trim().length > 0) ||
+    (isMsHs && msHsOptedOut && parentEmail.trim().length > 0);
+
   const primaryEmail = hasParent ? parentEmail.trim().toLowerCase() : athleteEmail.trim().toLowerCase();
   const primaryFullName = hasParent
     ? `${parentFirstName} ${parentLastName}`.trim()
     : `${athleteFirstName} ${athleteLastName}`.trim();
   const primaryPhone = hasParent ? parentPhone : athletePhone;
+
+  // If the user un-ticks the first box, always clear the second.
+  useEffect(() => {
+    if (!msHsSoloAck1 && msHsSoloAck2) setMsHsSoloAck2(false);
+  }, [msHsSoloAck1, msHsSoloAck2]);
 
   // Load locations once
   useEffect(() => {
@@ -215,11 +244,12 @@ function RegisterForm() {
 
     // ──────────────────────────────────────────────────────────
     // Parent/guardian required fields
-    //   • Youth / MS-HS → parent ALWAYS required
-    //   • College → parent required UNLESS self-management opt-out
+    //   • Youth → parent ALWAYS required
+    //   • MS/HS → parent required UNLESS BOTH solo-ack boxes ticked
+    //   • College → parent required UNLESS single self-management opt-out
     //   • Pro → no parent section
     // ──────────────────────────────────────────────────────────
-    if (needsParent) {
+    if (parentRequired) {
       if (!parentFirstName.trim() || !parentLastName.trim()) {
         setError("Please enter the parent/guardian's first and last name.");
         return;
@@ -230,6 +260,34 @@ function RegisterForm() {
       }
       if (!parentPhone.trim()) {
         setError("Please enter a parent/guardian phone number.");
+        return;
+      }
+    } else if (isMsHs && msHsOptedOut) {
+      // MS/HS athlete managing the account themselves.
+      if (!athleteEmail.trim()) {
+        setError("Please enter the athlete's email — this will be the login.");
+        return;
+      }
+      if (!athletePhone.trim()) {
+        setError("Please enter the athlete's phone number.");
+        return;
+      }
+      // If they entered ANY parent info, require all of it (same rule as College).
+      const anyParentField =
+        parentFirstName.trim() ||
+        parentLastName.trim() ||
+        parentEmail.trim() ||
+        parentPhone.trim();
+      if (
+        anyParentField &&
+        (!parentFirstName.trim() ||
+          !parentLastName.trim() ||
+          !parentEmail.trim() ||
+          !parentPhone.trim())
+      ) {
+        setError(
+          'Please fill in ALL parent/guardian fields, or clear them to finish signing up solo.'
+        );
         return;
       }
     } else if (isCollege) {
@@ -247,7 +305,6 @@ function RegisterForm() {
         parentEmail.trim() ||
         parentPhone.trim();
       if (anyParentField) {
-        // Partial parent info — require all of it.
         if (
           !parentFirstName.trim() ||
           !parentLastName.trim() ||
@@ -282,7 +339,9 @@ function RegisterForm() {
     //   Runs only when a parent/guardian is actually attached.
     // ──────────────────────────────────────────────────────────
     const parentAttached =
-      needsParent || (isCollege && parentEmail.trim().length > 0);
+      parentRequired ||
+      (isCollege && parentEmail.trim().length > 0) ||
+      (isMsHs && msHsOptedOut && parentEmail.trim().length > 0);
     if (parentAttached) {
       const aName = `${athleteFirstName.trim().toLowerCase()} ${athleteLastName.trim().toLowerCase()}`;
       const pName = `${parentFirstName.trim().toLowerCase()} ${parentLastName.trim().toLowerCase()}`;
@@ -629,7 +688,7 @@ function RegisterForm() {
                       value={athletePhone}
                       onChange={(e) => setAthletePhone(e.target.value)}
                       className="ppl-input"
-                      placeholder={needsParent ? "Use parent's cell if athlete has none" : ''}
+                      placeholder={parentRequired ? "Use parent's cell if athlete has none" : ''}
                       required
                     />
                   </div>
@@ -637,7 +696,7 @@ function RegisterForm() {
                 </section>
 
                 {/* ─── PARENT / GUARDIAN SECTION ───────────────── */}
-                {(needsParent || isCollege) && (
+                {showsParentSection && (
                   <section className="rounded-xl overflow-hidden border-2 border-amber-500/70 bg-amber-500/[0.06] shadow-lg shadow-amber-500/10">
                     {/* Bold banner header */}
                     <div className="flex items-center gap-2.5 px-4 py-2.5 bg-amber-500 text-black">
@@ -650,68 +709,120 @@ function RegisterForm() {
                       <span className="text-xs font-extrabold uppercase tracking-[0.15em]">
                         Step 2 — Parent / Guardian
                       </span>
-                      {isCollege && (
+                      {!parentRequired && (
                         <span className="ml-auto text-[10px] font-semibold normal-case tracking-normal bg-black/15 px-2 py-0.5 rounded">
-                          optional for College
+                          {isCollege ? 'optional for College' : 'optional — solo mode'}
                         </span>
                       )}
                     </div>
                     <div className="p-4 space-y-3">
                       <p className="text-[11px] text-muted -mt-1">
-                        {needsParent
-                          ? "The parent or legal guardian responsible for this account."
+                        {parentRequired
+                          ? 'The parent or legal guardian responsible for this account.'
                           : "Who should we contact if we can't reach the athlete?"}
                       </p>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-xs text-muted block mb-1">Parent/guardian first name</label>
+                        <label className="text-xs text-muted block mb-1">
+                          Parent/guardian first name
+                          {parentRequired && <span className="text-amber-500 ml-0.5">*</span>}
+                        </label>
                         <input
                           type="text"
                           value={parentFirstName}
                           onChange={(e) => setParentFirstName(e.target.value)}
                           className="ppl-input"
-                          required={needsParent}
+                          required={parentRequired}
                         />
                       </div>
                       <div>
-                        <label className="text-xs text-muted block mb-1">Parent/guardian last name</label>
+                        <label className="text-xs text-muted block mb-1">
+                          Parent/guardian last name
+                          {parentRequired && <span className="text-amber-500 ml-0.5">*</span>}
+                        </label>
                         <input
                           type="text"
                           value={parentLastName}
                           onChange={(e) => setParentLastName(e.target.value)}
                           className="ppl-input"
-                          required={needsParent}
+                          required={parentRequired}
                         />
                       </div>
                     </div>
                     <div className="mt-3">
-                      <label className="text-xs text-muted block mb-1">Parent/guardian email</label>
+                      <label className="text-xs text-muted block mb-1">
+                        Parent/guardian email
+                        {parentRequired && <span className="text-amber-500 ml-0.5">*</span>}
+                      </label>
                       <input
                         type="email"
                         value={parentEmail}
                         onChange={(e) => setParentEmail(e.target.value)}
                         className="ppl-input"
                         placeholder="parent@example.com"
-                        required={needsParent}
+                        required={parentRequired}
                       />
-                      {needsParent && (
+                      {parentRequired && (
                         <p className="text-[11px] text-muted mt-1">
                           This will be the account login. You&apos;ll manage billing and scheduling.
                         </p>
                       )}
                     </div>
                     <div className="mt-3">
-                      <label className="text-xs text-muted block mb-1">Parent/guardian phone</label>
+                      <label className="text-xs text-muted block mb-1">
+                        Parent/guardian phone
+                        {parentRequired && <span className="text-amber-500 ml-0.5">*</span>}
+                      </label>
                       <input
                         type="tel"
                         value={parentPhone}
                         onChange={(e) => setParentPhone(e.target.value)}
                         className="ppl-input"
-                        required={needsParent}
+                        required={parentRequired}
                       />
                     </div>
                     </div>
                   </section>
+                )}
+
+                {/* MS/HS two-step self-management gate.
+                    We intentionally make this harder than College — MS/HS athletes
+                    almost always have a parent on the account. Requiring two boxes
+                    prevents accidental solo registrations. */}
+                {isMsHs && (
+                  <div className="space-y-2.5 rounded-xl border border-border bg-surface/60 p-3">
+                    <p className="text-[11px] text-muted leading-snug">
+                      Most MS/HS athletes register with a parent or guardian.
+                      If you&apos;re managing this account by yourself, tick both boxes
+                      below — otherwise please complete the parent/guardian fields above.
+                    </p>
+                    <label className="flex gap-3 p-3 rounded-lg border border-border bg-background cursor-pointer hover:border-amber-500/50 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={msHsSoloAck1}
+                        onChange={(e) => setMsHsSoloAck1(e.target.checked)}
+                        className="mt-0.5 accent-amber-500"
+                      />
+                      <span className="text-xs text-foreground/90 leading-snug">
+                        I&apos;m managing this account myself — I understand I&apos;m responsible
+                        for my own scheduling, cancellations, and billing.
+                      </span>
+                    </label>
+                    {msHsSoloAck1 && (
+                      <label className="flex gap-3 p-3 rounded-lg border-2 border-amber-500/60 bg-amber-500/10 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={msHsSoloAck2}
+                          onChange={(e) => setMsHsSoloAck2(e.target.checked)}
+                          className="mt-0.5 accent-amber-500"
+                        />
+                        <span className="text-xs text-foreground leading-snug">
+                          <strong>Are you 100% sure?</strong> All billing reminders,
+                          payment issues, and cancellation windows will go to you — not to a parent.
+                        </span>
+                      </label>
+                    )}
+                  </div>
                 )}
 
                 {/* College-only self-management acknowledgment */}
