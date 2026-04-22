@@ -25,7 +25,7 @@ const STEPS = ['Account', 'Details', 'Plan', 'Payment'];
 /*  Age-group helpers                                                   */
 /* ------------------------------------------------------------------ */
 const AGE_GROUPS = [
-  { value: 'youth', label: 'Youth', desc: '12 and under' },
+  { value: 'youth', label: 'Youth', desc: 'Ages 12 & Under' },
   { value: 'ms_hs', label: 'Middle School / High School', desc: 'Ages 13-18' },
   { value: 'college', label: 'College', desc: 'College athletes' },
 ];

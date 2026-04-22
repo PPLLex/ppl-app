@@ -48,7 +48,7 @@ const LEVEL_LABEL: Record<PlayingLevel, string> = {
 };
 
 const LEVEL_DESC: Record<PlayingLevel, string> = {
-  youth: 'Ages 12 & under',
+  youth: 'Ages 12 & Under',
   ms_hs: 'Ages 13–18',
   college: 'College athletes',
   pro: 'Professional athletes',
