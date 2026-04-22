@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import { config } from './config';
 import { errorHandler } from './middleware/errorHandler';
 import { authLimiter, apiLimiter } from './middleware/rateLimit';
+import { orgContext } from './middleware/orgContext';
 
 // Route imports
 import authRoutes from './routes/auth';
@@ -69,6 +70,11 @@ app.use(express.json());
 // Rate limiting
 app.use('/api/auth', authLimiter);
 app.use('/api', apiLimiter);
+
+// Organization context — attaches req.org on every /api request. Must run
+// before routes but after body parsing. See ARCHITECTURE.md for the resolution
+// order and fallback behavior.
+app.use('/api', orgContext);
 
 // Membership guard — enforces "dummy mode" for clients without active membership
 // Checks JWT (if present) and blocks non-payment routes for suspended/past-due/cancelled members
