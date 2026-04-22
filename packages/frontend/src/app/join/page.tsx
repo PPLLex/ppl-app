@@ -280,22 +280,22 @@ function JoinFlow() {
 
       <div className="w-full max-w-md">
         {/* Header */}
-        <div className="text-center mb-8">
+        <div className="flex flex-col items-center text-center mb-8">
           {branding.logoData ? (
-            <div className="inline-flex items-center justify-center w-24 h-24 rounded-2xl overflow-hidden mb-4 shadow-lg shadow-emerald-900/20 ring-1 ring-border">
+            <div className="flex items-center justify-center w-48 h-48 rounded-full overflow-hidden mb-5 shadow-xl shadow-emerald-900/25 ring-1 ring-border bg-white/5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={branding.logoData}
                 alt={branding.businessName}
-                className="w-full h-full object-contain bg-white/5"
+                className="w-full h-full object-contain"
               />
             </div>
           ) : (
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full ppl-gradient mb-4">
-              <span className="text-white text-3xl font-bold">P</span>
+            <div className="flex items-center justify-center w-48 h-48 rounded-full ppl-gradient mb-5">
+              <span className="text-white text-6xl font-bold">P</span>
             </div>
           )}
-          <h1 className="font-display text-sm sm:text-base font-bold tracking-[0.08em] uppercase text-foreground whitespace-nowrap">
+          <h1 className="font-display text-sm sm:text-base font-bold tracking-[0.08em] uppercase text-foreground whitespace-nowrap text-center">
             Get Started with {branding.businessName || 'Pitching Performance Lab'}
           </h1>
           <p className="text-muted mt-1">

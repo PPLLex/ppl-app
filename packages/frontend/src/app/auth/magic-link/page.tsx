@@ -40,19 +40,19 @@ function MagicLinkVerifier() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-sm text-center">
+      <div className="w-full max-w-sm flex flex-col items-center text-center">
         {branding.logoData ? (
-          <div className="inline-flex items-center justify-center w-24 h-24 rounded-2xl overflow-hidden mb-6 shadow-lg shadow-emerald-900/20 ring-1 ring-border">
+          <div className="flex items-center justify-center w-48 h-48 rounded-full overflow-hidden mb-6 shadow-xl shadow-emerald-900/25 ring-1 ring-border bg-white/5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={branding.logoData}
               alt={branding.businessName}
-              className="w-full h-full object-contain bg-white/5"
+              className="w-full h-full object-contain"
             />
           </div>
         ) : (
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full ppl-gradient mb-6">
-            <span className="text-white text-3xl font-bold">P</span>
+          <div className="flex items-center justify-center w-48 h-48 rounded-full ppl-gradient mb-6">
+            <span className="text-white text-6xl font-bold">P</span>
           </div>
         )}
 
