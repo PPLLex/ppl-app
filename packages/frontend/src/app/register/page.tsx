@@ -9,7 +9,6 @@ import Link from 'next/link';
 import Script from 'next/script';
 import StripeCheckout from '@/components/payments/StripeCheckout';
 
-// Deploy-kick marker v2: force Vercel rebuild.
 // ---------------------------------------------------------------------------
 // PPL registration — 6-step onboarding.
 //

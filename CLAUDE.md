@@ -124,9 +124,11 @@ PPL currently has multiple locations (PPL Louisville, PPL Youth, etc.). Staff/ad
 - **NO data migration from Swift.** Clients will not be migrated from Swift to this app. Don't plan migration work, don't suggest it, don't bring it up.
 - **Always call training sessions "training sessions," not "classes."** Chad prefers this terminology.
 - **Room canonical name for 13+ is** `13+ (Middle School, High School, College, and Pro)` — keep the parenthetical everywhere it's displayed.
-- **Push workflow in the sandbox:** use `/tmp/ppl-push-helper.sh "message" file1 file2 ...` — this clones fresh to /tmp, copies edited files, commits, and pushes. Avoids overlayfs lock-file issues in the main `.git`. Token at `/tmp/.ghtoken` (sandbox-private, ephemeral).
+- **Push workflow in the sandbox:** use `/tmp/ppl-push-helper.sh "message" file1 file2 ...` — this clones fresh to /tmp, copies edited files, commits, pushes, AND fires a Vercel deploy hook to guarantee the build triggers (Vercel's GitHub webhook has dropped pushes silently in the past; the deploy hook is our safety net — idempotent so it's fine if both the webhook AND the hook fire). Secrets: GH token at `/tmp/.ghtoken`, Vercel deploy hook URL at `/tmp/.vercel-deploy-hook` (both sandbox-private, ephemeral). If those files are missing after a sandbox rebuild, recreate them — hook URL lives in Vercel project Settings → Git → Deploy Hooks.
+- **Vercel project:** only `ppl-app-xsg5` (mapped to `app.pitchingperformancelab.com`) is Git-connected. The three older projects (`ppl-app`, `ppl-frontend`, `ppl-scheduling-app`) are disconnected so they don't burn build budget. Don't reconnect them unless you intend to use them.
 - **Ship-as-you-go cadence.** Chad wants changes committed + pushed + deployed as soon as they're ready, not batched at the end of a session. Keep him in the loop when deploys land so he can test live.
 - **Do everything autonomously that can be done autonomously.** Only interrupt Chad for decisions with meaningful tradeoffs, production data mutations that can't be undone, financial operations, or truly ambiguous requirements. Otherwise, make the call, ship it, report.
+- **Always include the correct test link when asking Chad to test something.** Don't make him scroll back or hunt for it. If it's the registration flow, that's `https://app.pitchingperformancelab.com/register`. If it's a specific admin page, paste the full URL.
 
 ## Current Build Priority (as of April 21, 2026)
 
