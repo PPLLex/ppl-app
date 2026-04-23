@@ -184,24 +184,20 @@ html {
   font-weight: 400;
 }
 
-/* Form field labels — Transducer Black Italic, uppercase. Intentionally
-   small (12px) so the display face doesn't overpower the input itself;
-   italic + tracking give it the "sports-brand UI" feel that matches the
-   step heading. */
-/* Labels — Manrope, medium weight, uppercase, heavy tracking, muted tone.
-   This is the "premium SaaS form label" look — think Linear, Tesla account
-   settings, Airbnb checkout, high-end agency sites. Intentionally sleek and
-   quiet so Transducer banners can do the shouting. */
+/* Labels — Manrope, medium weight, natural case. Aligned with the
+   pitching-report aesthetic: readable, quiet, lets the Transducer banners
+   do the shouting. Uppercase + heavy tracking has been removed since the
+   fonts now carry enough personality on their own. */
 .ppl-label {
   display: block;
   font-family: var(--font-manrope), system-ui, -apple-system, "Segoe UI", sans-serif;
   font-weight: 500;
   font-style: normal;
-  font-size: 0.6875rem;      /* 11px */
-  color: #b5b5b5;            /* muted but readable — the premium-label tone */
-  text-transform: uppercase;
-  letter-spacing: 0.14em;    /* heavy tracking = expensive-feeling */
-  margin-bottom: 0.45rem;
+  font-size: 0.8125rem;      /* 13px — readable mixed case */
+  color: #c4c4c4;            /* slightly brighter now that it's not all-caps */
+  text-transform: none;
+  letter-spacing: 0.01em;    /* a hair of tracking, still feels refined */
+  margin-bottom: 0.4rem;
 }
 
 .ppl-badge {

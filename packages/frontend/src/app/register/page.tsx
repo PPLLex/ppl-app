@@ -761,17 +761,11 @@ function RegisterForm() {
                 </button>
               </div>
 
-              {/* OAuth buttons — optional shortcut */}
-              <div className="space-y-2 mb-5">
+              {/* OAuth shortcut — Google button (SDK label already says
+                  "Sign up with Google"). The email form below is the default
+                  path, so no "or sign up with email" divider needed. */}
+              <div data-ppl-marker="oauth-no-divider-v2" className="space-y-2 mb-6">
                 <div id="google-signup-btn" className="flex justify-center [&>div]:!w-full" />
-              </div>
-              <div className="relative mb-5">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-border" />
-                </div>
-                <div className="relative flex justify-center text-xs">
-                  <span className="px-3 bg-surface text-muted">or sign up with email</span>
-                </div>
               </div>
 
               <form onSubmit={handleStep2Submit} className="space-y-6">
