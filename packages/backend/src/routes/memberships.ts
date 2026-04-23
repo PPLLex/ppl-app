@@ -549,6 +549,20 @@ router.post('/subscribe', authenticate, async (req: Request, res: Response, next
       },
     });
 
+    // Compute the prorated first charge in cents so the frontend can display
+    // "First charge today: $X. Then $Y/week starting Mon Apr 27." This matches
+    // Stripe's own proration math (create_prorations + billing_cycle_anchor).
+    //
+    // Weekly plans: prorated fraction of (days-until-anchor / 7) × weekly rate.
+    // Monthly plans (Pro): charged on signup day, no anchor shift.
+    let firstChargeCents = plan.priceCents;
+    if (plan.billingCycle === 'weekly' || plan.billingCycle === 'WEEKLY') {
+      const msUntilAnchor = result.billingAnchorDate.getTime() - Date.now();
+      const daysUntilAnchor = msUntilAnchor / (1000 * 60 * 60 * 24);
+      const proratedFraction = Math.max(0, Math.min(1, daysUntilAnchor / 7));
+      firstChargeCents = Math.round(plan.priceCents * proratedFraction);
+    }
+
     res.status(201).json({
       success: true,
       data: {
@@ -556,6 +570,7 @@ router.post('/subscribe', authenticate, async (req: Request, res: Response, next
         clientSecret: result.clientSecret,
         billingDay: result.billingDay,
         billingAnchorDate: result.billingAnchorDate,
+        firstChargeCents,
         plan,
       },
       message: `Complete payment to activate your ${plan.name} membership.`,

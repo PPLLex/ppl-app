@@ -1356,6 +1356,12 @@ export interface SubscribeResult {
   clientSecret: string;
   billingDay: string;
   billingAnchorDate: string;
+  /**
+   * Prorated amount (cents) the customer will actually pay on signup day.
+   * Computed on the backend as (days-until-anchor / 7) × plan.priceCents for
+   * weekly plans. Equal to plan.priceCents for monthly plans (Pro).
+   */
+  firstChargeCents: number;
   plan: MembershipPlan;
 }
 

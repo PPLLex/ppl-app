@@ -15,8 +15,17 @@ const stripePromise = STRIPE_PK ? loadStripe(STRIPE_PK) : null;
 interface StripeCheckoutProps {
   clientSecret: string;
   planName: string;
+  /** Full recurring rate per billing period. */
   priceCents: number;
+  /** 'MONDAY' | 'THURSDAY' | anything else — used for the "billed weekly on ___s" copy. */
   billingDay: string;
+  /** Optional: prorated amount the customer will pay TODAY. If set, the summary shows both
+   *  "First charge today" and "Then $X / week" rather than just the recurring rate. */
+  firstChargeCents?: number;
+  /** Optional: ISO date of the first full-rate charge (the Stripe billing cycle anchor). */
+  anchorDate?: string;
+  /** Optional: 'weekly' | 'monthly' — drives the "/week" vs "/mo" suffix. */
+  billingCycle?: string;
   onSuccess: () => void;
   onCancel: () => void;
 }
@@ -29,6 +38,9 @@ export default function StripeCheckout({
   planName,
   priceCents,
   billingDay,
+  firstChargeCents,
+  anchorDate,
+  billingCycle = 'weekly',
   onSuccess,
   onCancel,
 }: StripeCheckoutProps) {
@@ -52,23 +64,79 @@ export default function StripeCheckout({
           </button>
         </div>
 
-        {/* Plan summary */}
-        <div className="bg-background rounded-lg p-4 mb-5">
-          <div className="flex justify-between items-center">
-            <div>
+        {/* Plan summary — shows BOTH the prorated first charge and the
+            recurring rate, so the customer knows exactly what their card
+            will be charged today vs. from next Mon/Thu onward. The prorated
+            math comes from the backend (see /api/memberships/subscribe). */}
+        {(() => {
+          const isMonthly = billingCycle === 'monthly' || billingCycle === 'MONTHLY';
+          const perPeriod = isMonthly ? '/mo' : '/week';
+          const day = billingDay.toLowerCase();
+          // Fallback: if firstChargeCents is missing (older clients / older
+          // response), show the old single-amount layout. Don't lie about the
+          // actual charge — Stripe will bill correctly either way.
+          const hasProration =
+            firstChargeCents !== undefined && firstChargeCents !== priceCents;
+          const anchor = anchorDate ? new Date(anchorDate) : null;
+          const anchorLabel = anchor
+            ? anchor.toLocaleDateString('en-US', {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+              })
+            : null;
+
+          if (!hasProration) {
+            return (
+              <div className="bg-background rounded-lg p-4 mb-5">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="font-semibold text-foreground">{planName}</p>
+                    <p className="text-xs text-muted mt-0.5">
+                      {isMonthly
+                        ? `Billed on the ${day} of each month`
+                        : `Billed weekly on ${day}s`}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-stat text-3xl leading-none tracking-wide text-accent-text tabular-nums">
+                      ${(priceCents / 100).toFixed(0)}
+                    </p>
+                    <p className="text-xs text-muted mt-1">{perPeriod}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          // Prorated signup — explain both charges explicitly.
+          return (
+            <div className="bg-background rounded-lg p-4 mb-5">
               <p className="font-semibold text-foreground">{planName}</p>
-              <p className="text-xs text-muted mt-0.5">
-                Billed weekly on {billingDay.toLowerCase()}s
+              <div className="mt-3 flex justify-between items-baseline">
+                <p className="text-xs text-muted">First charge today</p>
+                <p className="font-stat text-2xl leading-none tabular-nums text-foreground">
+                  ${(firstChargeCents! / 100).toFixed(2)}
+                </p>
+              </div>
+              <div className="mt-1 flex justify-between items-baseline">
+                <p className="text-xs text-muted">
+                  Then {isMonthly ? 'monthly' : 'weekly'}
+                  {anchorLabel ? `, starting ${anchorLabel}` : ''}
+                </p>
+                <p className="font-stat text-2xl leading-none tabular-nums text-accent-text">
+                  ${(priceCents / 100).toFixed(0)}
+                  <span className="text-xs text-muted font-normal ml-0.5">{perPeriod}</span>
+                </p>
+              </div>
+              <p className="mt-3 text-[11px] text-muted leading-snug">
+                Your first charge is prorated for the days between today and your
+                first {day}. Every charge after that will be the full{' '}
+                ${(priceCents / 100).toFixed(0)}{perPeriod}.
               </p>
             </div>
-            <div className="text-right">
-              <p className="text-2xl font-bold text-accent-text">
-                ${(priceCents / 100).toFixed(0)}
-              </p>
-              <p className="text-xs text-muted">/week</p>
-            </div>
-          </div>
-        </div>
+          );
+        })()}
 
         <Elements
           stripe={stripePromise}

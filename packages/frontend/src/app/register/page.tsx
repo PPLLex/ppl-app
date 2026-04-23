@@ -77,6 +77,29 @@ const LEVEL_DESC: Record<PlayingLevel, string> = {
   pro: 'MLB, MiLB, or Independent',
 };
 
+/**
+ * Per-playing-level recommendation. The plan ID listed here gets a
+ * "MOST POPULAR" badge on step 5 when that age group's plans are shown.
+ * Intentionally hardcoded — these are business decisions (what PPL
+ * wants to steer people toward), not data-driven.
+ *
+ * Recommendations (per Chad 2026-04-23):
+ *   Youth   → Youth 1x/Week           (only option, reinforces the plan)
+ *   MS/HS   → Unlimited Pitching      (flagship upgrade over 1x)
+ *   College → Unlimited College       (only option)
+ *   Pro     → Programming + Access    ($175/mo bundle, flagship Pro tier)
+ *
+ * If the user toggles "+ Add Hitting Training" on a recommended pitching
+ * card, the combo sibling is considered the same recommendation (not a
+ * downgrade). Matching is done on the BASE plan id regardless of toggle.
+ */
+const RECOMMENDED_PLAN_IDS: Record<PlayingLevel, string> = {
+  youth: 'plan-youth-1x',
+  ms_hs: 'plan-unlimited-pitching',
+  college: 'plan-unlimited-college',
+  pro: 'plan-pro-programming-access',
+};
+
 export default function RegisterPage() {
   return (
     <Suspense>
@@ -230,6 +253,126 @@ function RegisterForm() {
 
   // Google Sign-In setup
   const [googleLoaded, setGoogleLoaded] = useState(false);
+
+  // ──────────────────────────────────────────────────────────────
+  // SAVE-AND-FINISH-LATER (lightweight localStorage persistence)
+  // ──────────────────────────────────────────────────────────────
+  //
+  // Persists step 1 + step 2 form state (EXCEPT password fields) to
+  // localStorage so unauthenticated users who bounce mid-signup can pick
+  // up where they left off. Authenticated users get the richer backend-
+  // backed resume flow (/onboarding/me) handled in the earlier useEffect.
+  //
+  // Cleared the moment step 2 submits successfully — once their account
+  // exists, backend resume takes over and we don't need the cache.
+  const SAVE_KEY = 'ppl:register:draft:v1';
+  const [restoredDraft, setRestoredDraft] = useState(false);
+
+  // Restore on mount (once). Only runs if we actually find saved state;
+  // never overwrites a user who came back to /register with a fresh goal.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem(SAVE_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      if (!d || typeof d !== 'object') return;
+      // Only restore fields we recognize — prevents a corrupted/renamed
+      // schema from blowing up the UI.
+      if (d.playingLevel) setPlayingLevel(d.playingLevel);
+      if (d.athleteFirstName) setAthleteFirstName(d.athleteFirstName);
+      if (d.athleteLastName) setAthleteLastName(d.athleteLastName);
+      if (d.athleteEmail) setAthleteEmail(d.athleteEmail);
+      if (d.athleteDob) setAthleteDob(d.athleteDob);
+      if (d.athletePhone) setAthletePhone(d.athletePhone);
+      if (d.parentFirstName) setParentFirstName(d.parentFirstName);
+      if (d.parentLastName) setParentLastName(d.parentLastName);
+      if (d.parentEmail) setParentEmail(d.parentEmail);
+      if (d.parentPhone) setParentPhone(d.parentPhone);
+      setRestoredDraft(true);
+    } catch {
+      // Malformed JSON — discard silently, no need to surface this.
+      window.localStorage.removeItem(SAVE_KEY);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-save on field change. Debounced 400ms so we're not hammering
+  // localStorage every keystroke. Password fields are intentionally
+  // excluded — never store plaintext credentials, even client-side.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    // Don't save anything if the user hasn't touched the form at all
+    // (prevents the "start fresh" banner from appearing after a 0-state mount).
+    const anyValue =
+      playingLevel ||
+      athleteFirstName ||
+      athleteLastName ||
+      athleteEmail ||
+      athleteDob ||
+      athletePhone ||
+      parentFirstName ||
+      parentLastName ||
+      parentEmail ||
+      parentPhone;
+    if (!anyValue) return;
+    const t = setTimeout(() => {
+      try {
+        window.localStorage.setItem(
+          SAVE_KEY,
+          JSON.stringify({
+            playingLevel,
+            athleteFirstName,
+            athleteLastName,
+            athleteEmail,
+            athleteDob,
+            athletePhone,
+            parentFirstName,
+            parentLastName,
+            parentEmail,
+            parentPhone,
+            savedAt: Date.now(),
+          })
+        );
+      } catch {
+        /* quota exceeded or disabled — silent no-op */
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [
+    playingLevel,
+    athleteFirstName,
+    athleteLastName,
+    athleteEmail,
+    athleteDob,
+    athletePhone,
+    parentFirstName,
+    parentLastName,
+    parentEmail,
+    parentPhone,
+  ]);
+
+  const clearDraft = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(SAVE_KEY);
+    }
+    setRestoredDraft(false);
+  }, []);
+
+  const startFresh = useCallback(() => {
+    clearDraft();
+    setPlayingLevel('');
+    setAthleteFirstName('');
+    setAthleteLastName('');
+    setAthleteEmail('');
+    setAthleteDob('');
+    setAthletePhone('');
+    setParentFirstName('');
+    setParentLastName('');
+    setParentEmail('');
+    setParentPhone('');
+    setStep(1);
+  }, [clearDraft, setStep]);
 
   // Derived — who's on the account and who's primary
   const isYouth = playingLevel === 'youth';
@@ -564,6 +707,9 @@ function RegisterForm() {
       if (res.data?.token) {
         localStorage.setItem('ppl_token', res.data.token);
       }
+      // Wipe the localStorage draft now that the account exists — from here
+      // on the authenticated resume flow (/onboarding/me) is in charge.
+      clearDraft();
       toast.success('Account created');
       setStep(3);
     } catch (err) {
@@ -765,15 +911,34 @@ function RegisterForm() {
               });
             })()}
           </div>
-          <div className="mt-2 flex items-center justify-between text-[11px] uppercase tracking-[0.12em] text-muted">
-            <span>
+          <div className="mt-2 flex items-center justify-between gap-2 text-[11px] uppercase tracking-[0.12em] text-muted">
+            <span className="whitespace-nowrap flex-shrink-0">
               Step <span className="text-foreground font-bold tabular-nums">{step}</span> of 6
             </span>
-            <span className="text-foreground/70">
+            <span className="text-foreground/70 truncate min-w-0 text-right">
               {(['Playing Level', 'Your Info', 'History', 'Training', 'Membership', 'Checkout'] as const)[step - 1]}
             </span>
           </div>
         </div>
+
+        {/* Save-and-finish-later restore banner — only visible on steps 1 & 2
+            (where the draft is still relevant; after account creation the
+            authenticated resume flow takes over). Discreet pill, not a modal. */}
+        {restoredDraft && (step === 1 || step === 2) && (
+          <div className="mb-4 flex items-center justify-between gap-3 p-3 rounded-lg border border-highlight/30 bg-highlight/5 text-sm">
+            <span className="text-foreground/90 leading-snug flex-1">
+              <strong className="text-foreground">Welcome back.</strong>{' '}
+              We saved your progress — pick up where you left off.
+            </span>
+            <button
+              type="button"
+              onClick={startFresh}
+              className="text-xs font-medium text-muted hover:text-foreground underline underline-offset-2 whitespace-nowrap"
+            >
+              Start fresh
+            </button>
+          </div>
+        )}
 
         {/* view-transition-name gives the View Transitions API a named
             element to crossfade when `step` changes. The key forces a fresh
@@ -804,50 +969,32 @@ function RegisterForm() {
           {/* ============================================ */}
           {step === 1 && (
             <div className="space-y-2.5">
-              {(['youth', 'ms_hs', 'college', 'pro'] as PlayingLevel[]).map((lvl, i) => {
-                // MS/HS is the single most-common signup cohort at PPL. The
-                // POPULAR badge pre-anchors the user toward it without pushing
-                // anyone away from the other levels.
-                const isPopular = lvl === 'ms_hs';
-                return (
-                  <button
-                    key={lvl}
-                    type="button"
-                    onClick={() => handleStep1Select(lvl)}
-                    // Stagger-fade in on page load (~70ms between cards) for a
-                    // "designed, not rendered" feel. Respects prefers-reduced-motion
-                    // via the media query in globals.css.
-                    className="ppl-fade-in group relative w-full text-left p-4 rounded-xl border-2 border-border bg-surface transition-all duration-150 hover:bg-[#95C83C] hover:border-[#95C83C] hover:shadow-lg hover:shadow-[#95C83C]/25 focus:bg-[#95C83C] focus:border-[#95C83C] focus:outline-none"
-                    style={{ animationDelay: `${i * 70}ms` }}
+              {(['youth', 'ms_hs', 'college', 'pro'] as PlayingLevel[]).map((lvl, i) => (
+                <button
+                  key={lvl}
+                  type="button"
+                  onClick={() => handleStep1Select(lvl)}
+                  // Stagger-fade in on page load (~70ms between cards) for a
+                  // "designed, not rendered" feel. Respects prefers-reduced-motion
+                  // via the media query in globals.css.
+                  className="ppl-fade-in group w-full text-left p-4 rounded-xl border-2 border-border bg-surface transition-all duration-150 hover:bg-[#95C83C] hover:border-[#95C83C] hover:shadow-lg hover:shadow-[#95C83C]/25 focus:bg-[#95C83C] focus:border-[#95C83C] focus:outline-none"
+                  style={{ animationDelay: `${i * 70}ms` }}
+                >
+                  <div
+                    className="font-accent italic font-black uppercase tracking-[0.04em] text-foreground text-sm leading-none transition-colors group-hover:text-black group-focus:text-black"
+                    style={{
+                      fontFamily: 'var(--font-transducer), Impact, "Arial Black", sans-serif',
+                      fontWeight: 900,
+                      fontStyle: 'italic',
+                    }}
                   >
-                    {isPopular && (
-                      <span
-                        className="absolute top-2 right-2 px-2 py-0.5 rounded-md text-black text-[11px] leading-none tracking-[0.14em] tabular-nums shadow-sm transition-opacity group-hover:opacity-0"
-                        style={{
-                          backgroundColor: '#95C83C',
-                          fontFamily: 'var(--font-bebas), Oswald, Impact, sans-serif',
-                        }}
-                        aria-label="Most popular choice"
-                      >
-                        POPULAR
-                      </span>
-                    )}
-                    <div
-                      className="font-accent italic font-black uppercase tracking-[0.04em] text-foreground text-sm leading-none transition-colors group-hover:text-black group-focus:text-black"
-                      style={{
-                        fontFamily: 'var(--font-transducer), Impact, "Arial Black", sans-serif',
-                        fontWeight: 900,
-                        fontStyle: 'italic',
-                      }}
-                    >
-                      {LEVEL_LABEL[lvl]}
-                    </div>
-                    <div className="text-[11px] text-muted/80 mt-1.5 font-normal transition-colors group-hover:text-black/75 group-focus:text-black/75">
-                      {LEVEL_DESC[lvl]}
-                    </div>
-                  </button>
-                );
-              })}
+                    {LEVEL_LABEL[lvl]}
+                  </div>
+                  <div className="text-[11px] text-muted/80 mt-1.5 font-normal transition-colors group-hover:text-black/75 group-focus:text-black/75">
+                    {LEVEL_DESC[lvl]}
+                  </div>
+                </button>
+              ))}
             </div>
           )}
 
@@ -907,14 +1054,14 @@ function RegisterForm() {
                         fontStyle: 'italic',
                       }}
                     >
-                      Step 1 — Athlete
+                      Athlete Info
                     </span>
                   </div>
                   <div className="p-4 space-y-3">
                     <p className="text-[11px] text-muted -mt-1">
                       The person who will be training at PPL.
                     </p>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 [@media(min-width:420px)]:grid-cols-2 gap-3">
                     <div>
                       <label className="ppl-label">
                         Athlete first name<span className="text-[#95C83C] ml-0.5">*</span>
@@ -940,7 +1087,12 @@ function RegisterForm() {
                       />
                     </div>
                   </div>
-                  <div className="mt-3 grid grid-cols-2 gap-3">
+                  {/* Stack to single column below ~420px (sm breakpoint in
+                      Tailwind ≈ 640px — but we want tighter for phones).
+                      `@media (min-width: 420px)` via an arbitrary class
+                      keeps DOB + email side-by-side on anything wider than
+                      a very narrow phone. */}
+                  <div className="mt-3 grid grid-cols-1 [@media(min-width:420px)]:grid-cols-2 gap-3">
                     <div>
                       <label className="ppl-label">
                         Date of birth<span className="text-[#95C83C] ml-0.5">*</span>
@@ -955,29 +1107,39 @@ function RegisterForm() {
                     </div>
                     <div>
                       <label className="ppl-label">
-                        Athlete email<span className="text-[#95C83C] ml-0.5">*</span>
+                        Athlete email
+                        {isYouth ? (
+                          <span className="text-muted ml-1 text-[10px] normal-case tracking-normal">(optional)</span>
+                        ) : (
+                          <span className="text-[#95C83C] ml-0.5">*</span>
+                        )}
                       </label>
                       <input
                         type="email"
                         value={athleteEmail}
                         onChange={(e) => setAthleteEmail(e.target.value)}
                         className="ppl-input"
-                        placeholder="athlete@example.com"
-                        required
+                        placeholder={isYouth ? 'Leave blank — parent gets all messages' : 'athlete@example.com'}
+                        required={!isYouth}
                       />
                     </div>
                   </div>
                   <div className="mt-3">
                     <label className="ppl-label">
-                      Athlete phone<span className="text-[#95C83C] ml-0.5">*</span>
+                      Athlete phone
+                      {isYouth ? (
+                        <span className="text-muted ml-1 text-[10px] normal-case tracking-normal">(optional)</span>
+                      ) : (
+                        <span className="text-[#95C83C] ml-0.5">*</span>
+                      )}
                     </label>
                     <input
                       type="tel"
                       value={athletePhone}
                       onChange={(e) => setAthletePhone(e.target.value)}
                       className="ppl-input"
-                      placeholder={parentRequired ? "Use parent's cell if athlete has none" : ''}
-                      required
+                      placeholder={isYouth ? "Leave blank if athlete has no phone" : (parentRequired ? "Use parent's cell if athlete has none" : '')}
+                      required={!isYouth}
                     />
                   </div>
                   </div>
@@ -994,8 +1156,7 @@ function RegisterForm() {
                     <p className="text-[11px] text-muted leading-snug">
                       Most MS/HS athletes register with a parent or guardian.
                       If you&apos;re managing this account by yourself, tick both boxes
-                      below — otherwise please complete the parent/guardian fields
-                      in Step&nbsp;2.
+                      below — otherwise please complete the parent/guardian fields.
                     </p>
                     <label className="flex gap-3 p-3 rounded-lg border border-border bg-background cursor-pointer hover:border-[#5E9E50]/50 transition-colors">
                       <input
@@ -1085,7 +1246,7 @@ function RegisterForm() {
                         fontStyle: 'italic',
                       }}
                     >
-                        Step 2 — Parent / Guardian
+                        Parent / Guardian Info
                       </span>
                       {!parentRequired && (
                         <span className="ml-auto text-[10px] font-semibold normal-case tracking-normal bg-white/15 px-2 py-0.5 rounded">
@@ -1099,7 +1260,7 @@ function RegisterForm() {
                           ? 'The parent or legal guardian responsible for this account.'
                           : "Who should we contact if we can't reach the athlete?"}
                       </p>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 [@media(min-width:420px)]:grid-cols-2 gap-3">
                       <div>
                         <label className="ppl-label">
                           Parent/guardian first name
@@ -1189,16 +1350,21 @@ function RegisterForm() {
                         fontStyle: 'italic',
                       }}
                     >
-                      Step 3 — Password
+                      Create Password
                     </span>
                   </div>
                   <div className="p-4 space-y-3">
                     <p className="text-[11px] text-muted -mt-1">
-                      This is the login for{' '}
-                      <strong className="text-foreground">{primaryEmail || 'your email'}</strong>.
-                      At least 8 characters.
+                      {primaryEmail ? (
+                        <>
+                          Your login will be{' '}
+                          <strong className="text-foreground">{primaryEmail}</strong>. At least 8 characters.
+                        </>
+                      ) : (
+                        <>Your login will be the email you entered above. At least 8 characters.</>
+                      )}
                     </p>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 [@media(min-width:420px)]:grid-cols-2 gap-3">
                       <div>
                         <label className="ppl-label" htmlFor="register-password">Password</label>
                         <PasswordInput
@@ -1230,7 +1396,7 @@ function RegisterForm() {
                   <button
                     type="button"
                     onClick={() => setStep(1)}
-                    className="ppl-btn ppl-btn-secondary flex-1 py-3"
+                    className="text-sm font-medium text-muted hover:text-foreground transition-colors py-3 px-4"
                   >
                     Back
                   </button>
@@ -1253,12 +1419,12 @@ function RegisterForm() {
             <div className="space-y-2.5">
               <p className="text-sm text-muted mb-2">
                 This helps us route you correctly. New athletes pay a one-time
-                <strong className="text-foreground"> $300 onboarding fee</strong>.
+                <strong className="text-foreground"> $300 onboarding fee per athlete</strong>.
                 Returning athletes and partner-school players don&apos;t.
               </p>
               {(
                 [
-                  { v: 'new' as const, label: 'New to PPL', desc: 'First-time athlete — includes the $300 onboarding fee.' },
+                  { v: 'new' as const, label: 'New to PPL', desc: 'First-time athlete — includes the $300 onboarding fee per athlete.' },
                   { v: 'returning' as const, label: 'Returning athlete', desc: 'I\u2019ve trained at PPL before — no onboarding fee.' },
                   { v: 'youth_graduate' as const, label: 'PPL Youth graduate', desc: 'I moved up from the Youth program to 13+.' },
                   { v: 'free_assessment' as const, label: 'Free assessment', desc: 'I was invited for a complimentary assessment.' },
@@ -1291,6 +1457,10 @@ function RegisterForm() {
           {/* ============================================ */}
           {step === 4 && (
             <form onSubmit={handleStep4Submit} className="space-y-5">
+              <p className="text-sm text-muted -mt-1">
+                Tell us where and how you want to train. You can adjust both from
+                your account later.
+              </p>
               <section>
                 <h3 className="text-sm font-semibold text-foreground mb-2">Training location</h3>
                 <div className="space-y-2">
@@ -1329,9 +1499,9 @@ function RegisterForm() {
                 <div className="grid grid-cols-3 gap-2">
                   {(
                     [
-                      { v: 'IN_PERSON' as const, label: 'In person' },
-                      { v: 'REMOTE' as const, label: 'Remote' },
-                      { v: 'HYBRID' as const, label: 'Hybrid' },
+                      { v: 'IN_PERSON' as const, label: 'In person', desc: 'On-site with PPL coaches at your selected facility.' },
+                      { v: 'REMOTE' as const, label: 'Remote', desc: 'Custom programming + video review, train wherever you are.' },
+                      { v: 'HYBRID' as const, label: 'Hybrid', desc: 'Mix of in-person sessions and remote programming.' },
                     ]
                   ).map((pref) => (
                     <button
@@ -1348,6 +1518,17 @@ function RegisterForm() {
                     </button>
                   ))}
                 </div>
+                {/* One-liner that updates based on the selected preference — keeps
+                    the button row compact while still explaining what each means. */}
+                <p className="text-[11px] text-muted mt-2 leading-snug min-h-[1.25em]">
+                  {trainingPreference === 'IN_PERSON'
+                    ? 'On-site with PPL coaches at your selected facility.'
+                    : trainingPreference === 'REMOTE'
+                    ? 'Custom programming + video review, train wherever you are.'
+                    : trainingPreference === 'HYBRID'
+                    ? 'Mix of in-person sessions and remote programming.'
+                    : 'Tap one to see what it includes.'}
+                </p>
               </section>
 
               <div className="flex gap-3 pt-1">
@@ -1394,6 +1575,13 @@ function RegisterForm() {
                   const withHitting = !!hittingToggled[plan.id] && combo !== null;
                   const displayPriceCents = withHitting && combo ? combo.priceCents : plan.priceCents;
                   const deltaCents = combo ? combo.priceCents - plan.priceCents : 0;
+                  // MOST POPULAR — matches the BASE plan id (pre-hitting-toggle) so
+                  // flipping the combo toggle doesn't move the badge around. Skipped
+                  // when there's only one plan for this level (no "choice" to make).
+                  const isRecommended =
+                    playingLevel &&
+                    RECOMMENDED_PLAN_IDS[playingLevel as PlayingLevel] === plan.id &&
+                    relevantPlans.length > 1;
                   // Outer wrapper is a div (not button) so the nested "+ Add Hitting"
                   // button doesn't produce invalid <button> inside <button> markup.
                   return (
@@ -1402,6 +1590,11 @@ function RegisterForm() {
                       role="button"
                       tabIndex={0}
                       aria-disabled={isLoading}
+                      aria-label={
+                        isRecommended
+                          ? `${plan.name} — most popular for your playing level`
+                          : plan.name
+                      }
                       onClick={() => !isLoading && handleStep5Select(resolvePlanId(plan))}
                       onKeyDown={(e) => {
                         if (!isLoading && (e.key === 'Enter' || e.key === ' ')) {
@@ -1409,12 +1602,26 @@ function RegisterForm() {
                           handleStep5Select(resolvePlanId(plan));
                         }
                       }}
-                      className={`group w-full text-left p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                        withHitting
+                      className={`group relative w-full text-left p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                        isRecommended
+                          ? 'border-[#95C83C] bg-[#95C83C]/[0.06] shadow-lg shadow-[#95C83C]/15 hover:shadow-[#95C83C]/30'
+                          : withHitting
                           ? 'border-highlight/60 bg-highlight/5 hover:border-highlight'
                           : 'border-border hover:border-border-light bg-surface'
-                      } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      } ${isRecommended ? 'mt-3' : ''} ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
+                      {isRecommended && (
+                        <span
+                          className="absolute left-1/2 -top-2.5 -translate-x-1/2 px-3 py-1 rounded-full text-black text-[12px] leading-none tracking-[0.16em] shadow-md"
+                          style={{
+                            backgroundColor: '#95C83C',
+                            fontFamily: 'var(--font-bebas), Oswald, Impact, sans-serif',
+                          }}
+                          aria-hidden="true"
+                        >
+                          MOST POPULAR
+                        </span>
+                      )}
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="font-bold text-foreground text-base leading-tight">
@@ -1506,11 +1713,23 @@ function RegisterForm() {
           {step === 6 && checkoutData && (
             <StripeCheckout
               clientSecret={checkoutData.clientSecret}
-              planName={plans.find((p) => p.id === relevantPlans.find((r) => r.id)?.id)?.name || 'PPL Membership'}
-              priceCents={0 /* actual price comes from the subscription */}
+              // Use the plan the backend actually subscribed us to —
+              // NOT relevantPlans[0]. Previous code had a bug that always
+              // displayed the first plan in the filtered list regardless
+              // of what the user picked (caught in 2026-04-23 audit).
+              planName={checkoutData.plan?.name || 'PPL Membership'}
+              priceCents={checkoutData.plan?.priceCents ?? 0}
               billingDay={checkoutData.billingDay}
+              firstChargeCents={checkoutData.firstChargeCents}
+              anchorDate={checkoutData.billingAnchorDate}
+              billingCycle={checkoutData.plan?.billingCycle || 'weekly'}
               onSuccess={handlePaymentSuccess}
-              onCancel={() => setStep(5)}
+              onCancel={() => {
+                const ok = window.confirm(
+                  'Cancel and go back? Your $300 onboarding fee has already been charged — you\'ll need to resume from where you left off to finish signing up.'
+                );
+                if (ok) setStep(5);
+              }}
             />
           )}
 
