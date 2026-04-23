@@ -117,7 +117,7 @@ export default function ClientDashboard() {
       {/* Quick Stats */}
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          {[1, 2, 3].map((n) => <div key={n} className="ppl-card animate-pulse h-28" />)}
+          {[1, 2, 3].map((n) => <div key={n} className="ppl-skeleton h-28" aria-hidden="true" />)}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
@@ -211,7 +211,7 @@ export default function ClientDashboard() {
         </div>
         {isLoading ? (
           <div className="space-y-2">
-            {[1, 2].map((n) => <div key={n} className="h-16 bg-surface animate-pulse rounded-lg" />)}
+            {[1, 2].map((n) => <div key={n} className="ppl-skeleton h-16" aria-hidden="true" />)}
           </div>
         ) : upcomingBookings.length > 0 ? (
           <div className="space-y-2">

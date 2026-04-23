@@ -63,21 +63,26 @@ export default function AdminDashboard() {
     return `${Math.floor(hrs / 24)}d ago`;
   };
 
-  // Skeleton loader
+  // Skeleton loader — upgraded from Tailwind's opacity pulse to the
+  // shimmer-gradient .ppl-skeleton class for a more premium loading feel.
+  // Dimensions match the real layout so there's no shift when data lands.
   if (isLoading) {
     return (
       <div>
-        <div className="mb-8">
-          <div className="h-8 w-64 bg-surface animate-pulse rounded-lg" />
-          <div className="h-4 w-48 bg-surface animate-pulse rounded-lg mt-2" />
+        <div className="mb-8 space-y-2">
+          <div className="ppl-skeleton h-8 w-64" aria-hidden="true" />
+          <div className="ppl-skeleton h-4 w-48" aria-hidden="true" />
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {[1, 2, 3, 4].map((n) => <div key={n} className="ppl-card animate-pulse h-28" />)}
+          {[1, 2, 3, 4].map((n) => (
+            <div key={n} className="ppl-skeleton h-28" aria-hidden="true" />
+          ))}
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 ppl-card animate-pulse h-72" />
-          <div className="ppl-card animate-pulse h-72" />
+          <div className="lg:col-span-2 ppl-skeleton h-72" aria-hidden="true" />
+          <div className="ppl-skeleton h-72" aria-hidden="true" />
         </div>
+        <span className="sr-only">Loading dashboard…</span>
       </div>
     );
   }
