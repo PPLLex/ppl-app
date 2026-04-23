@@ -11,6 +11,8 @@ import { toast } from 'sonner';
 import StripeCheckout from '@/components/payments/StripeCheckout';
 import { PasswordInput } from '@/components/auth/PasswordInput';
 import { isCommonPassword } from '@/lib/common-passwords';
+import { haptic } from '@/lib/haptic';
+import { AnimatedPrice } from '@/components/AnimatedPrice';
 
 /**
  * View Transitions API wrapper — crossfade/slide between steps rather than
@@ -507,6 +509,7 @@ function RegisterForm() {
   // --------------------------------------------------------------------
 
   const handleStep1Select = (level: PlayingLevel) => {
+    haptic.medium();
     setPlayingLevel(level);
     setError('');
     setStep(2);
@@ -710,6 +713,7 @@ function RegisterForm() {
       // Wipe the localStorage draft now that the account exists — from here
       // on the authenticated resume flow (/onboarding/me) is in charge.
       clearDraft();
+      haptic.success();
       toast.success('Account created');
       setStep(3);
     } catch (err) {
@@ -1636,8 +1640,8 @@ function RegisterForm() {
                         <div className="text-right flex-shrink-0">
                           {/* Price — Bebas Neue for the scoreboard/menu-board
                               feel. Matches the PPL pitching-report aesthetic. */}
-                          <div className="font-stat text-4xl leading-none tracking-wide text-accent-text tabular-nums">
-                            ${(displayPriceCents / 100).toFixed(0)}
+                          <div className="font-stat text-4xl leading-none tracking-wide text-accent-text">
+                            <AnimatedPrice cents={displayPriceCents} />
                           </div>
                           <div className="text-[11px] text-muted mt-1">
                             / {plan.billingCycle === 'monthly' ? 'mo' : 'week'}
@@ -1653,6 +1657,7 @@ function RegisterForm() {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
+                            haptic.light();
                             setHittingToggled((prev) => ({
                               ...prev,
                               [plan.id]: !prev[plan.id],

@@ -63,6 +63,37 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Relative so the ::before noise layer can stretch to fill. */
+  position: relative;
+  min-height: 100vh;
+}
+
+/* ============================================================
+   PREMIUM TEXTURE — subtle film-grain noise layer
+   ============================================================
+   Makes dark surfaces feel "physical" rather than flat CSS.
+   Linear, Framer, Stripe Atlas all do this. Fixed-position so
+   it doesn't scroll with content; pointer-events: none so it
+   can't block clicks; mix-blend-mode: overlay so it layers
+   over cards + background uniformly without looking like a
+   gradient artifact.
+*/
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.035;
+  mix-blend-mode: overlay;
+  /* 160x160 SVG turbulence — Gzip-compressed + inlined. Cheap. */
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+/* Everything else should render ABOVE the noise. */
+body > * { position: relative; z-index: 1; }
+/* Honor reduced-motion + low-end GPU policies. */
+@media (prefers-reduced-motion: reduce) {
+  body::before { opacity: 0.02; }
 }
 
 html {
@@ -195,10 +226,27 @@ html {
   border-radius: 8px;
   font-weight: 500;
   font-size: 0.875rem;
-  transition: all 150ms ease;
+  /* Transition the press (transform/filter) faster than the color shift so
+     taps feel instantaneous. Gives every button a tactile, Apple-like press. */
+  transition: transform 90ms ease, filter 90ms ease, background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
   cursor: pointer;
   border: none;
   outline: none;
+  /* Use GPU compositing so transforms don't paint-jitter. */
+  will-change: transform;
+}
+/* Micro-interaction — scale-down + darken on active press. Applied to
+   every primary pressable in the app via .ppl-btn. Only runs on pointer-
+   capable devices (coarse pointer = touch; we still respect the press via
+   :active which works on both). */
+.ppl-btn:not(:disabled):active {
+  transform: scale(0.97);
+  filter: brightness(0.94);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ppl-btn:not(:disabled):active {
+    transform: none;
+  }
 }
 
 .ppl-btn:disabled {

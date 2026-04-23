@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
@@ -17,6 +17,22 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Scroll-linked header treatment — the top bar gains a shadow + frosted
+  // backdrop blur once the user scrolls more than a few pixels. Gives
+  // every page a subtle "I'm a real app, not a document" depth cue.
+  // Apple, Stripe, Linear all do this. 10px threshold prevents flicker
+  // from rubber-band scroll on iOS.
+  const [scrolled, setScrolled] = useState(false);
+  const mainRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    const onScroll = () => setScrolled(el.scrollTop > 10);
+    el.addEventListener('scroll', onScroll, { passive: true });
+    // Initialize in case the page loads already-scrolled (deep-link case).
+    onScroll();
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [user]);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -67,9 +83,16 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen flex">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <main className="flex-1 overflow-auto flex flex-col min-w-0">
-        {/* Top Bar */}
-        <div className="h-14 border-b border-border flex items-center justify-between px-4 sm:px-6 flex-shrink-0">
+      <main ref={mainRef} className="flex-1 overflow-auto flex flex-col min-w-0">
+        {/* Top Bar — sticky so scroll-shadow is visible on top of content.
+            When scrolled > 10px we apply a backdrop blur + shadow for the
+            "floating header" effect that Apple/Stripe/Linear use. */}
+        <div
+          className={`sticky top-0 z-20 h-14 border-b border-border flex items-center justify-between px-4 sm:px-6 flex-shrink-0 transition-[background,backdrop-filter,box-shadow] duration-200 ${
+            scrolled
+              ? 'bg-background/75 backdrop-blur-md shadow-[0_4px_20px_-8px_rgba(0,0,0,0.6)]'
+              : 'bg-background'
+          }`}>
           {/* Mobile hamburger */}
           <button
             onClick={() => setSidebarOpen(true)}
