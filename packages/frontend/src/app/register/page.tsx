@@ -157,6 +157,20 @@ function RegisterForm() {
     if (!msHsSoloAck1 && msHsSoloAck2) setMsHsSoloAck2(false);
   }, [msHsSoloAck1, msHsSoloAck2]);
 
+  // Auto-clear parent/guardian fields when the athlete opts out of a parent
+  // account. Prevents stale values from being submitted with the solo form
+  // AND gives the visual feedback Chad expects — the inputs go empty, not
+  // just the section fades.
+  useEffect(() => {
+    const solo = (isMsHs && msHsOptedOut) || (isCollege && collegeOptOut);
+    if (solo) {
+      setParentFirstName('');
+      setParentLastName('');
+      setParentEmail('');
+      setParentPhone('');
+    }
+  }, [isMsHs, msHsOptedOut, isCollege, collegeOptOut]);
+
   // Load locations once
   useEffect(() => {
     api.getLocations().then((res) => {
@@ -402,7 +416,13 @@ function RegisterForm() {
           athleteLastName,
           athleteDateOfBirth: athleteDob || undefined,
         }),
-        ...(isCollege && !hasParent && collegeOptOut && { parentOptOut: true }),
+        // Solo-mode opt-out is sent whenever the athlete opted out and no
+        // parent was attached — College (single checkbox) or MS/HS (both
+        // checkboxes). Backend uses this to skip the "parent required" guard.
+        ...(!hasParent && (
+          (isCollege && collegeOptOut) ||
+          (isMsHs && msHsOptedOut)
+        ) && { parentOptOut: true }),
       };
 
       const res = await api.register(registerPayload);

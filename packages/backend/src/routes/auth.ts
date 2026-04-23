@@ -166,11 +166,20 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
         );
       }
     } else {
-      // Athlete self-signup enforcement: Youth and MS/HS must register via a
-      // parent account. Pro and College (with opt-out) can register themselves.
-      if (ageGroup === 'youth' || ageGroup === 'ms_hs') {
+      // Athlete self-signup enforcement:
+      //   • Youth → ALWAYS requires a parent account. No opt-out.
+      //   • MS/HS → requires parent UNLESS parentOptOut is explicitly true
+      //     (frontend sends this after the two-checkbox solo acknowledgment).
+      //   • College → requires parent UNLESS parentOptOut is true (single box).
+      //   • Pro → always allowed solo.
+      if (ageGroup === 'youth') {
         throw ApiError.badRequest(
-          'Athletes under 18 must be registered by a parent or guardian. Please restart registration using the parent/guardian option.'
+          'Youth athletes must be registered by a parent or guardian.'
+        );
+      }
+      if (ageGroup === 'ms_hs' && !parentOptOut) {
+        throw ApiError.badRequest(
+          'Middle/High School athletes must either register through a parent/guardian OR acknowledge they are managing their own account (both solo-mode boxes).'
         );
       }
       if (ageGroup === 'college' && !parentOptOut) {
