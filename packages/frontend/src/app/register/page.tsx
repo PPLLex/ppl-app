@@ -534,8 +534,15 @@ function RegisterForm() {
             </div>
           )}
           {/* Main heading removed per design — the sub-step heading in Bank
-              Gothic acts as the page's H1 now. */}
-          <h1 className="font-display font-bold tracking-[0.08em] uppercase text-foreground leading-none text-center whitespace-nowrap text-sm sm:text-base md:text-lg">
+              Gothic acts as the page's H1 now.
+              Sized with clamp() so it fills the row on every viewport without
+              ever wrapping. Upper bound 20px keeps the longest step heading
+              ("HAVE YOU TRAINED AT PPL BEFORE?" = 30 chars) inside the
+              max-w-md (448px) container even at the widest viewport. */}
+          <h1
+            className="font-display font-bold tracking-[0.08em] uppercase text-foreground leading-none text-center whitespace-nowrap"
+            style={{ fontSize: 'clamp(0.85rem, 4.2vw, 1.25rem)' }}
+          >
             {stepHeading}
           </h1>
         </div>
