@@ -576,7 +576,7 @@ function RegisterForm() {
                   className="w-full text-left p-4 rounded-xl border-2 border-border hover:border-border-light bg-surface transition-all"
                 >
                   <div
-                    className="font-accent italic font-black uppercase tracking-[0.04em] text-foreground text-lg leading-none"
+                    className="font-accent italic font-black uppercase tracking-[0.04em] text-foreground text-sm leading-none"
                     style={{
                       fontFamily: 'var(--font-transducer), Impact, "Arial Black", sans-serif',
                       fontWeight: 900,
@@ -585,7 +585,7 @@ function RegisterForm() {
                   >
                     {LEVEL_LABEL[lvl]}
                   </div>
-                  <div className="text-xs text-muted/80 mt-2 font-normal">
+                  <div className="text-[11px] text-muted/80 mt-1.5 font-normal">
                     {LEVEL_DESC[lvl]}
                   </div>
                 </button>
