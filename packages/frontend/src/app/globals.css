@@ -47,6 +47,10 @@
   --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-display: var(--font-bank-gothic), "Copperplate Gothic Bold", "Impact", sans-serif;
   --font-accent: var(--font-transducer), "Impact", "Arial Black", sans-serif;
+  /* font-stat → Bebas Neue (condensed all-caps sporty numerals).
+     ONLY for big numeric readouts: prices, stat card values, velo, counters.
+     Matches the aesthetic of the PPL pitching report PDFs. */
+  --font-stat: var(--font-bebas), "Oswald", "Impact", sans-serif;
 }
 
 /* ============================================================

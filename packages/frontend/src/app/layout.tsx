@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Manrope, JetBrains_Mono } from "next/font/google";
+import { Manrope, JetBrains_Mono, Bebas_Neue } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -21,6 +21,18 @@ const manrope = Manrope({
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-jetbrains",
   subsets: ["latin"],
+  display: "swap",
+});
+
+// Stat / numeric display font — Bebas Neue. Condensed, sporty, instantly
+// readable at huge sizes. Matches the "Colin Murphy" PPL pitching report
+// aesthetic so the app feels brand-consistent with the PDFs coaches already
+// hand out. Used ONLY for big numeric readouts (prices, stat cards,
+// capacity counters) via the font-stat utility — NEVER for body text.
+const bebasNeue = Bebas_Neue({
+  variable: "--font-bebas",
+  subsets: ["latin"],
+  weight: "400",
   display: "swap",
 });
 
@@ -65,7 +77,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${manrope.variable} ${jetbrainsMono.variable} ${bankGothic.variable} ${transducer.variable} h-full antialiased`}
+      className={`${manrope.variable} ${jetbrainsMono.variable} ${bankGothic.variable} ${transducer.variable} ${bebasNeue.variable} h-full antialiased`}
     >
       <head>
         <link rel="manifest" href="/manifest.json" />

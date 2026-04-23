@@ -1297,10 +1297,12 @@ function RegisterForm() {
                         )}
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <div className="text-xl font-bold text-accent-text">
+                        {/* Price — Bebas Neue for the scoreboard/menu-board
+                            feel. Matches the PPL pitching-report aesthetic. */}
+                        <div className="font-stat text-4xl leading-none tracking-wide text-accent-text">
                           ${(plan.priceCents / 100).toFixed(0)}
                         </div>
-                        <div className="text-[11px] text-muted">
+                        <div className="text-[11px] text-muted mt-1">
                           / {plan.billingCycle === 'monthly' ? 'mo' : 'week'}
                         </div>
                       </div>
