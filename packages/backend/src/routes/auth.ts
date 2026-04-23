@@ -150,9 +150,13 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
       parentOptOut,
     } = req.body;
 
-    if (!email || !password || !fullName || !locationId) {
-      throw ApiError.badRequest('Email, password, full name, and location are required');
+    if (!email || !password || !fullName) {
+      throw ApiError.badRequest('Email, password, and full name are required');
     }
+    // NOTE: locationId is OPTIONAL here. The 6-step register flow creates the
+    // account on step 2 (before the user has picked a location on step 4), so
+    // we allow a location-less account and let PUT /api/account set homeLocationId
+    // later. User.homeLocationId and Family.primaryLocationId are both nullable.
 
     const isParentRegistration = registeringAs === 'PARENT';
     if (isParentRegistration) {
@@ -182,10 +186,14 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
       throw ApiError.conflict('An account with this email already exists');
     }
 
-    // Verify location exists
-    const location = await prisma.location.findUnique({ where: { id: locationId } });
-    if (!location || !location.isActive) {
-      throw ApiError.badRequest('Invalid location');
+    // Verify location exists — only if one was provided. The 6-step register
+    // flow doesn't have a locationId at account-creation time.
+    const effectiveLocationId: string | null = locationId && locationId.trim() ? locationId : null;
+    if (effectiveLocationId) {
+      const location = await prisma.location.findUnique({ where: { id: effectiveLocationId } });
+      if (!location || !location.isActive) {
+        throw ApiError.badRequest('Invalid location');
+      }
     }
 
     // Hash password
@@ -204,7 +212,7 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
           phone,
           role: Role.CLIENT,
           authProvider: 'email',
-          homeLocationId: locationId,
+          homeLocationId: effectiveLocationId,
           clientProfile: {
             create: {
               ageGroup: ageGroup || null,
@@ -221,7 +229,7 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
         const family = await tx.family.create({
           data: {
             parentUserId: authUser.id,
-            primaryLocationId: locationId,
+            primaryLocationId: effectiveLocationId,
           },
         });
 
@@ -241,7 +249,7 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
             fullName: `${athleteFirstName} ${athleteLastName}`.trim(),
             role: Role.CLIENT,
             authProvider: 'family',
-            homeLocationId: locationId,
+            homeLocationId: effectiveLocationId,
           },
         });
 
