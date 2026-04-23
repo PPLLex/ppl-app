@@ -86,6 +86,67 @@ function RegisterForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // ──────────────────────────────────────────────────────────────
+  // Resume an abandoned registration.
+  //
+  // Audit issue #4: if a user completed step 2 (account created, token in
+  // localStorage) but dropped off before finishing, they used to be stuck —
+  // logging in dumped them at /client with "account on hold" and no way back
+  // into the flow. Now we jump them to the right step based on what they've
+  // already done server-side. Runs ONCE on mount when no explicit URL step
+  // is already asking for a specific position.
+  // ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const explicitUrlStep =
+      (stepParam === 'after-fee' && paymentStatus === 'success') || !!oauthProvider;
+    if (explicitUrlStep) return; // URL already tells us where to go
+    if (typeof window === 'undefined') return;
+    const token = localStorage.getItem('ppl_token');
+    if (!token) return; // fresh signup — start at step 1
+
+    (async () => {
+      try {
+        const [meRes, onboardRes] = await Promise.all([
+          api.getMe(),
+          api.getOnboardingStatus(),
+        ]);
+        const user = meRes.data;
+        const onb = onboardRes.data;
+        if (!user) return;
+
+        // If they've already got an ACTIVE membership, they're fully
+        // onboarded — ship them to the dashboard, not back into /register.
+        const hasActiveMembership = user.memberships?.some(
+          (m) => m.status === 'ACTIVE'
+        );
+        if (hasActiveMembership) {
+          router.push('/client');
+          return;
+        }
+
+        // Preload playingLevel so downstream steps render the right content
+        const storedAgeGroup = user.ageGroup as PlayingLevel | undefined;
+        if (storedAgeGroup) setPlayingLevel(storedAgeGroup);
+
+        // Decide the resume step.
+        // step 3 — account exists but no onboarding record yet
+        // step 4 — onboarding picked but no location yet
+        // step 5 — location picked but no membership yet
+        if (!onb?.onboardingRecord) {
+          setStep(3);
+        } else if (!user.homeLocation?.id) {
+          setStep(4);
+        } else {
+          setStep(5);
+        }
+      } catch {
+        // If /me fails (expired token, etc.) silently stay on step 1.
+        // The normal register flow will overwrite the token on step 2.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Step 1
   const [playingLevel, setPlayingLevel] = useState<PlayingLevel | ''>('');
 
