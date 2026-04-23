@@ -118,8 +118,16 @@ export default function DashboardLayout({
           <NotificationBell />
         </div>
 
-        {/* Page content */}
-        <div className="flex-1 p-4 sm:p-6 max-w-7xl mx-auto w-full">{children}</div>
+        {/* Page content — `ppl-page-root` gives the View Transitions API a
+            named element to crossfade when the route changes. The key forces
+            React to recompute the subtree per pathname so transitions have
+            distinct old/new views to animate between. */}
+        <div
+          className="flex-1 p-4 sm:p-6 max-w-7xl mx-auto w-full ppl-page-root"
+          key={pathname}
+        >
+          {children}
+        </div>
       </main>
 
       {/* Push notification opt-in prompt */}

@@ -2,7 +2,10 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import Link from 'next/link';
+// Swap next/link for our view-transition wrapper so sidebar navigation
+// crossfades the main content instead of hard-cutting. Falls through
+// gracefully on browsers without the View Transitions API.
+import Link from '@/components/PageTransitionLink';
 import { usePathname } from 'next/navigation';
 
 interface NavItem {

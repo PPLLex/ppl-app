@@ -189,6 +189,28 @@ html {
 ::view-transition-new(register-step) {
   animation: pplFadeInRight 300ms cubic-bezier(0.22, 0.9, 0.33, 1) both;
 }
+
+/* App-wide page transitions — every dashboard route change crossfades
+   between the outgoing and incoming main content. Enables the
+   "this feels native, not a website" effect. Triggered by the
+   PageTransitionLink wrapper around next/link. */
+.ppl-page-root {
+  view-transition-name: ppl-page;
+}
+::view-transition-old(ppl-page) {
+  animation: pplPageFadeOut 160ms cubic-bezier(0.32, 0, 0.67, 0) both;
+}
+::view-transition-new(ppl-page) {
+  animation: pplPageFadeIn 220ms cubic-bezier(0.33, 1, 0.68, 1) both;
+}
+@keyframes pplPageFadeOut {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-4px); }
+}
+@keyframes pplPageFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 @keyframes pplFadeOutLeft {
   from { opacity: 1; transform: translateX(0); }
   to   { opacity: 0; transform: translateX(-12px); }
