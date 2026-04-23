@@ -20,7 +20,7 @@ type AuthMode = 'credentials' | 'magic-link';
 
 function LoginForm() {
   const { login, loginWithGoogle, sendMagicLink } = useAuth();
-  const { branding } = useTheme();
+  const { branding, isLoaded: brandingLoaded } = useTheme();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -134,9 +134,13 @@ function LoginForm() {
       />
 
       <div className="w-full max-w-md">
-        {/* Logo */}
+        {/* Logo. Wait for branding to load before rendering anything —
+            prevents the green-P fallback from flashing before the real
+            logo arrives. Empty placeholder holds layout. */}
         <div className="flex flex-col items-center text-center mb-8">
-          {branding.logoData ? (
+          {!brandingLoaded ? (
+            <div className="w-48 h-48 mb-5" aria-hidden="true" />
+          ) : branding.logoData ? (
             <div className="flex items-center justify-center w-48 h-48 rounded-full overflow-hidden mb-5 shadow-xl shadow-emerald-900/25 ring-1 ring-border bg-white/5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img

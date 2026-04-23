@@ -38,7 +38,7 @@ function JoinFlow() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { loginWithGoogle, routeByRole, user, refreshUser } = useAuth();
-  const { branding } = useTheme();
+  const { branding, isLoaded: brandingLoaded } = useTheme();
 
   // OAuth returning users land on step=2
   const oauthProvider = searchParams.get('oauth');
@@ -279,9 +279,12 @@ function JoinFlow() {
       />
 
       <div className="w-full max-w-md">
-        {/* Header */}
+        {/* Header. Hold empty space until branding loads so the green-P
+            fallback never flashes before the real logo arrives. */}
         <div className="flex flex-col items-center text-center mb-8">
-          {branding.logoData ? (
+          {!brandingLoaded ? (
+            <div className="w-48 h-48 mb-5" aria-hidden="true" />
+          ) : branding.logoData ? (
             <div className="flex items-center justify-center w-48 h-48 rounded-full overflow-hidden mb-5 shadow-xl shadow-emerald-900/25 ring-1 ring-border bg-white/5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img

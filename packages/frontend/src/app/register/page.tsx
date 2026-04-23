@@ -68,7 +68,7 @@ function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { loginWithGoogle } = useAuth();
-  const { branding } = useTheme();
+  const { branding, isLoaded: brandingLoaded } = useTheme();
 
   // URL params — let the user return to the right step after a $300 Stripe
   // Checkout redirect, and let OAuth users jump into onboarding mid-flow.
@@ -647,9 +647,15 @@ function RegisterForm() {
       />
 
       <div className="w-full max-w-md">
-        {/* Logo + title */}
+        {/* Logo + title.
+            Wait for branding to actually load before deciding what to render —
+            otherwise the green "P" fallback flashes for ~200ms before the
+            real logo replaces it, which looks broken. We hold empty space
+            of the same dimensions so there's zero layout shift. */}
         <div className="flex flex-col items-center text-center mb-8">
-          {branding.logoData ? (
+          {!brandingLoaded ? (
+            <div className="w-48 h-48 mb-5" aria-hidden="true" />
+          ) : branding.logoData ? (
             <div className="flex items-center justify-center w-48 h-48 rounded-full overflow-hidden mb-5 shadow-xl shadow-emerald-900/25 ring-1 ring-border bg-white/5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img

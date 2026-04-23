@@ -17,7 +17,7 @@ export default function MagicLinkPage() {
 function MagicLinkVerifier() {
   const searchParams = useSearchParams();
   const { verifyMagicLink } = useAuth();
-  const { branding } = useTheme();
+  const { branding, isLoaded: brandingLoaded } = useTheme();
   const [status, setStatus] = useState<'verifying' | 'error'>('verifying');
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -41,7 +41,9 @@ function MagicLinkVerifier() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm flex flex-col items-center text-center">
-        {branding.logoData ? (
+        {!brandingLoaded ? (
+          <div className="w-48 h-48 mb-6" aria-hidden="true" />
+        ) : branding.logoData ? (
           <div className="flex items-center justify-center w-48 h-48 rounded-full overflow-hidden mb-6 shadow-xl shadow-emerald-900/25 ring-1 ring-border bg-white/5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img

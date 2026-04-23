@@ -136,7 +136,7 @@ const clientNav: NavItem[] = [
 
 export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
   const { user, logout } = useAuth();
-  const { branding } = useTheme();
+  const { branding, isLoaded: brandingLoaded } = useTheme();
   const pathname = usePathname();
 
   if (!user) return null;
@@ -173,7 +173,10 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
         <div className="p-5 border-b border-border">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              {branding.logoData ? (
+              {!brandingLoaded ? (
+                <div className="w-10 h-10" aria-hidden="true" />
+              ) : branding.logoData ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img src={branding.logoData} alt={branding.businessName} className="w-10 h-10 rounded-full object-cover" />
               ) : (
                 <div className="w-10 h-10 rounded-full ppl-gradient flex items-center justify-center">
