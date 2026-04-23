@@ -130,7 +130,7 @@ PPL currently has multiple locations (PPL Louisville, PPL Youth, etc.). Staff/ad
 - **Vercel project:** only `ppl-app-xsg5` (mapped to `app.pitchingperformancelab.com`) is Git-connected. The three older projects (`ppl-app`, `ppl-frontend`, `ppl-scheduling-app`) are disconnected so they don't burn build budget. Don't reconnect them unless you intend to use them.
 - **Ship-as-you-go cadence.** Chad wants changes committed + pushed + deployed as soon as they're ready, not batched at the end of a session. Keep him in the loop when deploys land so he can test live.
 - **Do everything autonomously that can be done autonomously.** Only interrupt Chad for decisions with meaningful tradeoffs, production data mutations that can't be undone, financial operations, or truly ambiguous requirements. Otherwise, make the call, ship it, report.
-- **Always include the correct test link when asking Chad to test something.** Don't make him scroll back or hunt for it. If it's the registration flow, that's `https://app.pitchingperformancelab.com/register`. If it's a specific admin page, paste the full URL.
+- **Always include the correct test link when asking Chad to test something.** Don't make him scroll back or hunt for it. If it's the registration flow, that's `https://app.pitchingperformancelab.com/register`. If it's a specific admin page, paste the full URL. **Never add `?v=whatever` cache-buster query params** — they're visual noise and the push helper's verify-step already waits for the edge cache to rotate before declaring a change live. Plain URL every time.
 
 ## Current Build Priority (as of April 21, 2026)
 
