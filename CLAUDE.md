@@ -1,4 +1,6 @@
 # PPL App — Pitching Performance Lab Platform
+<!-- deploy-kick: 2026-04-23 -->
+
 
 ## Overview
 Full-stack scheduling, membership, and business management platform for Pitching Performance Lab (PPL). Built as a monorepo with separate backend and frontend packages. Currently live at **app.pitchingperformancelab.com**.
