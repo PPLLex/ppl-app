@@ -533,29 +533,11 @@ function RegisterForm() {
               <span className="text-white text-6xl font-bold">P</span>
             </div>
           )}
-          <h1 className="font-display font-bold tracking-[0.08em] text-foreground uppercase text-center leading-tight">
-            {/* Two spans forced onto their own lines so "Pitching Performance Lab"
-                can never wrap to a 3rd line. text-sm on base phones (≥340px),
-                scales up on larger viewports. Both lines stay the same size. */}
-            <span className="block whitespace-nowrap text-sm sm:text-base md:text-lg">
-              Get Started With
-            </span>
-            <span className="block whitespace-nowrap text-sm sm:text-base md:text-lg mt-0.5">
-              Pitching Performance Lab
-            </span>
-          </h1>
-          <p
-            className="mt-3 text-center font-accent italic font-black uppercase tracking-[0.02em] text-2xl sm:text-3xl text-foreground leading-none"
-            style={{
-              // Belt-and-suspenders: bypass Tailwind utility entirely and go
-              // straight at the CSS var next/font registered on <html>.
-              fontFamily: 'var(--font-transducer), Impact, "Arial Black", sans-serif',
-              fontWeight: 900,
-              fontStyle: 'italic',
-            }}
-          >
+          {/* Main heading removed per design — the sub-step heading in Bank
+              Gothic acts as the page's H1 now. */}
+          <h1 className="font-display font-bold tracking-[0.08em] uppercase text-foreground leading-none text-center whitespace-nowrap text-sm sm:text-base md:text-lg">
             {stepHeading}
-          </p>
+          </h1>
         </div>
 
         {/* Progress indicator */}
