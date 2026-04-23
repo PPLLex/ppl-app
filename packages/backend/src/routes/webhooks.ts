@@ -56,6 +56,13 @@ router.post('/stripe', async (req: Request, res: Response, next: NextFunction) =
         await handleCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session);
         break;
 
+      case 'checkout.session.expired':
+      case 'checkout.session.async_payment_failed':
+        // Reset any PROCESSING onboarding record back to REQUIRED so the
+        // athlete can retry and so admins can see them in the dashboard.
+        await handleCheckoutSessionAborted(event.data.object as Stripe.Checkout.Session);
+        break;
+
       default:
         console.log(`Unhandled Stripe event: ${event.type}`);
     }
@@ -511,6 +518,37 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
   });
 
   console.log(`Onboarding fee PAID via webhook for record ${onboardingRecordId}`);
+}
+
+/**
+ * Stripe Checkout Session was abandoned or its async payment (e.g. bank
+ * transfer) failed. Reset our side so the record doesn't zombie in
+ * PROCESSING — the athlete needs to be able to retry and the admin needs
+ * to see them in the dashboard. See audit issue #3.
+ */
+async function handleCheckoutSessionAborted(session: Stripe.Checkout.Session) {
+  const metadata = session.metadata || {};
+  if (metadata.type !== 'onboarding_fee') return;
+
+  const { onboardingRecordId } = metadata;
+  if (!onboardingRecordId) return;
+
+  const record = await prisma.onboardingRecord.findUnique({
+    where: { id: onboardingRecordId },
+  });
+  if (!record) return;
+  // Only reset if we're actually in PROCESSING — avoid overwriting a PAID
+  // record that arrived via a late webhook delivery.
+  if (record.feeStatus !== 'PROCESSING') return;
+
+  await prisma.onboardingRecord.update({
+    where: { id: record.id },
+    data: { feeStatus: 'REQUIRED', stripeCheckoutId: null },
+  });
+
+  console.log(
+    `[webhook] reset PROCESSING→REQUIRED for onboarding record ${onboardingRecordId} (session ${session.id})`
+  );
 }
 
 // ============================================================

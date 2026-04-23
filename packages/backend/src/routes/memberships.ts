@@ -481,21 +481,50 @@ router.post('/subscribe', authenticate, async (req: Request, res: Response, next
       throw ApiError.notFound('Membership plan not found or is no longer available');
     }
 
-    // Get client's home location
-    if (!user.homeLocationId) {
-      throw ApiError.badRequest('You need a home location to subscribe. Please update your profile.');
+    // Get the client's home location fresh from the database — NOT from the
+    // JWT. The JWT is minted at registration step 2 when homeLocationId is
+    // still null (step 4 is where they pick a location). Trusting the JWT
+    // here caused every new-user subscription to 400 with "you need a home
+    // location". See audit issue #1.
+    const clientUser = await prisma.user.findUnique({
+      where: { id: user.userId },
+      select: { homeLocationId: true },
+    });
+    const homeLocationId = clientUser?.homeLocationId;
+    if (!homeLocationId) {
+      throw ApiError.badRequest('Please pick a training location before subscribing.');
+    }
+
+    // Gate: onboarding fee must be paid / waived / not-applicable before we
+    // let them subscribe. Prevents a failed-onboarding user from becoming an
+    // active member. See audit issue #8.
+    const athleteProfile = await prisma.athleteProfile.findUnique({
+      where: { userId: user.userId },
+      include: { onboardingRecord: true },
+    });
+    // Cast to string — the locally-cached Prisma types in /sessions can be
+    // stale against the live schema. Railway regenerates on every deploy so
+    // production sees the full enum (REQUIRED, PROCESSING, PAID, WAIVED,
+    // NOT_APPLICABLE). This comparison is safe at runtime.
+    const feeStatus = athleteProfile?.onboardingRecord?.feeStatus as
+      | string
+      | undefined;
+    if (feeStatus === 'REQUIRED' || feeStatus === 'PROCESSING') {
+      throw ApiError.badRequest(
+        'Please complete your one-time onboarding fee before starting a membership.'
+      );
     }
 
     // Create the Stripe subscription
     const result = await createSubscription({
       userId: user.userId,
       planId,
-      locationId: user.homeLocationId,
+      locationId: homeLocationId,
     });
 
     await createAuditLog({
       userId: user.userId,
-      locationId: user.homeLocationId,
+      locationId: homeLocationId,
       action: 'membership.subscribed',
       resourceType: 'membership',
       resourceId: result.subscriptionId,

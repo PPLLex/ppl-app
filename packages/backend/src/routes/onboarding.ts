@@ -449,8 +449,13 @@ router.post('/checkout', authenticate, async (req: Request, res: Response, next:
         onboardingRecordId: record.id,
         userId,
       },
-      success_url: `${config.frontendUrl}/register?step=location&payment=success`,
-      cancel_url: `${config.frontendUrl}/register?step=payment&payment=cancelled`,
+      // success_url MUST match the frontend's getInitialStep() check:
+      // /register detects `step=after-fee` + `payment=success` and jumps to
+      // step 4 (location/training preference). Previously this was
+      // `step=location` which the frontend didn't recognize → user bounced
+      // back to step 1 after paying. See audit issue #2.
+      success_url: `${config.frontendUrl}/register?step=after-fee&payment=success`,
+      cancel_url: `${config.frontendUrl}/register?step=after-fee&payment=cancelled`,
     });
 
     // Update the onboarding record with the checkout session ID
