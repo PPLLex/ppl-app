@@ -543,6 +543,9 @@ router.get('/me', authenticate, async (req: Request, res: Response, next: NextFu
       data: {
         hasProfile: !!athleteProfile,
         onboardingRecord: athleteProfile?.onboardingRecord || null,
+        // Expose the source-of-truth ageGroup so the /register resume-flow
+        // can preload playingLevel and filter plans correctly. See audit #11.
+        ageGroup: athleteProfile?.ageGroup || null,
         requiresPayment: athleteProfile?.onboardingRecord?.feeStatus === 'REQUIRED',
         isComplete:
           athleteProfile?.onboardingRecord?.feeStatus === 'PAID' ||

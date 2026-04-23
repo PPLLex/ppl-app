@@ -583,6 +583,7 @@ class ApiClient {
     return this.request<{
       hasProfile: boolean;
       onboardingRecord: OnboardingRecord | null;
+      ageGroup: string | null;
       requiresPayment: boolean;
       isComplete: boolean;
     }>('/onboarding/me');

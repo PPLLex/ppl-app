@@ -114,6 +114,11 @@ function RegisterForm() {
         const onb = onboardRes.data;
         if (!user) return;
 
+        // ONLY auto-resume for CLIENT users. Admins and staff visiting
+        // /register (e.g. to preview what the flow looks like, or to register
+        // an athlete on someone else's behalf) should always start at step 1.
+        if (user.role !== 'CLIENT') return;
+
         // If they've already got an ACTIVE membership, they're fully
         // onboarded — ship them to the dashboard, not back into /register.
         const hasActiveMembership = user.memberships?.some(
@@ -124,21 +129,31 @@ function RegisterForm() {
           return;
         }
 
-        // Preload playingLevel so downstream steps render the right content
-        const storedAgeGroup = user.ageGroup as PlayingLevel | undefined;
+        // Preload playingLevel so downstream steps render the right plans.
+        // Pull from the /onboarding/me response which now includes the
+        // AthleteProfile.ageGroup (the source of truth, per audit #11).
+        // Fall back to user.ageGroup (legacy ClientProfile cache).
+        const storedAgeGroup =
+          (onb?.ageGroup as PlayingLevel | undefined) ||
+          (user.ageGroup as PlayingLevel | undefined);
         if (storedAgeGroup) setPlayingLevel(storedAgeGroup);
 
         // Decide the resume step.
         // step 3 — account exists but no onboarding record yet
         // step 4 — onboarding picked but no location yet
         // step 5 — location picked but no membership yet
+        //
+        // Safety: if we can't determine ageGroup, we'd land on step 5 with
+        // no filter and show every plan. Skip the resume in that case and
+        // let the user start fresh instead of seeing all plans.
         if (!onb?.onboardingRecord) {
           setStep(3);
         } else if (!user.homeLocation?.id) {
           setStep(4);
-        } else {
+        } else if (storedAgeGroup) {
           setStep(5);
         }
+        // else: stay on step 1 — user must pick a playing level first
       } catch {
         // If /me fails (expired token, etc.) silently stay on step 1.
         // The normal register flow will overwrite the token on step 2.
@@ -599,10 +614,13 @@ function RegisterForm() {
   // --------------------------------------------------------------------
   // FILTERED PLANS (only those matching the playing level)
   // --------------------------------------------------------------------
-  const relevantPlans = plans.filter((p) => {
-    if (!playingLevel) return true;
-    return p.ageGroup === playingLevel;
-  });
+  // If playingLevel isn't set, show NO plans — prevents a client being
+  // shown every plan in the system (incl. Youth prices to a College athlete)
+  // when the resume-flow fallback lands them on step 5 without a stored
+  // ageGroup. The back-button on the step 5 UI also lets them pick a level.
+  const relevantPlans = plans.filter((p) =>
+    playingLevel ? p.ageGroup === playingLevel : false
+  );
 
   // --------------------------------------------------------------------
   // RENDER
