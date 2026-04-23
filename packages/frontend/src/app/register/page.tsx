@@ -580,10 +580,10 @@ function RegisterForm() {
                   key={lvl}
                   type="button"
                   onClick={() => handleStep1Select(lvl)}
-                  className="w-full text-left p-4 rounded-xl border-2 border-border hover:border-border-light bg-surface transition-all"
+                  className="group w-full text-left p-4 rounded-xl border-2 border-border bg-surface transition-all duration-150 hover:bg-[#95C83C] hover:border-[#95C83C] hover:shadow-lg hover:shadow-[#95C83C]/25 focus:bg-[#95C83C] focus:border-[#95C83C] focus:outline-none"
                 >
                   <div
-                    className="font-accent italic font-black uppercase tracking-[0.04em] text-foreground text-sm leading-none"
+                    className="font-accent italic font-black uppercase tracking-[0.04em] text-foreground text-sm leading-none transition-colors group-hover:text-black group-focus:text-black"
                     style={{
                       fontFamily: 'var(--font-transducer), Impact, "Arial Black", sans-serif',
                       fontWeight: 900,
@@ -592,7 +592,7 @@ function RegisterForm() {
                   >
                     {LEVEL_LABEL[lvl]}
                   </div>
-                  <div className="text-[11px] text-muted/80 mt-1.5 font-normal">
+                  <div className="text-[11px] text-muted/80 mt-1.5 font-normal transition-colors group-hover:text-black/75 group-focus:text-black/75">
                     {LEVEL_DESC[lvl]}
                   </div>
                 </button>
