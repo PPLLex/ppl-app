@@ -9,6 +9,53 @@ const router = Router();
 router.use(authenticate, requireStaffOrAdmin);
 
 /**
+ * Compute what each org earns from a single membership's plan, in cents.
+ *
+ *   MembershipPlan.revenueSplits is a JSON object keyed by org slug with
+ *   cent values that sum to plan.priceCents. Examples:
+ *     Youth 1x/Week pitching-only  →  { ppl: 5500 }
+ *     Youth 1x + Hitting combo     →  { ppl: 5000, hpl: 4000 }
+ *
+ *   If revenueSplits is missing / empty / unparseable (legacy plans seeded
+ *   before the JSON field existed), we fall back to 100% PPL.
+ */
+type OrgSplits = Record<string, number>;
+function readPlanSplits(rev: unknown, fallbackPriceCents: number): OrgSplits {
+  if (rev && typeof rev === 'object' && !Array.isArray(rev)) {
+    const obj = rev as Record<string, unknown>;
+    const result: OrgSplits = {};
+    let sum = 0;
+    for (const [org, val] of Object.entries(obj)) {
+      if (typeof val === 'number' && val >= 0) {
+        result[org] = val;
+        sum += val;
+      }
+    }
+    if (sum > 0) return result;
+  }
+  // Legacy / missing → 100% PPL.
+  return { ppl: fallbackPriceCents };
+}
+
+/** Aggregate per-org shares across a collection of memberships (weekly basis). */
+function aggregateSplits(
+  mems: Array<{ plan: { priceCents: number; billingCycle: string; revenueSplits: unknown } }>
+): OrgSplits {
+  const totals: OrgSplits = {};
+  for (const m of mems) {
+    const splits = readPlanSplits(m.plan.revenueSplits, m.plan.priceCents);
+    // Monthly plans are divided into a weekly equivalent so the dashboard's
+    // "weekly revenue" totals line up with reality.
+    const weeklyFactor =
+      m.plan.billingCycle === 'monthly' || m.plan.billingCycle === 'MONTHLY' ? 1 / 4.33 : 1;
+    for (const [org, cents] of Object.entries(splits)) {
+      totals[org] = (totals[org] || 0) + Math.round(cents * weeklyFactor);
+    }
+  }
+  return totals;
+}
+
+/**
  * GET /api/revenue/dashboard
  * Admin only: full revenue overview across all locations.
  * Returns:
@@ -30,7 +77,7 @@ router.get('/dashboard', async (req: Request, res: Response, next: NextFunction)
         status: { in: [MembershipStatus.ACTIVE, MembershipStatus.PAST_DUE] },
       },
       include: {
-        plan: { select: { name: true, priceCents: true, billingCycle: true, ageGroup: true, sessionsPerWeek: true } },
+        plan: { select: { name: true, priceCents: true, billingCycle: true, ageGroup: true, sessionsPerWeek: true, includesHitting: true, revenueSplits: true } },
         location: { select: { id: true, name: true } },
       },
     });
@@ -57,9 +104,15 @@ router.get('/dashboard', async (req: Request, res: Response, next: NextFunction)
     const totalWeeklyRevenueCents = estimateWeeklyRevenueCents(activeMemberships);
     const totalMonthlyRevenueCents = Math.round(totalWeeklyRevenueCents * 4.33);
 
-    // PPL Revenue = all internal memberships (not partner school)
-    const pplMemberships = activeMemberships.filter((m) => m.plan.ageGroup !== 'partner_school');
-    const pplWeeklyRevenueCents = estimateWeeklyRevenueCents(pplMemberships);
+    // Per-org weekly splits — sourced from MembershipPlan.revenueSplits JSON.
+    // This is what drives the inter-business settlement (what PPL owes HPL and
+    // Renewed Performance each week). Combo plans carry the HPL share; pitching-
+    // only plans are 100% PPL; future Renewed Performance combos would add an
+    // 'renewed-performance' key.
+    const orgSplitWeekly = aggregateSplits(activeMemberships);
+    const pplWeeklyRevenueCents = orgSplitWeekly['ppl'] || 0;
+    const hplWeeklyRevenueCents = orgSplitWeekly['hpl'] || 0;
+    const renewedPerformanceWeeklyRevenueCents = orgSplitWeekly['renewed-performance'] || 0;
     const pplMonthlyRevenueCents = Math.round(pplWeeklyRevenueCents * 4.33);
 
     // Revenue by location
@@ -67,14 +120,41 @@ router.get('/dashboard', async (req: Request, res: Response, next: NextFunction)
       const locActive = activeMemberships.filter((m) => m.locationId === loc.id);
       const locPastDue = pastDueMemberships.filter((m) => m.locationId === loc.id);
       const weeklyRev = estimateWeeklyRevenueCents(locActive);
+      const locSplits = aggregateSplits(locActive);
+      // Bucket members: youth (≤12) vs 13+ (ms_hs + college + pro).
+      const youthCount = locActive.filter((m) => m.plan.ageGroup === 'youth').length;
+      const thirteenPlusCount = locActive.filter((m) =>
+        ['ms_hs', 'college', 'pro'].includes(m.plan.ageGroup)
+      ).length;
       return {
         locationId: loc.id,
         locationName: loc.name,
         activeMemberCount: locActive.length,
+        youthMemberCount: youthCount,
+        thirteenPlusMemberCount: thirteenPlusCount,
         pastDueCount: locPastDue.length,
         weeklyRevenueCents: weeklyRev,
         monthlyRevenueCents: Math.round(weeklyRev * 4.33),
         pastDueAmountCents: locPastDue.reduce((s, m) => s + m.plan.priceCents, 0),
+        pplWeeklyRevenueCents: locSplits['ppl'] || 0,
+        hplWeeklyRevenueCents: locSplits['hpl'] || 0,
+        renewedPerformanceWeeklyRevenueCents: locSplits['renewed-performance'] || 0,
+      };
+    });
+
+    // 13+ revenue by location (MS/HS + College + Pro combined, per Chad 2026-04-23)
+    const thirteenPlusRevenueByLocation = locations.map((loc) => {
+      const mems = activeMemberships.filter(
+        (m) =>
+          m.locationId === loc.id && ['ms_hs', 'college', 'pro'].includes(m.plan.ageGroup)
+      );
+      const weeklyRev = estimateWeeklyRevenueCents(mems);
+      return {
+        locationId: loc.id,
+        locationName: loc.name,
+        memberCount: mems.length,
+        weeklyRevenueCents: weeklyRev,
+        monthlyRevenueCents: Math.round(weeklyRev * 4.33),
       };
     });
 
@@ -111,7 +191,13 @@ router.get('/dashboard', async (req: Request, res: Response, next: NextFunction)
           totalMonthlyRevenueCents,
           pplWeeklyRevenueCents,
           pplMonthlyRevenueCents,
+          hplWeeklyRevenueCents,
+          renewedPerformanceWeeklyRevenueCents,
           activeMemberCount: activeMemberships.length,
+          youthMemberCount: activeMemberships.filter((m) => m.plan.ageGroup === 'youth').length,
+          thirteenPlusMemberCount: activeMemberships.filter((m) =>
+            ['ms_hs', 'college', 'pro'].includes(m.plan.ageGroup)
+          ).length,
           pastDueCount: pastDueMemberships.length,
           pastDueAmountCents,
           pendingFinesCount: pendingFines._count,
@@ -119,6 +205,15 @@ router.get('/dashboard', async (req: Request, res: Response, next: NextFunction)
         },
         revenueByLocation,
         youthRevenueByLocation,
+        thirteenPlusRevenueByLocation,
+        // Inter-business settlements owed by PPL this week, based on this
+        // week's active-membership revenue splits (combo plans). Actual
+        // settlement of HPL's reciprocal flow will come from the HPL app
+        // once it exists.
+        interBusinessSettlements: {
+          owedToHplCents: hplWeeklyRevenueCents,
+          owedToRenewedPerformanceCents: renewedPerformanceWeeklyRevenueCents,
+        },
       },
     });
   } catch (error) {

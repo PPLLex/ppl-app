@@ -75,9 +75,20 @@ router.put('/branding', authenticate, requireAdmin, async (req: Request, res: Re
       sessionDurationMinutes,
       registrationCutoffHours,
       cancellationCutoffHours,
+      financeWeekStartDay,
+      financeWeekResetDay,
+      financeWeekResetHour,
     } = req.body;
 
     await getOrCreateSettings(); // ensure row exists
+
+    // Clamp helper for the finance-week fields so a malformed PUT can't
+    // leave the DB in a bad state.
+    const clamp = (v: unknown, min: number, max: number, fallback: number) => {
+      const n = parseInt(String(v));
+      if (Number.isNaN(n)) return fallback;
+      return Math.max(min, Math.min(max, n));
+    };
 
     const data: Record<string, unknown> = {};
     if (businessName !== undefined) data.businessName = businessName;
@@ -88,6 +99,9 @@ router.put('/branding', authenticate, requireAdmin, async (req: Request, res: Re
     if (sessionDurationMinutes !== undefined) data.sessionDurationMinutes = parseInt(sessionDurationMinutes) || 60;
     if (registrationCutoffHours !== undefined) data.registrationCutoffHours = parseInt(registrationCutoffHours) || 1;
     if (cancellationCutoffHours !== undefined) data.cancellationCutoffHours = parseInt(cancellationCutoffHours) || 6;
+    if (financeWeekStartDay !== undefined) data.financeWeekStartDay = clamp(financeWeekStartDay, 1, 7, 1);
+    if (financeWeekResetDay !== undefined) data.financeWeekResetDay = clamp(financeWeekResetDay, 1, 7, 1);
+    if (financeWeekResetHour !== undefined) data.financeWeekResetHour = clamp(financeWeekResetHour, 0, 23, 5);
 
     const settings = await prisma.orgSettings.update({
       where: { id: 'ppl' },

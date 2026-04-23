@@ -1397,6 +1397,15 @@ model OrgSettings {
   registrationCutoffHours Int @default(1)
   cancellationCutoffHours Int @default(6)
 
+  // Finance reporting cadence — which day the weekly report window starts,
+  // and which day at what time the week "resets" (snapshot is taken, new
+  // window begins). ISO-ish: 1 = Monday ... 7 = Sunday (matches JS getDay()
+  // after normalizing Sunday=0→7). Defaults to a Mon-Sun week with the
+  // reset running Monday at 05:00 local time.
+  financeWeekStartDay Int    @default(1) // 1=Mon ... 7=Sun
+  financeWeekResetDay Int    @default(1) // day the snapshot is taken
+  financeWeekResetHour Int   @default(5) // 24h local time
+
   updatedAt DateTime @updatedAt
 
   @@map("org_settings")
