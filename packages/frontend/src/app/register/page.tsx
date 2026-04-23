@@ -12,6 +12,25 @@ import StripeCheckout from '@/components/payments/StripeCheckout';
 import { PasswordInput } from '@/components/auth/PasswordInput';
 import { isCommonPassword } from '@/lib/common-passwords';
 
+/**
+ * View Transitions API wrapper — crossfade/slide between steps rather than
+ * a hard cut. Falls back to the raw setter on browsers without support
+ * (older Safari / Firefox <127). The ::view-transition-* animations in
+ * globals.css paint the transition.
+ */
+function transitionStep(fn: () => void) {
+  // Newer TS DOM libs have startViewTransition; older ones don't. Gracefully
+  // fall through on any browser missing the API (older Safari / Firefox <127).
+  const doc = typeof document !== 'undefined'
+    ? (document as Document & { startViewTransition?: (cb: () => void) => void })
+    : null;
+  if (doc?.startViewTransition) {
+    doc.startViewTransition(fn);
+  } else {
+    fn();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // PPL registration — 6-step onboarding.
 //
@@ -84,7 +103,17 @@ function RegisterForm() {
     return 1;
   };
 
-  const [step, setStep] = useState<number>(getInitialStep);
+  const [step, setStepRaw] = useState<number>(getInitialStep);
+  // Wrap every step change in a View Transitions crossfade so moving between
+  // steps feels like a premium app, not a hard cut. Works across ALL call
+  // sites because we aliased the raw setter above — no rewrites needed.
+  // Falls back gracefully on browsers without startViewTransition support.
+  const setStep: React.Dispatch<React.SetStateAction<number>> = useCallback(
+    (newStep) => {
+      transitionStep(() => setStepRaw(newStep));
+    },
+    []
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -708,19 +737,54 @@ function RegisterForm() {
           </h1>
         </div>
 
-        {/* Progress indicator */}
-        <div className="flex items-center gap-2 mb-6">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div
-              key={i}
-              className={`h-1 flex-1 rounded-full ${
-                step > i ? 'ppl-gradient' : 'bg-border'
-              }`}
-            />
-          ))}
+        {/* Progress indicator — 6 bars + contextual label. The label tells
+            users how far they are in the flow ("Step 1 of 6 · Playing Level"),
+            which drops abandonment on multi-step forms. The active bar is
+            brighter PPL green; completed bars are solid; future bars are border. */}
+        <div className="mb-6">
+          <div className="flex items-center gap-2">
+            {(() => {
+              const labels = ['Playing Level', 'Your Info', 'History', 'Training', 'Membership', 'Checkout'];
+              return labels.map((_, i) => {
+                const stepNum = i + 1;
+                const isComplete = step > stepNum;
+                const isActive = step === stepNum;
+                return (
+                  <div
+                    key={stepNum}
+                    aria-current={isActive ? 'step' : undefined}
+                    className={`h-1 flex-1 rounded-full transition-all duration-300 ${
+                      isActive
+                        ? 'bg-[#95C83C] shadow-[0_0_8px_rgba(149,200,60,0.5)]'
+                        : isComplete
+                        ? 'bg-[#5E9E50]'
+                        : 'bg-border'
+                    }`}
+                  />
+                );
+              });
+            })()}
+          </div>
+          <div className="mt-2 flex items-center justify-between text-[11px] uppercase tracking-[0.12em] text-muted">
+            <span>
+              Step <span className="text-foreground font-bold tabular-nums">{step}</span> of 6
+            </span>
+            <span className="text-foreground/70">
+              {(['Playing Level', 'Your Info', 'History', 'Training', 'Membership', 'Checkout'] as const)[step - 1]}
+            </span>
+          </div>
         </div>
 
-        <div className="ppl-card">
+        {/* view-transition-name gives the View Transitions API a named
+            element to crossfade when `step` changes. The key forces a fresh
+            subtree per step so the old/new view are properly distinct.
+            view-transition-name is set via the .ppl-register-step class in
+            globals.css (not as inline style because older TS lib.dom types
+            don't yet include viewTransitionName). */}
+        <div
+          className="ppl-card ppl-register-step"
+          key={`step-${step}`}
+        >
           {error && (
             <div
               ref={(el) => {
@@ -740,32 +804,50 @@ function RegisterForm() {
           {/* ============================================ */}
           {step === 1 && (
             <div className="space-y-2.5">
-              <p className="text-sm text-muted mb-2">
-                One quick question before we get into details. This helps us
-                show you the right options for everything that follows.
-              </p>
-              {(['youth', 'ms_hs', 'college', 'pro'] as PlayingLevel[]).map((lvl) => (
-                <button
-                  key={lvl}
-                  type="button"
-                  onClick={() => handleStep1Select(lvl)}
-                  className="group w-full text-left p-4 rounded-xl border-2 border-border bg-surface transition-all duration-150 hover:bg-[#95C83C] hover:border-[#95C83C] hover:shadow-lg hover:shadow-[#95C83C]/25 focus:bg-[#95C83C] focus:border-[#95C83C] focus:outline-none"
-                >
-                  <div
-                    className="font-accent italic font-black uppercase tracking-[0.04em] text-foreground text-sm leading-none transition-colors group-hover:text-black group-focus:text-black"
-                    style={{
-                      fontFamily: 'var(--font-transducer), Impact, "Arial Black", sans-serif',
-                      fontWeight: 900,
-                      fontStyle: 'italic',
-                    }}
+              {(['youth', 'ms_hs', 'college', 'pro'] as PlayingLevel[]).map((lvl, i) => {
+                // MS/HS is the single most-common signup cohort at PPL. The
+                // POPULAR badge pre-anchors the user toward it without pushing
+                // anyone away from the other levels.
+                const isPopular = lvl === 'ms_hs';
+                return (
+                  <button
+                    key={lvl}
+                    type="button"
+                    onClick={() => handleStep1Select(lvl)}
+                    // Stagger-fade in on page load (~70ms between cards) for a
+                    // "designed, not rendered" feel. Respects prefers-reduced-motion
+                    // via the media query in globals.css.
+                    className="ppl-fade-in group relative w-full text-left p-4 rounded-xl border-2 border-border bg-surface transition-all duration-150 hover:bg-[#95C83C] hover:border-[#95C83C] hover:shadow-lg hover:shadow-[#95C83C]/25 focus:bg-[#95C83C] focus:border-[#95C83C] focus:outline-none"
+                    style={{ animationDelay: `${i * 70}ms` }}
                   >
-                    {LEVEL_LABEL[lvl]}
-                  </div>
-                  <div className="text-[11px] text-muted/80 mt-1.5 font-normal transition-colors group-hover:text-black/75 group-focus:text-black/75">
-                    {LEVEL_DESC[lvl]}
-                  </div>
-                </button>
-              ))}
+                    {isPopular && (
+                      <span
+                        className="absolute top-2 right-2 px-2 py-0.5 rounded-md text-black text-[11px] leading-none tracking-[0.14em] tabular-nums shadow-sm transition-opacity group-hover:opacity-0"
+                        style={{
+                          backgroundColor: '#95C83C',
+                          fontFamily: 'var(--font-bebas), Oswald, Impact, sans-serif',
+                        }}
+                        aria-label="Most popular choice"
+                      >
+                        POPULAR
+                      </span>
+                    )}
+                    <div
+                      className="font-accent italic font-black uppercase tracking-[0.04em] text-foreground text-sm leading-none transition-colors group-hover:text-black group-focus:text-black"
+                      style={{
+                        fontFamily: 'var(--font-transducer), Impact, "Arial Black", sans-serif',
+                        fontWeight: 900,
+                        fontStyle: 'italic',
+                      }}
+                    >
+                      {LEVEL_LABEL[lvl]}
+                    </div>
+                    <div className="text-[11px] text-muted/80 mt-1.5 font-normal transition-colors group-hover:text-black/75 group-focus:text-black/75">
+                      {LEVEL_DESC[lvl]}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
 
@@ -1212,7 +1294,16 @@ function RegisterForm() {
               <section>
                 <h3 className="text-sm font-semibold text-foreground mb-2">Training location</h3>
                 <div className="space-y-2">
-                  {locations.map((loc) => (
+                  {locations.length === 0 ? (
+                    // Skeleton — 2 location-card placeholders with shimmer until the API returns.
+                    // Much more professional than a text "Loading…" label.
+                    <>
+                      <div className="ppl-skeleton h-[68px]" aria-hidden="true" />
+                      <div className="ppl-skeleton h-[68px]" aria-hidden="true" />
+                      <span className="sr-only">Loading locations…</span>
+                    </>
+                  ) : (
+                    locations.map((loc) => (
                     <button
                       key={loc.id}
                       type="button"
@@ -1228,7 +1319,8 @@ function RegisterForm() {
                         <div className="text-xs text-muted/80 mt-1 font-normal">{loc.address}</div>
                       )}
                     </button>
-                  ))}
+                    ))
+                  )}
                 </div>
               </section>
 
@@ -1287,9 +1379,15 @@ function RegisterForm() {
                 time you&apos;re charged; cancellation is request-based.
               </p>
               {relevantPlans.length === 0 ? (
-                <div className="p-4 rounded-xl border border-border bg-surface text-sm text-muted">
-                  Loading plans…
-                </div>
+                // Skeleton — 3 plan-card placeholders with shimmer. Height
+                // matches the real card so there's no layout shift when
+                // plans actually arrive.
+                <>
+                  <div className="ppl-skeleton h-[92px]" aria-hidden="true" />
+                  <div className="ppl-skeleton h-[92px]" aria-hidden="true" />
+                  <div className="ppl-skeleton h-[92px]" aria-hidden="true" />
+                  <span className="sr-only">Loading plans…</span>
+                </>
               ) : (
                 relevantPlans.map((plan) => {
                   const combo = getComboPlan(plan);
@@ -1419,7 +1517,11 @@ function RegisterForm() {
           <div className="mt-6 text-center">
             <p className="text-sm text-muted">
               Already have an account?{' '}
-              <Link href="/login" className="text-accent-text hover:text-primary-text transition-colors">
+              <Link
+                href="/login"
+                className="font-bold transition-colors hover:brightness-110"
+                style={{ color: '#95C83C' }}
+              >
                 Sign in
               </Link>
             </p>

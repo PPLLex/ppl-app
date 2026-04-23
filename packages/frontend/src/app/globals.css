@@ -88,6 +88,86 @@ html {
 }
 
 /* ============================================================
+   ACCESSIBILITY — WCAG 2.2 focus rings
+   ============================================================
+   Default :focus-visible is generic blue in most browsers. Override
+   with a 3px PPL-green ring that meets the 3:1 contrast requirement
+   against both the dark app background AND light surface cards. The
+   2px offset gives the ring breathing room without hugging the
+   element. Buttons already-styled with their own focus ring (e.g.
+   the show/hide password toggle) keep theirs. */
+:focus {
+  outline: none; /* suppress default outline — :focus-visible handles keyboard users */
+}
+:focus-visible {
+  outline: 3px solid #95C83C;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+/* Inputs — use a shadow ring instead of an outline so the 10px border
+   radius is respected. */
+.ppl-input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(149, 200, 60, 0.45);
+}
+
+/* ============================================================
+   ANIMATIONS — entrance + skeleton shimmer
+   ============================================================ */
+@keyframes pplFadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.ppl-fade-in {
+  animation: pplFadeInUp 360ms cubic-bezier(0.22, 0.9, 0.33, 1) both;
+}
+/* Stagger helper — use inline `style={{ animationDelay: `${i * 70}ms` }}`
+   to chain children. Combined with .ppl-fade-in for the entrance curve. */
+
+@keyframes pplShimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position:  400px 0; }
+}
+.ppl-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface) 0%,
+    var(--color-surface-hover) 50%,
+    var(--color-surface) 100%
+  );
+  background-size: 800px 100%;
+  animation: pplShimmer 1600ms linear infinite;
+  border-radius: 12px;
+}
+
+/* Respect users who prefer less motion — no entrance animation, no shimmer. */
+@media (prefers-reduced-motion: reduce) {
+  .ppl-fade-in { animation: none; }
+  .ppl-skeleton { animation: none; }
+}
+
+/* View Transitions API — give step swaps a smooth crossfade+slide rather
+   than the browser's default instant cut. Scoped via ::view-transition-*
+   pseudo-elements so nothing else on the page is affected. */
+.ppl-register-step {
+  view-transition-name: register-step;
+}
+::view-transition-old(register-step) {
+  animation: pplFadeOutLeft 200ms cubic-bezier(0.22, 0.9, 0.33, 1) both;
+}
+::view-transition-new(register-step) {
+  animation: pplFadeInRight 300ms cubic-bezier(0.22, 0.9, 0.33, 1) both;
+}
+@keyframes pplFadeOutLeft {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(-12px); }
+}
+@keyframes pplFadeInRight {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ============================================================
    COMPONENT UTILITIES
    ============================================================ */
 
