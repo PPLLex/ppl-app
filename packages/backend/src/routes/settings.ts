@@ -101,8 +101,34 @@ router.put('/branding', authenticate, requireAdmin, async (req: Request, res: Re
 });
 
 /**
+ * Trigger a Vercel rebuild of the frontend. Fire-and-forget — we don't block
+ * the admin's response on the hook call. Configure with Railway env var
+ * VERCEL_DEPLOY_HOOK_URL. See packages/frontend/scripts/fetch-logo.mjs for
+ * the prebuild step that pulls the latest logo into public/ppl-logo.webp.
+ */
+async function triggerFrontendRebuild(reason: string): Promise<void> {
+  const url = process.env.VERCEL_DEPLOY_HOOK_URL;
+  if (!url) {
+    console.log(`[logo-sync] no VERCEL_DEPLOY_HOOK_URL set; skipping rebuild (${reason})`);
+    return;
+  }
+  try {
+    const res = await fetch(url, { method: 'POST' });
+    const body = await res.text();
+    console.log(`[logo-sync] Vercel redeploy triggered (${reason}): ${body.slice(0, 200)}`);
+  } catch (err) {
+    console.error(
+      `[logo-sync] failed to trigger Vercel redeploy (${reason}):`,
+      err instanceof Error ? err.message : err
+    );
+  }
+}
+
+/**
  * POST /api/settings/branding/logo
- * Admin: upload a logo image. Stores as base64 data URI in DB.
+ * Admin: upload a logo image. Stores as base64 data URI in DB and fires a
+ * Vercel rebuild so the static /ppl-logo.webp asset gets refreshed from the
+ * new image. Frontend's prebuild script reads the new logo from this API.
  */
 router.post(
   '/branding/logo',
@@ -122,7 +148,15 @@ router.post(
         data: { logoData },
       });
 
-      res.json({ data: settings });
+      // Fire-and-forget — the admin gets their response immediately; the
+      // frontend rebuild runs in the background and promotes the new logo
+      // to the static asset in ~60-90s.
+      triggerFrontendRebuild('logo uploaded').catch(() => {});
+
+      res.json({
+        data: settings,
+        message: 'Logo saved. Frontend will finish updating in about 1-2 minutes.',
+      });
     } catch (err) {
       next(err);
     }
@@ -131,7 +165,8 @@ router.post(
 
 /**
  * DELETE /api/settings/branding/logo
- * Admin: remove the current logo.
+ * Admin: remove the current logo and rebuild the frontend so the default
+ * asset is restored.
  */
 router.delete('/branding/logo', authenticate, requireAdmin, async (_req: Request, res: Response, next: NextFunction) => {
   try {
@@ -140,6 +175,7 @@ router.delete('/branding/logo', authenticate, requireAdmin, async (_req: Request
       where: { id: 'ppl' },
       data: { logoData: null },
     });
+    triggerFrontendRebuild('logo removed').catch(() => {});
     res.json({ data: settings });
   } catch (err) {
     next(err);
