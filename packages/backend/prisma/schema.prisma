@@ -590,6 +590,24 @@ model MembershipPlan {
   billingCycle    String   @default("weekly")
   description     String?
   isActive        Boolean  @default(true)
+  // Discipline / bundling.
+  //   includesHitting   — this plan covers hitting training in addition to pitching.
+  //                       On PPL app, hitting is only available as an add-on; the
+  //                       registration UI offers a "+ Add Hitting" toggle that
+  //                       swaps the user to the paired combo plan.
+  //   pairedWithPlanId  — points to the sibling plan in the pitching/combo pair.
+  //                       A pitching-only plan points to its combo; the combo
+  //                       points back to the pitching-only plan. Always bidirectional
+  //                       so the UI can navigate either direction.
+  //   revenueSplits     — how the weekly (or monthly) priceCents is divided
+  //                       BETWEEN BUSINESSES. JSON object keyed by org slug, values
+  //                       in cents. MUST sum to priceCents. Example:
+  //                         { "ppl": 5000, "hpl": 4000 }  for a $90/wk Youth combo.
+  //                       Pitching-only plans are 100% PPL → { "ppl": <priceCents> }.
+  //                       Used by the weekly inter-business settlement report.
+  includesHitting  Boolean @default(false)
+  pairedWithPlanId String?
+  revenueSplits    Json    @default("{}")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

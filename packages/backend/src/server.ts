@@ -13,6 +13,7 @@ import app from './app';
 import { config, validateProductionConfig } from './config';
 import { startCronJobs, stopCronJobs } from './services/cronService';
 import { bootstrapOrganizations } from './bootstrapOrgs';
+import { bootstrapMembershipPlans } from './bootstrapMembershipPlans';
 
 console.log('[Server] Modules imported successfully');
 
@@ -26,6 +27,10 @@ const start = async () => {
     // we start listening so routes never see a missing org. Swallows its own
     // errors — server still starts even if bootstrapping fails.
     await bootstrapOrganizations();
+    // Enforce the canonical membership-plan catalog on every deploy.
+    // Idempotent (upserts + soft-retire of legacy plans). Swallows its own
+    // errors so a bad plan entry can never block server startup.
+    await bootstrapMembershipPlans();
 
     console.log('[Server] Starting listener on port', config.port);
     const server = app.listen(config.port, () => {

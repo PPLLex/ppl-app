@@ -1313,6 +1313,10 @@ export interface MembershipPlan {
   billingCycle: string;
   description: string | null;
   isActive: boolean;
+  includesHitting: boolean;
+  pairedWithPlanId: string | null;
+  /** Keys are org slugs ('ppl' | 'hpl' | ...). Values are cents. Sums to priceCents. */
+  revenueSplits: Record<string, number>;
 }
 
 export interface MembershipDetail {

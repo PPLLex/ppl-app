@@ -80,40 +80,92 @@ async function main() {
   // ============================================================
   // 3. MEMBERSHIP PLANS
   // ============================================================
-  const planDefs = [
-    // ── Weekly tiers (Youth / MS-HS / College) ──────────────────────────────
-    { id: 'plan-unlimited-college', name: 'Unlimited College Pitching', slug: 'unlimited-college-pitching', ageGroup: 'college', sessionsPerWeek: null, priceCents: 8500, billingCycle: 'weekly', description: 'Unlimited training sessions for college athletes.' },
-    { id: 'plan-unlimited-pitching', name: 'Unlimited Pitching', slug: 'unlimited-pitching', ageGroup: 'ms_hs', sessionsPerWeek: null, priceCents: 8500, billingCycle: 'weekly', description: 'Unlimited training sessions for ages 13+.' },
-    { id: 'plan-1x-pitching', name: '1x/Week Pitching', slug: '1x-week-pitching', ageGroup: 'ms_hs', sessionsPerWeek: 1, priceCents: 7000, billingCycle: 'weekly', description: 'One training session per week for ages 13+.' },
-    { id: 'plan-youth-1x', name: 'Youth 1x/Week', slug: 'youth-1x-week', ageGroup: 'youth', sessionsPerWeek: 1, priceCents: 5500, billingCycle: 'weekly', description: 'One session per week for ages 12 and under.' },
-    { id: 'plan-youth-2x', name: 'Youth 2x/Week', slug: 'youth-2x-week', ageGroup: 'youth', sessionsPerWeek: 2, priceCents: 7000, billingCycle: 'weekly', description: 'Two sessions per week for ages 12 and under.' },
+  // Canonical plan catalog. Keep in sync with src/bootstrapMembershipPlans.ts —
+  // that file runs on every deploy so these values are idempotently enforced
+  // on production. This seed runs only in local dev (`npm run db:seed`).
+  //
+  // Revenue splits: JSON keyed by org slug, values in cents, must sum to
+  // priceCents. Pitching-only → 100% PPL. Pitching+Hitting combos → PPL/HPL
+  // split per Chad's 2026-04-23 pricing decision.
+  type PlanSeed = {
+    id: string;
+    name: string;
+    slug: string;
+    ageGroup: string;
+    sessionsPerWeek: number | null;
+    priceCents: number;
+    billingCycle: string;
+    description: string;
+    includesHitting: boolean;
+    pairedWithPlanId: string | null;
+    revenueSplits: Record<string, number>;
+  };
 
-    // ── Pro tier (MONTHLY billing) ──────────────────────────────────────────
-    // Pros get perks: facility access, custom programming, or hands-on coaching.
+  const planDefs: PlanSeed[] = [
+    // ── PITCHING-ONLY (Youth / MS-HS / College) — 100% PPL ─────────────────
+    { id: 'plan-youth-1x',           name: 'Youth 1x/Week',              slug: 'youth-1x-week',            ageGroup: 'youth',   sessionsPerWeek: 1,    priceCents: 5500,  billingCycle: 'weekly',  description: 'One pitching session per week for ages 12 and under.',           includesHitting: false, pairedWithPlanId: 'plan-youth-1x-hitting',           revenueSplits: { ppl: 5500 } },
+    { id: 'plan-1x-pitching',        name: '1x/Week Pitching',           slug: '1x-week-pitching',         ageGroup: 'ms_hs',   sessionsPerWeek: 1,    priceCents: 7000,  billingCycle: 'weekly',  description: 'One pitching session per week for ages 13+.',                    includesHitting: false, pairedWithPlanId: 'plan-1x-pitching-hitting',        revenueSplits: { ppl: 7000 } },
+    { id: 'plan-unlimited-pitching', name: 'Unlimited Pitching',         slug: 'unlimited-pitching',       ageGroup: 'ms_hs',   sessionsPerWeek: null, priceCents: 8500,  billingCycle: 'weekly',  description: 'Unlimited pitching training for ages 13+.',                      includesHitting: false, pairedWithPlanId: 'plan-unlimited-pitching-hitting', revenueSplits: { ppl: 8500 } },
+    { id: 'plan-unlimited-college',  name: 'Unlimited College Pitching', slug: 'unlimited-college-pitching', ageGroup: 'college', sessionsPerWeek: null, priceCents: 8500,  billingCycle: 'weekly',  description: 'Unlimited pitching training for college athletes.',              includesHitting: false, pairedWithPlanId: 'plan-unlimited-college-hitting',  revenueSplits: { ppl: 8500 } },
+
+    // ── PITCHING + HITTING COMBOS — PPL/HPL split per Chad 2026-04-23 ──────
+    { id: 'plan-youth-1x-hitting',           name: 'Youth 1x/Week + Hitting',        slug: 'youth-1x-week-hitting',         ageGroup: 'youth',   sessionsPerWeek: 1,    priceCents: 9000,  billingCycle: 'weekly', description: 'One pitching + hitting session per week for ages 12 and under.', includesHitting: true, pairedWithPlanId: 'plan-youth-1x',           revenueSplits: { ppl: 5000, hpl: 4000 } },
+    { id: 'plan-1x-pitching-hitting',        name: '1x/Week Pitching + Hitting',     slug: '1x-week-pitching-hitting',      ageGroup: 'ms_hs',   sessionsPerWeek: 1,    priceCents: 10500, billingCycle: 'weekly', description: 'One pitching + hitting session per week for ages 13+.',          includesHitting: true, pairedWithPlanId: 'plan-1x-pitching',        revenueSplits: { ppl: 5750, hpl: 4750 } },
+    { id: 'plan-unlimited-pitching-hitting', name: 'Unlimited Pitching + Hitting',   slug: 'unlimited-pitching-hitting',    ageGroup: 'ms_hs',   sessionsPerWeek: null, priceCents: 12500, billingCycle: 'weekly', description: 'Unlimited pitching + hitting training for ages 13+.',            includesHitting: true, pairedWithPlanId: 'plan-unlimited-pitching', revenueSplits: { ppl: 6750, hpl: 5750 } },
+    { id: 'plan-unlimited-college-hitting',  name: 'Unlimited College + Hitting',    slug: 'unlimited-college-hitting',     ageGroup: 'college', sessionsPerWeek: null, priceCents: 12500, billingCycle: 'weekly', description: 'Unlimited pitching + hitting training for college athletes.',    includesHitting: true, pairedWithPlanId: 'plan-unlimited-college',  revenueSplits: { ppl: 6750, hpl: 5750 } },
+
+    // ── PRO tier (MONTHLY billing, no hitting) — 100% PPL ──────────────────
     // Discount incentives (social posts / Google reviews / coaching help) are
     // tracked separately via the ProPerkCredit system — see ARCHITECTURE.md.
-    { id: 'plan-pro-facility-access', name: 'Pro — Facility Access', slug: 'pro-facility-access', ageGroup: 'pro', sessionsPerWeek: null, priceCents: 10000, billingCycle: 'monthly', description: 'Monthly self-directed facility access for pro athletes. No coaching sessions included.' },
-    { id: 'plan-pro-programming', name: 'Pro — Programming', slug: 'pro-programming', ageGroup: 'pro', sessionsPerWeek: 0, priceCents: 10000, billingCycle: 'monthly', description: 'Custom monthly programming delivered to you. No facility access.' },
-    { id: 'plan-pro-programming-access', name: 'Pro — Programming + Access', slug: 'pro-programming-access', ageGroup: 'pro', sessionsPerWeek: null, priceCents: 17500, billingCycle: 'monthly', description: 'Custom monthly programming plus unlimited facility access.' },
-    { id: 'plan-pro-programming-training', name: 'Pro — Programming + Training', slug: 'pro-programming-training', ageGroup: 'pro', sessionsPerWeek: null, priceCents: 8500, billingCycle: 'weekly', description: 'Custom programming plus hands-on coaching sessions with PPL staff.' },
+    { id: 'plan-pro-facility-access',     name: 'Pro — Facility Access',       slug: 'pro-facility-access',     ageGroup: 'pro', sessionsPerWeek: null, priceCents: 10000, billingCycle: 'monthly', description: 'Monthly self-directed facility access for pro athletes. No coaching sessions included.', includesHitting: false, pairedWithPlanId: null, revenueSplits: { ppl: 10000 } },
+    { id: 'plan-pro-programming',         name: 'Pro — Programming',           slug: 'pro-programming',         ageGroup: 'pro', sessionsPerWeek: 0,    priceCents: 10000, billingCycle: 'monthly', description: 'Custom monthly programming delivered to you. No facility access.',                       includesHitting: false, pairedWithPlanId: null, revenueSplits: { ppl: 10000 } },
+    { id: 'plan-pro-programming-access',  name: 'Pro — Programming + Access',  slug: 'pro-programming-access',  ageGroup: 'pro', sessionsPerWeek: null, priceCents: 17500, billingCycle: 'monthly', description: 'Custom monthly programming plus unlimited facility access.',                             includesHitting: false, pairedWithPlanId: null, revenueSplits: { ppl: 17500 } },
+    { id: 'plan-pro-programming-training', name: 'Pro — Programming + Training', slug: 'pro-programming-training', ageGroup: 'pro', sessionsPerWeek: null, priceCents: 8500,  billingCycle: 'weekly',  description: 'Custom programming plus hands-on coaching sessions with PPL staff.',                      includesHitting: false, pairedWithPlanId: null, revenueSplits: { ppl: 8500 } },
   ];
 
+  // Verify revenue splits sum to priceCents for every plan before we seed.
+  for (const p of planDefs) {
+    const sum = Object.values(p.revenueSplits).reduce((a, b) => a + b, 0);
+    if (sum !== p.priceCents) {
+      throw new Error(
+        `revenueSplits for ${p.id} sum to ${sum} but priceCents is ${p.priceCents}`
+      );
+    }
+  }
+
+  // Retire any legacy plans that are no longer in the canonical list.
+  // Soft-retire via isActive=false so existing ClientMembership rows still
+  // resolve their plan (FK integrity).
+  const canonicalIds = new Set(planDefs.map((p) => p.id));
+  const legacy = await prisma.membershipPlan.findMany({ where: { isActive: true } });
+  for (const row of legacy) {
+    if (!canonicalIds.has(row.id)) {
+      await prisma.membershipPlan.update({
+        where: { id: row.id },
+        data: { isActive: false },
+      });
+      console.log(`  ↻ retired legacy plan: ${row.id}`);
+    }
+  }
+
   for (const plan of planDefs) {
-    // Use update to keep existing plan prices + descriptions fresh on re-seed.
-    // (Previous seed used empty `update: {}` which meant price bumps required
-    // a manual SQL update in prod.)
+    const data = {
+      name: plan.name,
+      slug: plan.slug,
+      ageGroup: plan.ageGroup,
+      sessionsPerWeek: plan.sessionsPerWeek,
+      priceCents: plan.priceCents,
+      billingCycle: plan.billingCycle,
+      description: plan.description,
+      includesHitting: plan.includesHitting,
+      pairedWithPlanId: plan.pairedWithPlanId,
+      revenueSplits: plan.revenueSplits,
+      isActive: true,
+    };
     await prisma.membershipPlan.upsert({
       where: { id: plan.id },
-      update: {
-        name: plan.name,
-        slug: plan.slug,
-        ageGroup: plan.ageGroup,
-        sessionsPerWeek: plan.sessionsPerWeek,
-        priceCents: plan.priceCents,
-        billingCycle: plan.billingCycle,
-        description: plan.description,
-      },
-      create: plan,
+      update: data,
+      create: { id: plan.id, ...data },
     });
   }
   console.log(`✅ Membership plans (${planDefs.length})`);

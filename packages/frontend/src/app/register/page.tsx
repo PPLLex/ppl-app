@@ -191,6 +191,10 @@ function RegisterForm() {
   const [locationId, setLocationId] = useState('');
   const [trainingPreference, setTrainingPreference] = useState<TrainingPref | ''>('');
   const [plans, setPlans] = useState<MembershipPlan[]>([]);
+  // Per-plan toggle state: { [pitchingPlanId]: true } when the user has
+  // flipped the "+ Add Hitting Training" switch. At submit time, a true
+  // value causes the selected plan to swap to the paired combo's id.
+  const [hittingToggled, setHittingToggled] = useState<Record<string, boolean>>({});
 
   // Step 6 (Stripe Elements)
   const [checkoutData, setCheckoutData] = useState<SubscribeResult | null>(null);
@@ -628,9 +632,24 @@ function RegisterForm() {
   // shown every plan in the system (incl. Youth prices to a College athlete)
   // when the resume-flow fallback lands them on step 5 without a stored
   // ageGroup. The back-button on the step 5 UI also lets them pick a level.
+  //
+  // On PPL app, hitting is an ADD-ON — the combo plans never appear as
+  // standalone cards. Instead each pitching-only card renders an
+  // "+ Add Hitting Training" toggle that swaps the selected plan to the
+  // paired combo at submit time. Filter combos out of the visible list.
   const relevantPlans = plans.filter((p) =>
-    playingLevel ? p.ageGroup === playingLevel : false
+    playingLevel ? p.ageGroup === playingLevel && !p.includesHitting : false
   );
+  const resolvePlanId = (plan: MembershipPlan): string => {
+    if (hittingToggled[plan.id] && plan.pairedWithPlanId) {
+      return plan.pairedWithPlanId;
+    }
+    return plan.id;
+  };
+  const getComboPlan = (plan: MembershipPlan): MembershipPlan | null => {
+    if (!plan.pairedWithPlanId) return null;
+    return plans.find((p) => p.id === plan.pairedWithPlanId) ?? null;
+  };
 
   // --------------------------------------------------------------------
   // RENDER
@@ -1272,40 +1291,104 @@ function RegisterForm() {
                   Loading plans…
                 </div>
               ) : (
-                relevantPlans.map((plan) => (
-                  <button
-                    key={plan.id}
-                    type="button"
-                    onClick={() => handleStep5Select(plan.id)}
-                    disabled={isLoading}
-                    className={`w-full text-left p-4 rounded-xl border-2 border-border hover:border-border-light bg-surface transition-all ${
-                      isLoading ? 'opacity-50 cursor-not-allowed' : ''
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="font-bold text-foreground text-base leading-tight">
-                          {plan.name}
-                        </div>
-                        {plan.description && (
-                          <div className="text-xs text-muted/80 mt-1.5 font-normal leading-snug">
-                            {plan.description}
+                relevantPlans.map((plan) => {
+                  const combo = getComboPlan(plan);
+                  const withHitting = !!hittingToggled[plan.id] && combo !== null;
+                  const displayPriceCents = withHitting && combo ? combo.priceCents : plan.priceCents;
+                  const deltaCents = combo ? combo.priceCents - plan.priceCents : 0;
+                  // Outer wrapper is a div (not button) so the nested "+ Add Hitting"
+                  // button doesn't produce invalid <button> inside <button> markup.
+                  return (
+                    <div
+                      key={plan.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-disabled={isLoading}
+                      onClick={() => !isLoading && handleStep5Select(resolvePlanId(plan))}
+                      onKeyDown={(e) => {
+                        if (!isLoading && (e.key === 'Enter' || e.key === ' ')) {
+                          e.preventDefault();
+                          handleStep5Select(resolvePlanId(plan));
+                        }
+                      }}
+                      className={`group w-full text-left p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                        withHitting
+                          ? 'border-highlight/60 bg-highlight/5 hover:border-highlight'
+                          : 'border-border hover:border-border-light bg-surface'
+                      } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-foreground text-base leading-tight">
+                            {withHitting && combo ? combo.name : plan.name}
                           </div>
-                        )}
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        {/* Price — Bebas Neue for the scoreboard/menu-board
-                            feel. Matches the PPL pitching-report aesthetic. */}
-                        <div className="font-stat text-4xl leading-none tracking-wide text-accent-text">
-                          ${(plan.priceCents / 100).toFixed(0)}
+                          {(withHitting && combo ? combo.description : plan.description) && (
+                            <div className="text-xs text-muted/80 mt-1.5 font-normal leading-snug">
+                              {withHitting && combo ? combo.description : plan.description}
+                            </div>
+                          )}
                         </div>
-                        <div className="text-[11px] text-muted mt-1">
-                          / {plan.billingCycle === 'monthly' ? 'mo' : 'week'}
+                        <div className="text-right flex-shrink-0">
+                          {/* Price — Bebas Neue for the scoreboard/menu-board
+                              feel. Matches the PPL pitching-report aesthetic. */}
+                          <div className="font-stat text-4xl leading-none tracking-wide text-accent-text tabular-nums">
+                            ${(displayPriceCents / 100).toFixed(0)}
+                          </div>
+                          <div className="text-[11px] text-muted mt-1">
+                            / {plan.billingCycle === 'monthly' ? 'mo' : 'week'}
+                          </div>
                         </div>
                       </div>
+
+                      {/* + Add Hitting Training toggle — only shown when this
+                          plan has a paired combo sibling. Tap toggles without
+                          submitting the card. */}
+                      {combo && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setHittingToggled((prev) => ({
+                              ...prev,
+                              [plan.id]: !prev[plan.id],
+                            }));
+                          }}
+                          aria-pressed={withHitting}
+                          className={`mt-3 w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
+                            withHitting
+                              ? 'border-highlight bg-highlight/15 text-foreground'
+                              : 'border-border bg-background/60 text-muted hover:border-border-light hover:text-foreground'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            {/* Check / plus icon */}
+                            <span
+                              className={`inline-flex items-center justify-center w-4 h-4 rounded ${
+                                withHitting ? 'bg-highlight text-on-accent' : 'bg-border/60 text-muted'
+                              }`}
+                              aria-hidden="true"
+                            >
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                                {withHitting ? (
+                                  <path d="M20 6 9 17l-5-5" />
+                                ) : (
+                                  <>
+                                    <line x1="12" y1="5" x2="12" y2="19" />
+                                    <line x1="5" y1="12" x2="19" y2="12" />
+                                  </>
+                                )}
+                              </svg>
+                            </span>
+                            {withHitting ? 'Hitting Training Added' : 'Add Hitting Training'}
+                          </span>
+                          <span className={`text-xs tabular-nums ${withHitting ? 'text-foreground' : 'text-muted'}`}>
+                            {withHitting ? 'included' : `+$${(deltaCents / 100).toFixed(0)}/wk`}
+                          </span>
+                        </button>
+                      )}
                     </div>
-                  </button>
-                ))
+                  );
+                })
               )}
               <div className="flex gap-3 pt-2">
                 <button
