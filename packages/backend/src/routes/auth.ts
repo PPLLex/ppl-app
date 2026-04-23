@@ -273,18 +273,41 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
             relationToParent: 'CHILD',
           },
         });
-      } else if (parentOptOut === true && ageGroup === 'college') {
-        // Solo college athlete: create their AthleteProfile up front with
-        // relationToParent=SELF and a logged opt-out acknowledgment.
+      } else if (parentOptOut === true && (ageGroup === 'college' || ageGroup === 'ms_hs')) {
+        // Solo College or MS/HS athlete: create their AthleteProfile up front
+        // with relationToParent=SELF and a logged opt-out acknowledgment.
+        // Uses athleteFirstName/athleteLastName directly (always sent now)
+        // instead of splitting fullName. See audit issue #7.
         await tx.athleteProfile.create({
           data: {
             userId: authUser.id,
-            firstName: authUser.fullName.split(/\s+/)[0] || 'Athlete',
-            lastName: authUser.fullName.split(/\s+/).slice(1).join(' ') || 'Athlete',
+            firstName: athleteFirstName || authUser.fullName.split(/\s+/)[0] || 'Athlete',
+            lastName:
+              athleteLastName ||
+              authUser.fullName.split(/\s+/).slice(1).join(' ') ||
+              'Athlete',
+            dateOfBirth: athleteDateOfBirth ? new Date(athleteDateOfBirth) : null,
             ageGroup,
             relationToParent: 'SELF',
             parentOptOut: true,
             parentOptOutAckedAt: new Date(),
+          },
+        });
+      } else if (!isParentRegistration && ageGroup === 'pro') {
+        // Pro athletes register solo. Create their AthleteProfile up front
+        // with real names + DOB so later onboarding steps don't have to
+        // invent them. See audit issue #7.
+        await tx.athleteProfile.create({
+          data: {
+            userId: authUser.id,
+            firstName: athleteFirstName || authUser.fullName.split(/\s+/)[0] || 'Athlete',
+            lastName:
+              athleteLastName ||
+              authUser.fullName.split(/\s+/).slice(1).join(' ') ||
+              'Athlete',
+            dateOfBirth: athleteDateOfBirth ? new Date(athleteDateOfBirth) : null,
+            ageGroup,
+            relationToParent: 'SELF',
           },
         });
       }

@@ -506,12 +506,25 @@ router.post('/subscribe', authenticate, async (req: Request, res: Response, next
     // stale against the live schema. Railway regenerates on every deploy so
     // production sees the full enum (REQUIRED, PROCESSING, PAID, WAIVED,
     // NOT_APPLICABLE). This comparison is safe at runtime.
-    const feeStatus = athleteProfile?.onboardingRecord?.feeStatus as
-      | string
-      | undefined;
+    const record = athleteProfile?.onboardingRecord;
+    const feeStatus = record?.feeStatus as string | undefined;
     if (feeStatus === 'REQUIRED' || feeStatus === 'PROCESSING') {
       throw ApiError.badRequest(
         'Please complete your one-time onboarding fee before starting a membership.'
+      );
+    }
+    // Returning-athlete safeguard. Self-reported "returning" sets
+    // feeStatus=NOT_APPLICABLE, which would otherwise pass the guard above.
+    // We hold them at the gate until an admin has explicitly acted (either
+    // waived the fee, which sets completedAt, or charged the fee, which
+    // flips feeStatus back to REQUIRED). See audit issue #6.
+    if (
+      feeStatus === 'NOT_APPLICABLE' &&
+      record?.selfReportedStatus === 'returning' &&
+      !record?.completedAt
+    ) {
+      throw ApiError.badRequest(
+        "Thanks for signing up! A PPL admin is reviewing your returning-athlete status. You'll be able to choose a membership as soon as they confirm."
       );
     }
 

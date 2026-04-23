@@ -250,6 +250,10 @@ function RegisterForm() {
 
   const handleStep2Submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Belt-and-suspenders vs double-submit. The button has
+    // disabled={isLoading} but Enter-key spam or super-fast taps can slip
+    // through React's state batching. This early-return hard-blocks.
+    if (isLoading) return;
     setError('');
 
     // ──────────────────────────────────────────────────────────
@@ -411,11 +415,13 @@ function RegisterForm() {
         locationId: '', // will be set on step 4
         ageGroup: playingLevel || undefined,
         registeringAs: (hasParent ? 'PARENT' : 'SELF') as 'SELF' | 'PARENT',
-        ...(hasParent && {
-          athleteFirstName,
-          athleteLastName,
-          athleteDateOfBirth: athleteDob || undefined,
-        }),
+        // Athlete name + DOB are ALWAYS sent (for both PARENT and SELF
+        // paths). Backend uses these to create the AthleteProfile with
+        // actual names instead of splitting fullName (which produced
+        // ugly "Drew Athlete" single-word fallbacks). Audit issue #7.
+        athleteFirstName,
+        athleteLastName,
+        ...(athleteDob && { athleteDateOfBirth: athleteDob }),
         // Solo-mode opt-out is sent whenever the athlete opted out and no
         // parent was attached — College (single checkbox) or MS/HS (both
         // checkboxes). Backend uses this to skip the "parent required" guard.

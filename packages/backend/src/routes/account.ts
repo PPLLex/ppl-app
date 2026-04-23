@@ -56,18 +56,56 @@ router.get('/profile', async (req: Request, res: Response, next: NextFunction) =
 router.put('/profile', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.userId;
-    const { fullName, phone, parentName, parentEmail, parentPhone, emergencyContact, emergencyPhone, trainingGoals, trainingPreference } = req.body;
+    const {
+      fullName,
+      phone,
+      // NEW: homeLocationId — register step 4 sends this. Previously it was
+      // silently ignored, which meant the subscribe endpoint at step 5 never
+      // saw a home location and every 6-step registration died at step 5.
+      // See audit issue #1 (root cause).
+      homeLocationId,
+      parentName,
+      parentEmail,
+      parentPhone,
+      emergencyContact,
+      emergencyPhone,
+      trainingGoals,
+      trainingPreference,
+      clientProfile: clientProfileBody, // frontend sends { clientProfile: { ageGroup } }
+    } = req.body;
 
     // Update user
     const updateData: any = {};
     if (fullName !== undefined) updateData.fullName = fullName;
     if (phone !== undefined) updateData.phone = phone;
+    if (homeLocationId !== undefined) {
+      // Verify the location exists + is active before accepting
+      if (homeLocationId) {
+        const loc = await prisma.location.findUnique({ where: { id: homeLocationId } });
+        if (!loc || !loc.isActive) {
+          throw ApiError.badRequest('Invalid location.');
+        }
+      }
+      updateData.homeLocationId = homeLocationId || null;
+    }
 
     if (Object.keys(updateData).length > 0) {
       await prisma.user.update({
         where: { id: userId },
         data: updateData,
       });
+
+      // If this user is a family parent AND we just set a location, also
+      // backfill Family.primaryLocationId so the family's athletes inherit
+      // the same home. See audit issue #16.
+      if (homeLocationId) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const p: any = prisma;
+        await p.family.updateMany({
+          where: { parentUserId: userId },
+          data: { primaryLocationId: homeLocationId },
+        });
+      }
     }
 
     // Update client profile fields if provided
@@ -83,6 +121,11 @@ router.put('/profile', async (req: Request, res: Response, next: NextFunction) =
       if (validPrefs.includes(trainingPreference)) {
         profileData.trainingPreference = trainingPreference;
       }
+    }
+    // Accept the nested `clientProfile.ageGroup` shape that the register
+    // flow sends. Keeps the frontend API contract stable.
+    if (clientProfileBody?.ageGroup !== undefined) {
+      profileData.ageGroup = clientProfileBody.ageGroup;
     }
 
     if (Object.keys(profileData).length > 0) {
