@@ -23,27 +23,90 @@ export function determineBillingDay(paymentDate: Date): BillingDay {
   return BillingDay.MONDAY;
 }
 
+// ============================================================
+// EASTERN TIME HELPERS
+// ============================================================
+//
+// Railway runs in UTC, but PPL's billing + ops clock is Eastern. These
+// helpers let us reason about "9 AM Eastern" without a datetime library.
+//
+// US Eastern DST rules:
+//   DST starts: 2nd Sunday of March at 02:00 local (spring forward to EDT, UTC-4)
+//   DST ends:   1st Sunday of November at 02:00 local (fall back to EST, UTC-5)
+//
+// Exact enough for billing scheduling — the 5-day cushion in
+// calculateBillingAnchor makes one-hour discrepancies harmless.
+
+/** True if the given UTC instant falls in US Eastern Daylight Time. */
+function isEasternDST(d: Date): boolean {
+  const year = d.getUTCFullYear();
+  // 2nd Sunday of March
+  const march1 = new Date(Date.UTC(year, 2, 1));
+  const daysToFirstSunMar = (7 - march1.getUTCDay()) % 7;
+  const dstStart = new Date(Date.UTC(year, 2, 1 + daysToFirstSunMar + 7, 7)); // 02:00 EST = 07:00 UTC
+  // 1st Sunday of November
+  const nov1 = new Date(Date.UTC(year, 10, 1));
+  const daysToFirstSunNov = (7 - nov1.getUTCDay()) % 7;
+  const dstEnd = new Date(Date.UTC(year, 10, 1 + daysToFirstSunNov, 6)); // 02:00 EDT = 06:00 UTC
+  return d >= dstStart && d < dstEnd;
+}
+
+/** Current hour (0-23) in America/New_York. */
+export function getEasternHour(now: Date = new Date()): number {
+  const offsetHours = isEasternDST(now) ? 4 : 5; // EDT=UTC-4, EST=UTC-5
+  return (now.getUTCHours() - offsetHours + 24) % 24;
+}
+
+/** Current day-of-week in America/New_York (0=Sun, 1=Mon, ..., 6=Sat). */
+export function getEasternDay(now: Date = new Date()): number {
+  const offsetHours = isEasternDST(now) ? 4 : 5;
+  // Shift UTC hours back by the offset to get local hour, then compute day.
+  const localMs = now.getTime() - offsetHours * 60 * 60 * 1000;
+  return new Date(localMs).getUTCDay();
+}
+
 /**
- * Calculate the next billing anchor date (the first recurring charge date).
- * Ensures at least 5 days before the first auto-charge.
+ * Calculate the next billing anchor — the specific UTC instant of the next
+ * Monday or Thursday at 09:00 America/New_York, at least 5 days out from
+ * the signup. 5-day cushion gives Stripe enough time to finalize the
+ * signup-day invoice before the first recurring one fires.
+ *
+ * Example: customer signs up Wed 2026-04-22 14:30 UTC (10:30 AM ET);
+ *   billingDay=MONDAY → anchor = Mon 2026-04-27 13:00 UTC (09:00 AM EDT).
+ *   billingDay=THURSDAY → anchor = Thu 2026-04-30 13:00 UTC (09:00 AM EDT).
  */
 export function calculateBillingAnchor(paymentDate: Date, billingDay: BillingDay): Date {
-  const targetDayNum = billingDay === BillingDay.MONDAY ? 1 : 4; // 1=Mon, 4=Thu
-  const anchor = new Date(paymentDate);
+  const targetEasternDay = billingDay === BillingDay.MONDAY ? 1 : 4;
 
-  // Move forward to the next occurrence of the target day
-  while (anchor.getDay() !== targetDayNum) {
-    anchor.setDate(anchor.getDate() + 1);
-  }
+  // Work entirely in Eastern-local terms first, then shift back to UTC.
+  const paymentEasternDay = getEasternDay(paymentDate);
 
-  // If less than 5 days away, push to the week after
-  const diffDays = (anchor.getTime() - paymentDate.getTime()) / (1000 * 60 * 60 * 24);
+  // Days forward to next Mon or Thu (in Eastern weekday numbering).
+  let daysAhead = (targetEasternDay - paymentEasternDay + 7) % 7;
+  if (daysAhead === 0) daysAhead = 7; // always push to NEXT Mon/Thu, not today
+
+  // Anchor date calendar day (in Eastern terms). Start from paymentDate's
+  // Eastern-date midnight, add daysAhead, then set local 09:00.
+  const etOffsetHoursNow = isEasternDST(paymentDate) ? 4 : 5;
+  const paymentEasternMs = paymentDate.getTime() - etOffsetHoursNow * 60 * 60 * 1000;
+  const paymentEasternMidnight = new Date(paymentEasternMs);
+  paymentEasternMidnight.setUTCHours(0, 0, 0, 0);
+
+  let anchorEastern = new Date(
+    paymentEasternMidnight.getTime() + daysAhead * 24 * 60 * 60 * 1000
+  );
+  anchorEastern.setUTCHours(9, 0, 0, 0); // 09:00 Eastern local
+
+  // Re-anchor if <5 days out
+  const diffDays = (anchorEastern.getTime() - paymentEasternMs) / (1000 * 60 * 60 * 24);
   if (diffDays < 5) {
-    anchor.setDate(anchor.getDate() + 7);
+    anchorEastern = new Date(anchorEastern.getTime() + 7 * 24 * 60 * 60 * 1000);
   }
 
-  anchor.setHours(0, 0, 0, 0);
-  return anchor;
+  // Convert back to UTC using the DST state AT THE ANCHOR (handles
+  // cross-DST-boundary signups correctly).
+  const etOffsetHoursAnchor = isEasternDST(anchorEastern) ? 4 : 5;
+  return new Date(anchorEastern.getTime() + etOffsetHoursAnchor * 60 * 60 * 1000);
 }
 
 // ============================================================
@@ -147,6 +210,12 @@ export async function createSubscription(params: {
 }> {
   const { userId, planId, locationId } = params;
 
+  // Load the plan once — we need its billingCycle to decide whether to
+  // anchor to Mon/Thu (weekly plans) or leave on the signup-date cycle
+  // (Pro monthly plans, per Chad 2026-04-23).
+  const plan = await prisma.membershipPlan.findUnique({ where: { id: planId } });
+  if (!plan) throw new Error('Plan not found');
+
   // Get/create Stripe customer
   const stripeCustomerId = await getOrCreateStripeCustomer(userId);
 
@@ -158,9 +227,19 @@ export async function createSubscription(params: {
   const billingDay = determineBillingDay(now);
   const billingAnchorDate = calculateBillingAnchor(now, billingDay);
 
-  // Create the subscription with a trial period until the billing anchor
-  // This means the first charge happens now, then recurring starts on the anchor date
-  const subscription = await stripe.subscriptions.create({
+  // Anchor recurring invoices to the next Mon/Thu 09:00 Eastern. Stripe then:
+  //   1. Charges a prorated amount NOW for the gap (signup → anchor) via the
+  //      initial invoice + the Payment Intent we return to the frontend.
+  //   2. Bills the full weekly rate on every anchor date thereafter.
+  // Result: all weekly subscribers bill Mon OR Thu at 09:00 ET. Retries of
+  // failed invoices are handled by paymentRetryService (daily at 09:00 ET).
+  //
+  // PRO MONTHLY plans (plan-pro-*) stay on their signup-date monthly cycle —
+  // anchoring them to Mon/Thu would require weekly conversion and Chad opted
+  // to leave Pro plans alone (2026-04-23 scope call).
+  const isWeekly = plan.billingCycle === 'weekly' || plan.billingCycle === 'WEEKLY';
+
+  const createParams: Stripe.SubscriptionCreateParams = {
     customer: stripeCustomerId,
     items: [{ price: stripePriceId }],
     payment_behavior: 'default_incomplete',
@@ -174,7 +253,17 @@ export async function createSubscription(params: {
       ppl_location_id: locationId,
       ppl_billing_day: billingDay,
     },
-  });
+  };
+
+  if (isWeekly) {
+    createParams.billing_cycle_anchor = Math.floor(billingAnchorDate.getTime() / 1000);
+    // 'create_prorations' bills the signup-to-anchor gap on day 1; subsequent
+    // cycles run on schedule. This is what lets the first charge land on the
+    // registration day while every future charge lands on Mon/Thu.
+    createParams.proration_behavior = 'create_prorations';
+  }
+
+  const subscription = await stripe.subscriptions.create(createParams);
 
   // Extract client secret for frontend payment completion
   const invoice = subscription.latest_invoice as Stripe.Invoice;

@@ -1,6 +1,7 @@
 import { sendSessionReminders, sendDailyStaffSchedule } from './reminderService';
 import { generateSessionsFromTemplates } from './scheduleGenerator';
 import { runDailyPaymentRetries } from './paymentRetryService';
+import { getEasternHour, getEasternDay } from './stripeService';
 
 interface CronJob {
   name: string;
@@ -21,25 +22,29 @@ const jobs: CronJob[] = [
     name: 'Daily Staff Schedule',
     intervalMs: 60 * 60 * 1000, // Every hour (checks if it's morning)
     handler: async () => {
-      const hour = new Date().getHours();
-      // Only run between 6-8 AM
+      // Eastern time — Railway runs in UTC but PPL operates on Eastern hours.
+      const hour = getEasternHour();
+      // Only run between 6-8 AM Eastern
       if (hour >= 6 && hour <= 8) {
         return sendDailyStaffSchedule();
       }
-      return { skipped: true, reason: 'Not morning hours' };
+      return { skipped: true, reason: `Not morning hours (ET hour ${hour})` };
     },
     enabled: true,
   },
   {
     name: 'Daily Payment Retry',
-    intervalMs: 60 * 60 * 1000, // Check every hour, only runs once at 9 AM
+    intervalMs: 60 * 60 * 1000, // Check every hour, only runs once at 9 AM Eastern
     handler: async () => {
-      const hour = new Date().getHours();
-      // Only run at 9 AM — retry all failed payments daily
+      // Eastern time — matches the Stripe billing anchor (Mon/Thu 9 AM ET).
+      // Running retries at 9 AM ET means fresh retries of any Mon/Thu bills
+      // that just declined, plus daily retries on all still-PAST_DUE accounts
+      // (per Chad 2026-04-23: retry every day until resolved or cancelled).
+      const hour = getEasternHour();
       if (hour === 9) {
         return runDailyPaymentRetries();
       }
-      return { skipped: true, reason: 'Not 9 AM' };
+      return { skipped: true, reason: `Not 9 AM ET (currently ${hour})` };
     },
     enabled: true,
   },
@@ -47,12 +52,13 @@ const jobs: CronJob[] = [
     name: 'Auto-Generate Sessions from Templates',
     intervalMs: 6 * 60 * 60 * 1000, // Every 6 hours
     handler: async () => {
-      // Only run on Sunday evenings to prep the next 2 weeks
-      const now = new Date();
-      if (now.getDay() === 0 && now.getHours() >= 18) {
+      // Only run on Sunday evenings Eastern to prep the next 2 weeks
+      const easternDay = getEasternDay();
+      const easternHour = getEasternHour();
+      if (easternDay === 0 && easternHour >= 18) {
         return generateSessionsFromTemplates(2);
       }
-      return { skipped: true, reason: 'Not Sunday evening' };
+      return { skipped: true, reason: 'Not Sunday evening ET' };
     },
     enabled: true,
   },
