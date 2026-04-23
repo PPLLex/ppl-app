@@ -173,16 +173,15 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
         <div className="p-5 border-b border-border">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              {!brandingLoaded ? (
-                <div className="w-10 h-10" aria-hidden="true" />
-              ) : branding.logoData ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={branding.logoData} alt={branding.businessName} className="w-10 h-10 rounded-full object-cover" />
-              ) : (
-                <div className="w-10 h-10 rounded-full ppl-gradient flex items-center justify-center">
-                  <span className="text-white text-lg font-bold">{branding.businessName.charAt(0)}</span>
-                </div>
-              )}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/ppl-logo.webp"
+                alt="Pitching Performance Lab"
+                width={40}
+                height={40}
+                className="w-10 h-10 rounded-full object-cover"
+                loading="eager"
+              />
               <div>
                 <h2 className="font-display font-bold text-foreground text-[11px] tracking-[0.08em] uppercase leading-tight">{branding.businessName}</h2>
                 {branding.tagline && (

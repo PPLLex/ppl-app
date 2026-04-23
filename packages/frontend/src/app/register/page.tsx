@@ -648,27 +648,23 @@ function RegisterForm() {
 
       <div className="w-full max-w-md">
         {/* Logo + title.
-            Wait for branding to actually load before deciding what to render —
-            otherwise the green "P" fallback flashes for ~200ms before the
-            real logo replaces it, which looks broken. We hold empty space
-            of the same dimensions so there's zero layout shift. */}
+            Uses the static /ppl-logo.webp (43KB) shipped with the app —
+            zero network round-trip, paints on first frame. The branding
+            API is still the source of truth for name/tagline/colors, but
+            the logo image itself is static so it loads instantly. */}
         <div className="flex flex-col items-center text-center mb-8">
-          {!brandingLoaded ? (
-            <div className="w-48 h-48 mb-5" aria-hidden="true" />
-          ) : branding.logoData ? (
-            <div className="flex items-center justify-center w-48 h-48 rounded-full overflow-hidden mb-5 shadow-xl shadow-emerald-900/25 ring-1 ring-border bg-white/5">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={branding.logoData}
-                alt={branding.businessName}
-                className="w-full h-full object-contain"
-              />
-            </div>
-          ) : (
-            <div className="flex items-center justify-center w-48 h-48 rounded-full ppl-gradient mb-5">
-              <span className="text-white text-6xl font-bold">P</span>
-            </div>
-          )}
+          <div className="flex items-center justify-center w-48 h-48 rounded-full overflow-hidden mb-5 shadow-xl shadow-emerald-900/25 ring-1 ring-border bg-white/5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/ppl-logo.webp"
+              alt="Pitching Performance Lab"
+              width={192}
+              height={192}
+              className="w-full h-full object-contain"
+              loading="eager"
+              fetchPriority="high"
+            />
+          </div>
           {/* Main heading removed per design — the sub-step heading in Bank
               Gothic acts as the page's H1 now.
               Sized with clamp() so it fills the row on every viewport without

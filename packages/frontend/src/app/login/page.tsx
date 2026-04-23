@@ -134,26 +134,21 @@ function LoginForm() {
       />
 
       <div className="w-full max-w-md">
-        {/* Logo. Wait for branding to load before rendering anything —
-            prevents the green-P fallback from flashing before the real
-            logo arrives. Empty placeholder holds layout. */}
+        {/* Logo — static /ppl-logo.webp (43KB). Zero network round-trip,
+            paints on first frame. */}
         <div className="flex flex-col items-center text-center mb-8">
-          {!brandingLoaded ? (
-            <div className="w-48 h-48 mb-5" aria-hidden="true" />
-          ) : branding.logoData ? (
-            <div className="flex items-center justify-center w-48 h-48 rounded-full overflow-hidden mb-5 shadow-xl shadow-emerald-900/25 ring-1 ring-border bg-white/5">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={branding.logoData}
-                alt={branding.businessName}
-                className="w-full h-full object-contain"
-              />
-            </div>
-          ) : (
-            <div className="flex items-center justify-center w-48 h-48 rounded-full ppl-gradient mb-5">
-              <span className="text-white text-6xl font-bold">P</span>
-            </div>
-          )}
+          <div className="flex items-center justify-center w-48 h-48 rounded-full overflow-hidden mb-5 shadow-xl shadow-emerald-900/25 ring-1 ring-border bg-white/5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/ppl-logo.webp"
+              alt="Pitching Performance Lab"
+              width={192}
+              height={192}
+              className="w-full h-full object-contain"
+              loading="eager"
+              fetchPriority="high"
+            />
+          </div>
           <h1 className="font-display text-xl sm:text-2xl font-bold tracking-[0.08em] uppercase text-foreground text-center leading-tight">
             {branding.businessName || 'Pitching Performance Lab'}
           </h1>

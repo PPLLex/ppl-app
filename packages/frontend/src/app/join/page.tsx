@@ -279,25 +279,20 @@ function JoinFlow() {
       />
 
       <div className="w-full max-w-md">
-        {/* Header. Hold empty space until branding loads so the green-P
-            fallback never flashes before the real logo arrives. */}
+        {/* Header — static logo, zero-lag. */}
         <div className="flex flex-col items-center text-center mb-8">
-          {!brandingLoaded ? (
-            <div className="w-48 h-48 mb-5" aria-hidden="true" />
-          ) : branding.logoData ? (
-            <div className="flex items-center justify-center w-48 h-48 rounded-full overflow-hidden mb-5 shadow-xl shadow-emerald-900/25 ring-1 ring-border bg-white/5">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={branding.logoData}
-                alt={branding.businessName}
-                className="w-full h-full object-contain"
-              />
-            </div>
-          ) : (
-            <div className="flex items-center justify-center w-48 h-48 rounded-full ppl-gradient mb-5">
-              <span className="text-white text-6xl font-bold">P</span>
-            </div>
-          )}
+          <div className="flex items-center justify-center w-48 h-48 rounded-full overflow-hidden mb-5 shadow-xl shadow-emerald-900/25 ring-1 ring-border bg-white/5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/ppl-logo.webp"
+              alt="Pitching Performance Lab"
+              width={192}
+              height={192}
+              className="w-full h-full object-contain"
+              loading="eager"
+              fetchPriority="high"
+            />
+          </div>
           <h1 className="font-display font-bold tracking-[0.08em] text-foreground uppercase text-center leading-tight">
             <span className="block whitespace-nowrap text-sm sm:text-base md:text-lg">
               Get Started With
