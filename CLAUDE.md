@@ -1,5 +1,5 @@
 # PPL App — Pitching Performance Lab Platform
-<!-- deploy-kick: 2026-04-23 -->
+<!-- deploy-kick: 2026-04-23 (post-reconnect) -->
 
 
 ## Overview
