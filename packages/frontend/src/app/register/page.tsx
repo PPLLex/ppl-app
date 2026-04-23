@@ -654,7 +654,14 @@ function RegisterForm() {
                       <circle cx="12" cy="8" r="4" />
                       <path d="M20 21a8 8 0 1 0-16 0" />
                     </svg>
-                    <span className="font-display text-sm font-bold uppercase tracking-[0.15em]">
+                    <span
+                      className="text-base italic uppercase tracking-[0.06em]"
+                      style={{
+                        fontFamily: 'var(--font-transducer), Impact, "Arial Black", sans-serif',
+                        fontWeight: 900,
+                        fontStyle: 'italic',
+                      }}
+                    >
                       Step 1 — Athlete
                     </span>
                   </div>
@@ -825,7 +832,14 @@ function RegisterForm() {
                         <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
                         <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                       </svg>
-                      <span className="font-display text-sm font-bold uppercase tracking-[0.15em]">
+                      <span
+                      className="text-base italic uppercase tracking-[0.06em]"
+                      style={{
+                        fontFamily: 'var(--font-transducer), Impact, "Arial Black", sans-serif',
+                        fontWeight: 900,
+                        fontStyle: 'italic',
+                      }}
+                    >
                         Step 2 — Parent / Guardian
                       </span>
                       {!parentRequired && (
@@ -922,7 +936,14 @@ function RegisterForm() {
                       <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                     </svg>
-                    <span className="font-display text-sm font-bold uppercase tracking-[0.15em]">
+                    <span
+                      className="text-base italic uppercase tracking-[0.06em]"
+                      style={{
+                        fontFamily: 'var(--font-transducer), Impact, "Arial Black", sans-serif',
+                        fontWeight: 900,
+                        fontStyle: 'italic',
+                      }}
+                    >
                       Step 3 — Password
                     </span>
                   </div>
