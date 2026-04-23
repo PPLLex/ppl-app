@@ -1094,7 +1094,7 @@ model AthleteProfile {
   firstName            String
   lastName             String
   dateOfBirth          DateTime?
-  ageGroup             String? // "youth", "ms_hs", "college"
+  ageGroup             String? // "youth", "ms_hs", "college", "pro" — SOURCE OF TRUTH for an athlete's playing level. ClientProfile.ageGroup also exists (legacy) but should be treated as a cache; always read from here. Keep them in sync when updating via `$transaction`. See audit issue #11.
   trainingDeliveryPref TrainingDeliveryPreference?
   lastAgeMovedUpAlert  DateTime? // Last time we sent the "move up" notification
   parentOptOut         Boolean                     @default(false) // College athlete opted out of adding parent

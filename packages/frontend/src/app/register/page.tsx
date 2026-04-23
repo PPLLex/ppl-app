@@ -221,15 +221,25 @@ function RegisterForm() {
   // Auto-clear parent/guardian fields when the athlete opts out of a parent
   // account. Prevents stale values from being submitted with the solo form
   // AND gives the visual feedback Chad expects — the inputs go empty, not
-  // just the section fades.
+  // just the section fades. Fires a one-time info toast on the transition
+  // so the user understands why the data they typed disappeared (audit #13).
   useEffect(() => {
     const solo = (isMsHs && msHsOptedOut) || (isCollege && collegeOptOut);
     if (solo) {
+      const hadAnyParentInfo =
+        parentFirstName.trim() ||
+        parentLastName.trim() ||
+        parentEmail.trim() ||
+        parentPhone.trim();
       setParentFirstName('');
       setParentLastName('');
       setParentEmail('');
       setParentPhone('');
+      if (hadAnyParentInfo) {
+        toast.info('Parent/guardian info cleared — you chose to manage this account yourself.');
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMsHs, msHsOptedOut, isCollege, collegeOptOut]);
 
   // Load locations once
@@ -663,7 +673,15 @@ function RegisterForm() {
 
         <div className="ppl-card">
           {error && (
-            <div className="mb-4 p-3 rounded-lg bg-danger/10 border border-danger/20 text-danger text-sm">
+            <div
+              ref={(el) => {
+                // Audit issue #12 — on mobile the error banner is at the top
+                // of the form, above whatever the user was typing. Scroll it
+                // into view when it appears so they actually see the message.
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }}
+              className="mb-4 p-3 rounded-lg bg-danger/10 border border-danger/20 text-danger text-sm"
+            >
               {error}
             </div>
           )}
