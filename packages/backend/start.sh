@@ -10,11 +10,10 @@ echo "=== Running Prisma db push ==="
 npx prisma db push --skip-generate --accept-data-loss
 echo "=== Prisma done ==="
 
-echo "=== Bootstrapping organizations ==="
-# Idempotent — ensures the 4 core orgs (ppl, hpl, hpl-youth, renewed-performance)
-# exist before any org-tagged data references them. See ARCHITECTURE.md.
-npx tsx scripts/bootstrap-organizations.ts
-echo "=== Org bootstrap done ==="
+# Organization bootstrapping is now inside the compiled server (see
+# src/bootstrapOrgs.ts, called from server.ts's start() before app.listen).
+# That makes it part of the normal Node runtime — no tsx, no scripts/ folder
+# copied into the Docker image, no loose .ts files that could vanish.
 
 echo "=== Starting server ==="
 exec node dist/server.js

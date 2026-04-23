@@ -12,6 +12,7 @@ process.on('unhandledRejection', (reason: unknown) => {
 import app from './app';
 import { config, validateProductionConfig } from './config';
 import { startCronJobs, stopCronJobs } from './services/cronService';
+import { bootstrapOrganizations } from './bootstrapOrgs';
 
 console.log('[Server] Modules imported successfully');
 
@@ -20,6 +21,11 @@ const start = async () => {
     console.log('[Server] Validating config...');
     // Ensure all required secrets exist in production
     validateProductionConfig();
+
+    // Seed the 4 core Organization rows if missing. Idempotent. Runs BEFORE
+    // we start listening so routes never see a missing org. Swallows its own
+    // errors — server still starts even if bootstrapping fails.
+    await bootstrapOrganizations();
 
     console.log('[Server] Starting listener on port', config.port);
     const server = app.listen(config.port, () => {
