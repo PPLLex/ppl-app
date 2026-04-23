@@ -6,6 +6,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Script from 'next/script';
+import { toast } from 'sonner';
 
 export default function LoginPage() {
   return (
@@ -32,6 +33,7 @@ function LoginForm() {
 
   useEffect(() => {
     if (searchParams.get('expired') === 'true') {
+      toast.info('Your session expired. Please sign in again.');
       setInfo('Your session has expired. Please sign in again.');
     }
   }, [searchParams]);
@@ -48,6 +50,7 @@ function LoginForm() {
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Google sign-in failed';
+      toast.error(message);
       setError(message);
     } finally {
       setIsLoading(false);
@@ -93,8 +96,10 @@ function LoginForm() {
 
     try {
       await login(email, password);
+      toast.success('Welcome back to PPL');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Login failed. Please try again.';
+      toast.error(message);
       setError(message);
     } finally {
       setIsLoading(false);
@@ -109,8 +114,10 @@ function LoginForm() {
     try {
       await sendMagicLink(email);
       setMagicLinkSent(true);
+      toast.success('Check your email for a sign-in link');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to send link';
+      toast.error(message);
       setError(message);
     } finally {
       setIsLoading(false);

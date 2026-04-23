@@ -5,6 +5,7 @@ import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { OrgProvider } from "@/contexts/OrgContext";
+import { Toaster } from "sonner";
 
 // Body / UI font — Manrope. Geometric bones to echo Bank Gothic, rounded
 // terminals for warmth and mobile readability. Used for every non-display
@@ -78,6 +79,21 @@ export default function RootLayout({
             <AuthProvider>{children}</AuthProvider>
           </ThemeProvider>
         </OrgProvider>
+        {/* Sonner toasts — premium non-blocking notifications.
+            Positioned top-right on desktop, top-center on mobile.
+            Dark theme styling + PPL brand accents via `toastOptions`. */}
+        <Toaster
+          position="top-right"
+          richColors
+          closeButton
+          expand={false}
+          toastOptions={{
+            duration: 4500,
+            classNames: {
+              toast: 'font-sans',
+            },
+          }}
+        />
       </body>
     </html>
   );

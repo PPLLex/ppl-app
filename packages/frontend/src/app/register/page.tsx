@@ -7,6 +7,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Script from 'next/script';
+import { toast } from 'sonner';
 import StripeCheckout from '@/components/payments/StripeCheckout';
 
 // ---------------------------------------------------------------------------
@@ -188,7 +189,9 @@ function RegisterForm() {
       if (result.isNewUser) setStep(3);
       else router.push('/client');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Google sign-up failed');
+      const msg = err instanceof Error ? err.message : 'Google sign-up failed';
+      toast.error(msg);
+      setError(msg);
     } finally {
       setIsLoading(false);
     }
@@ -406,9 +409,12 @@ function RegisterForm() {
       if (res.data?.token) {
         localStorage.setItem('ppl_token', res.data.token);
       }
+      toast.success('Account created');
       setStep(3);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create your account.');
+      const msg = err instanceof Error ? err.message : 'Could not create your account.';
+      toast.error(msg);
+      setError(msg);
     } finally {
       setIsLoading(false);
     }
@@ -421,6 +427,7 @@ function RegisterForm() {
     try {
       const res = await api.setOnboardingStatus(sel);
       if (res.data?.requiresPayment) {
+        toast.info('Redirecting to secure checkout…');
         // Redirect to the existing Stripe Checkout for the $300 fee.
         const checkoutRes = await api.createOnboardingCheckout();
         if (checkoutRes.data && 'checkoutUrl' in checkoutRes.data && checkoutRes.data.checkoutUrl) {
@@ -431,7 +438,9 @@ function RegisterForm() {
       // Returning / Youth Graduate / Free Assessment — skip the fee.
       setStep(4);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save your status.');
+      const msg = err instanceof Error ? err.message : 'Could not save your status.';
+      toast.error(msg);
+      setError(msg);
     } finally {
       setIsLoading(false);
     }
@@ -456,9 +465,12 @@ function RegisterForm() {
         clientProfile: { ageGroup: playingLevel || undefined },
         trainingPreference,
       } as any);
+      toast.success('Preferences saved');
       setStep(5);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save your preferences.');
+      const msg = err instanceof Error ? err.message : 'Could not save your preferences.';
+      toast.error(msg);
+      setError(msg);
     } finally {
       setIsLoading(false);
     }
@@ -474,13 +486,16 @@ function RegisterForm() {
         setStep(6);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not start subscription.');
+      const msg = err instanceof Error ? err.message : 'Could not start subscription.';
+      toast.error(msg);
+      setError(msg);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handlePaymentSuccess = () => {
+    toast.success('Welcome to PPL — let\u2019s book your first session');
     router.push('/client/book');
   };
 
