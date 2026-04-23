@@ -4,6 +4,8 @@ import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import Link from 'next/link';
+import { PasswordInput } from '@/components/auth/PasswordInput';
+import { isCommonPassword } from '@/lib/common-passwords';
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
@@ -33,6 +35,10 @@ function ResetPasswordForm() {
     }
     if (form.newPassword.length < 8) {
       setError('Password must be at least 8 characters');
+      return;
+    }
+    if (isCommonPassword(form.newPassword)) {
+      setError('That password is too common. Please choose something unique.');
       return;
     }
     setIsLoading(true);
@@ -73,11 +79,10 @@ function ResetPasswordForm() {
       )}
       <div>
         <label className="text-xs font-medium text-muted block mb-1">New Password</label>
-        <input
-          type="password"
+        <PasswordInput
+          variant="create"
           value={form.newPassword}
           onChange={(e) => setForm({ ...form, newPassword: e.target.value })}
-          className="ppl-input"
           required
           minLength={8}
           autoFocus
@@ -85,12 +90,13 @@ function ResetPasswordForm() {
       </div>
       <div>
         <label className="text-xs font-medium text-muted block mb-1">Confirm Password</label>
-        <input
-          type="password"
+        <PasswordInput
+          variant="create"
           value={form.confirmPassword}
           onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
-          className="ppl-input"
+          matchValue={form.newPassword}
           required
+          minLength={8}
         />
       </div>
       <button type="submit" disabled={isLoading} className="ppl-btn ppl-btn-primary w-full justify-center">

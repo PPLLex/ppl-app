@@ -608,8 +608,8 @@ staffPublicRouter.post('/invite/:token/accept', async (req: Request, res: Respon
     const token = param(req, 'token');
     const { password, phone, profileImageUrl } = req.body;
 
-    if (!password || password.length < 6) {
-      throw ApiError.badRequest('Password must be at least 6 characters');
+    if (!password || password.length < 8) {
+      throw ApiError.badRequest('Password must be at least 8 characters');
     }
 
     const invite = await prisma.staffInvite.findUnique({ where: { token } });

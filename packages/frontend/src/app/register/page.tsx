@@ -9,6 +9,8 @@ import Link from 'next/link';
 import Script from 'next/script';
 import { toast } from 'sonner';
 import StripeCheckout from '@/components/payments/StripeCheckout';
+import { PasswordInput } from '@/components/auth/PasswordInput';
+import { isCommonPassword } from '@/lib/common-passwords';
 
 // ---------------------------------------------------------------------------
 // PPL registration — 6-step onboarding.
@@ -480,14 +482,22 @@ function RegisterForm() {
     }
 
     // ──────────────────────────────────────────────────────────
-    // Password
+    // Password — client-side gate. Backend re-validates (length,
+    // common-password blocklist, HIBP breach set) on every request.
     // ──────────────────────────────────────────────────────────
     if (password.length < 8) {
       setError('Password must be at least 8 characters.');
+      toast.error('Password must be at least 8 characters.');
       return;
     }
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
+      toast.error('Passwords do not match.');
+      return;
+    }
+    if (isCommonPassword(password)) {
+      setError('That password is too common. Please choose something unique.');
+      toast.error('That password is too common. Please choose something unique.');
       return;
     }
 
@@ -1089,29 +1099,26 @@ function RegisterForm() {
                     </p>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="ppl-label">Password</label>
-                        <input
-                          type="password"
+                        <label className="ppl-label" htmlFor="register-password">Password</label>
+                        <PasswordInput
+                          id="register-password"
+                          variant="create"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          placeholder="••••••••"
-                          className="ppl-input"
                           required
                           minLength={8}
-                          autoComplete="new-password"
                         />
                       </div>
                       <div>
-                        <label className="ppl-label">Confirm</label>
-                        <input
-                          type="password"
+                        <label className="ppl-label" htmlFor="register-confirm">Confirm</label>
+                        <PasswordInput
+                          id="register-confirm"
+                          variant="create"
                           value={confirmPassword}
                           onChange={(e) => setConfirmPassword(e.target.value)}
-                          placeholder="••••••••"
-                          className="ppl-input"
+                          matchValue={password}
                           required
                           minLength={8}
-                          autoComplete="new-password"
                         />
                       </div>
                     </div>

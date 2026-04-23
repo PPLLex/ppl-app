@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { api, UserProfile, OutsideCoachLink } from '@/lib/api';
+import { PasswordInput } from '@/components/auth/PasswordInput';
+import { isCommonPassword } from '@/lib/common-passwords';
 
 export default function ClientAccountPage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -515,12 +517,20 @@ function PasswordSection({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (form.newPassword === form.currentPassword) {
+      onSaved({ type: 'error', text: 'New password must be different from current' });
+      return;
+    }
     if (form.newPassword !== form.confirmPassword) {
       onSaved({ type: 'error', text: 'New passwords do not match' });
       return;
     }
     if (form.newPassword.length < 8) {
       onSaved({ type: 'error', text: 'New password must be at least 8 characters' });
+      return;
+    }
+    if (isCommonPassword(form.newPassword)) {
+      onSaved({ type: 'error', text: 'That password is too common. Please choose something unique.' });
       return;
     }
     setIsSaving(true);
@@ -544,33 +554,32 @@ function PasswordSection({
         <h2 className="text-lg font-bold text-foreground">Change Password</h2>
         <div>
           <label className="text-xs font-medium text-muted block mb-1">Current Password</label>
-          <input
-            type="password"
+          <PasswordInput
+            variant="login"
             value={form.currentPassword}
             onChange={(e) => setForm({ ...form, currentPassword: e.target.value })}
-            className="ppl-input"
             required
           />
         </div>
         <div>
           <label className="text-xs font-medium text-muted block mb-1">New Password</label>
-          <input
-            type="password"
+          <PasswordInput
+            variant="create"
             value={form.newPassword}
             onChange={(e) => setForm({ ...form, newPassword: e.target.value })}
-            className="ppl-input"
             required
             minLength={8}
           />
         </div>
         <div>
           <label className="text-xs font-medium text-muted block mb-1">Confirm New Password</label>
-          <input
-            type="password"
+          <PasswordInput
+            variant="create"
             value={form.confirmPassword}
             onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
-            className="ppl-input"
+            matchValue={form.newPassword}
             required
+            minLength={8}
           />
         </div>
         <button type="submit" disabled={isSaving} className="ppl-btn ppl-btn-primary w-full justify-center">

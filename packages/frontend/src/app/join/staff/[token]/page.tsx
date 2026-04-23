@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api, StaffInviteDetails } from '@/lib/api';
+import { PasswordInput } from '@/components/auth/PasswordInput';
+import { isCommonPassword } from '@/lib/common-passwords';
 
 const ROLE_LABELS: Record<string, string> = {
   OWNER: 'Owner',
@@ -49,12 +51,16 @@ export default function StaffOnboardingPage() {
     e.preventDefault();
     setError('');
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters');
       return;
     }
     if (password !== confirmPassword) {
       setError('Passwords do not match');
+      return;
+    }
+    if (isCommonPassword(password)) {
+      setError('That password is too common. Please choose something unique.');
       return;
     }
 
@@ -194,26 +200,26 @@ export default function StaffOnboardingPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Create Password *</label>
-            <input
-              type="password"
+            <PasswordInput
+              variant="create"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500/50"
-              placeholder="Minimum 6 characters"
+              inputClassName="w-full bg-gray-800 border border-gray-700 rounded-lg pl-3 pr-11 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500/50"
               required
-              minLength={6}
+              minLength={8}
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Confirm Password *</label>
-            <input
-              type="password"
+            <PasswordInput
+              variant="create"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500/50"
-              placeholder="Re-enter your password"
+              matchValue={password}
+              inputClassName="w-full bg-gray-800 border border-gray-700 rounded-lg pl-3 pr-11 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500/50"
               required
+              minLength={8}
             />
           </div>
 

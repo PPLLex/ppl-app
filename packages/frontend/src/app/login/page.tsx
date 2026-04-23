@@ -7,6 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Script from 'next/script';
 import { toast } from 'sonner';
+import { PasswordInput } from '@/components/auth/PasswordInput';
 
 export default function LoginPage() {
   return (
@@ -222,15 +223,12 @@ function LoginForm() {
                   <label htmlFor="password" className="block text-sm font-medium text-foreground mb-1.5">
                     Password
                   </label>
-                  <input
+                  <PasswordInput
                     id="password"
-                    type="password"
+                    variant="login"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="ppl-input"
                     required
-                    autoComplete="current-password"
                   />
                 </div>
 

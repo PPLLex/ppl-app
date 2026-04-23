@@ -120,6 +120,12 @@ PPL currently has multiple locations (PPL Louisville, PPL Youth, etc.). Staff/ad
 6. When pushing to GitHub, always create a temporary PAT, push, then delete it immediately
 7. Use `Promise.allSettled()` instead of `Promise.all()` when loading multiple independent resources
 
+## Operating Principles (apply to ALL future work, always)
+
+- **Extreme security + premium feel are non-negotiable.** Every change should either raise the security bar, raise the UX/visual polish bar, or both. When in doubt pick the more secure option. When a feature is user-facing, it should feel worthy of a $200/mo premium membership — no rough edges, no "good enough" defaults. Think Linear / Stripe / Apple, not generic SaaS. This applies to password flows, error messages, empty states, loading states, animations, typography, color, spacing, copy — everything.
+- **Password inputs minimum bar:** show/hide toggle + Caps Lock warning everywhere; on register/reset also strength meter + match indicator + common-password rejection + HIBP breach check. Rate-limit every auth endpoint. Log security events (failed login, password reset, 2FA change, new-device login) for audit.
+- **Never trust the client.** Every validation on the frontend must be duplicated on the backend. Frontend check = UX; backend check = security.
+
 ## Chad's Standing Directives (DO NOT SUGGEST OTHERWISE)
 
 - **NO session waitlist feature.** Chad has explicitly ruled out per-session waitlists. A registration-wide waitlist at the business level may come later, but individual session waitlists are OFF the roadmap. Do not suggest, do not propose.

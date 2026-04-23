@@ -8,6 +8,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Script from 'next/script';
 import StripeCheckout from '@/components/payments/StripeCheckout';
+import { PasswordInput } from '@/components/auth/PasswordInput';
+import { isCommonPassword } from '@/lib/common-passwords';
 
 export default function JoinPage() {
   return (
@@ -148,6 +150,10 @@ function JoinFlow() {
     }
     if (password !== confirmPassword) {
       setError('Passwords do not match');
+      return;
+    }
+    if (isCommonPassword(password)) {
+      setError('That password is too common. Please choose something unique.');
       return;
     }
     setStep(2);
@@ -416,13 +422,11 @@ function JoinFlow() {
                   <label htmlFor="joinPassword" className="block text-sm font-medium text-foreground mb-1.5">
                     Password
                   </label>
-                  <input
+                  <PasswordInput
                     id="joinPassword"
-                    type="password"
+                    variant="create"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="At least 8 characters"
-                    className="ppl-input"
                     required
                     minLength={8}
                   />
@@ -432,14 +436,14 @@ function JoinFlow() {
                   <label htmlFor="joinConfirmPw" className="block text-sm font-medium text-foreground mb-1.5">
                     Confirm Password
                   </label>
-                  <input
+                  <PasswordInput
                     id="joinConfirmPw"
-                    type="password"
+                    variant="create"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Re-enter your password"
-                    className="ppl-input"
+                    matchValue={password}
                     required
+                    minLength={8}
                   />
                 </div>
 
