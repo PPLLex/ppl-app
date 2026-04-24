@@ -203,6 +203,20 @@ enum LeadActivityType {
   ASSIGNED // System — owner changed
 }
 
+// --- Medical screening enums ---
+
+/// Status of a screening appointment. No-show and cancelled are preserved
+/// (not deleted) so the Medical Admin revenue report can reason about
+/// attendance rates and we can bill Renewed Performance for no-shows if
+/// PPL's policy calls for it later.
+enum ScreeningStatus {
+  SCHEDULED
+  CHECKED_IN
+  COMPLETED
+  NO_SHOW
+  CANCELLED
+}
+
 enum MetricType {
   FASTBALL_VELO
   CHANGEUP_VELO
@@ -344,6 +358,9 @@ model Location {
   userRoles            UserRole[]
   // Leads interested in this location.
   leads                Lead[]
+  // Medical screenings held at this location — drives the weekly revenue
+  // report grouped by location for the Medical Admin.
+  medicalScreenings    MedicalScreening[]
 
   @@index([organizationId])
   @@map("locations")
@@ -442,6 +459,11 @@ model User {
   ownedLeads           Lead[]         @relation("LeadOwner")
   convertedFromLead    Lead?          @relation("LeadConverted")
   loggedLeadActivities LeadActivity[] @relation("LeadActivityAuthor")
+
+  // Medical screenings this user is the PROVIDER for (MEDICAL /
+  // MEDICAL_ADMIN roles). Null providerUserId on a screening means
+  // it's been scheduled but not yet assigned to a PT.
+  providedScreenings MedicalScreening[] @relation("ScreeningProvider")
 
   @@index([homeLocationId])
   @@index([role])
@@ -1278,6 +1300,8 @@ model AthleteProfile {
 
   outsideCoachLinks OutsideCoachLink[]
   liabilityWaivers  LiabilityWaiverSignature[]
+  // Medical screenings this athlete has been scheduled for / completed
+  medicalScreenings MedicalScreening[]
 
   @@index([familyId])
   @@index([schoolTeamId])
@@ -1738,4 +1762,93 @@ model LeadActivity {
 
   @@index([leadId, createdAt])
   @@map("lead_activities")
+}
+
+// ============================================================
+// MEDICAL SCREENINGS — Renewed Performance integration (April 2026)
+// ============================================================
+// Medical screenings are separate from regular PPL training sessions.
+// They're run by MEDICAL / MEDICAL_ADMIN users (PTs from Renewed
+// Performance — a partner medical practice) and track athlete physical
+// readiness + recovery metrics.
+//
+// Why a separate model from Session/Booking:
+//   - Different workflows (PT assessment vs pitching coach training)
+//   - Different revenue stream (fees go to Renewed Performance, not PPL)
+//   - Different data shape (structured pass/fail metrics vs freeform notes)
+//
+// Revenue model:
+//   Every COMPLETED screening accumulates `providerFeeCents` in what
+//   Renewed Performance is owed for that week. The Medical Admin (just
+//   Renewed's owner, at this point) sees their weekly take grouped by
+//   location via a dedicated endpoint.
+
+model MedicalScreening {
+  id               String          @id @default(uuid())
+  organizationId   String          @default("ppl")
+  athleteId        String
+  // Which PT / medical staff is assigned. Nullable so admins can
+  // schedule first and assign later.
+  providerUserId   String?
+  locationId       String
+  scheduledAt      DateTime
+  status           ScreeningStatus @default(SCHEDULED)
+  checkedInAt      DateTime?
+  completedAt      DateTime?
+  durationMinutes  Int             @default(30)
+  // Fee Renewed Performance earns for this screening. Default matches
+  // the contract rate; adjust per-screening if needed. Only billed
+  // when status hits COMPLETED.
+  providerFeeCents Int             @default(7500) // $75 default
+  // Notes shared with the athlete's PPL performance coach after the
+  // screening — drives cross-functional recommendations. Visible to
+  // COORDINATOR / PERFORMANCE_COACH + the athlete's parent.
+  shareableNotes   String?
+  // Internal clinical notes — only visible to MEDICAL and MEDICAL_ADMIN
+  // roles. Kept separate so nothing clinical leaks into the coaching
+  // side of the app.
+  medicalNotes     String?
+  // Did the athlete opt in to marketing from Renewed Performance? Gates
+  // whether their email appears in the Medical Admin's exportable list.
+  marketingOptIn   Boolean         @default(false)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  athlete  AthleteProfile    @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  provider User?             @relation("ScreeningProvider", fields: [providerUserId], references: [id])
+  location Location          @relation(fields: [locationId], references: [id])
+  results  ScreeningResult[]
+
+  @@index([providerUserId, scheduledAt])
+  @@index([athleteId, scheduledAt])
+  @@index([locationId, scheduledAt])
+  @@index([status])
+  @@index([organizationId])
+  @@map("medical_screenings")
+}
+
+model ScreeningResult {
+  id          String   @id @default(uuid())
+  screeningId String
+  // What was measured — e.g. "Shoulder ER", "Hip internal rotation",
+  // "Single-leg squat depth". Free-form string so PTs can introduce
+  // new metrics without schema changes. If we ever want a canonical
+  // catalog we can add a ScreeningMetric table later.
+  metric      String
+  // Numeric value where applicable (degrees of rotation, lbs of force,
+  // etc.). Stored as Float for the occasional fractional reading.
+  value       Float?
+  unit        String? // 'degrees', 'lbs', 'in', 'seconds', etc.
+  // For pass/fail metrics (e.g. FMS screen positions). Redundant with
+  // `value` but way simpler to query.
+  passOrFail  Boolean?
+  // Side-specific results — many PT metrics are measured per side.
+  side        String? // 'LEFT' | 'RIGHT' | null for bilateral
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  screening MedicalScreening @relation(fields: [screeningId], references: [id], onDelete: Cascade)
+
+  @@index([screeningId])
+  @@map("screening_results")
 }

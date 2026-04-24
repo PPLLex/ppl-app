@@ -43,6 +43,7 @@ import inboundEmailRoutes from './routes/inboundEmail';
 import roleRoutes from './routes/roles';
 import partnerDashboardRoutes from './routes/partnerDashboard';
 import leadRoutes from './routes/leads';
+import screeningRoutes from './routes/screenings';
 import { membershipGuard } from './middleware/membershipGuard';
 
 const app = express();
@@ -149,6 +150,8 @@ app.use('/api/roles', roleRoutes);
 app.use('/api/partner-dashboard', partnerDashboardRoutes);
 // CRM — leads + sales pipeline for Content & Marketing + Admin + Coordinator
 app.use('/api/leads', leadRoutes);
+// Medical screenings — Renewed Performance integration for Medical + Medical Admin
+app.use('/api/screenings', screeningRoutes);
 
 // ============================================================
 // ERROR HANDLING
