@@ -320,32 +320,86 @@ html {
   filter: brightness(1.1);
 }
 
+/* ============================================================
+   Form inputs — modern, unified, stateful.
+   Idle:   muted bg (#141414), soft border, placeholder gray.
+   Filled: slightly brighter bg (#1c1c1c) + brighter text (white).
+           :placeholder-shown is the browser-native signal for "empty."
+           So `:not(:placeholder-shown)` triggers the "filled" look.
+   Focus:  accent border + subtle green ring.
+   Type:   text / email / tel / password / number / date — all same look.
+   Icons:  the native date picker indicator is recolored white so it's
+           visible on the dark background.
+   ============================================================ */
 .ppl-input {
   width: 100%;
   padding: 0.7rem 0.95rem;
-  background: #1a1a1a;                       /* subtly brighter than bg */
-  border: 1.5px solid #3a3a3a;               /* clearer, more present border */
+  background: #141414;
+  border: 1.5px solid #2a2a2a;
   border-radius: 10px;
-  color: var(--color-foreground);
+  color: #cfcfcf;                           /* idle text — slightly muted */
   font-size: 0.95rem;
   font-weight: 500;
   outline: none;
-  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+  transition: border-color 160ms ease, box-shadow 160ms ease,
+              background 160ms ease, color 160ms ease;
+  color-scheme: dark;                       /* tells the browser to render
+                                               native pickers in dark mode */
 }
 
 .ppl-input:hover {
-  border-color: #525252;
+  border-color: #3a3a3a;
+}
+
+/* User has typed or selected something — brighten bg + foreground to
+   signal "this field is filled." :placeholder-shown is empty-state; the
+   negation is filled-state. Works for text/email/tel/password/number.
+   For <select> the :valid/:invalid selectors cover it; we mirror those. */
+.ppl-input:not(:placeholder-shown),
+.ppl-input[type='date']:valid,
+.ppl-input:is(select):valid {
+  background: #1c1c1c;
+  color: var(--color-foreground);           /* bright white when filled */
+  border-color: #3a3a3a;
 }
 
 .ppl-input:focus {
   border-color: var(--color-primary);
-  background: #1f1f1f;
-  box-shadow: 0 0 0 3px rgba(94, 158, 80, 0.25);
+  background: #1c1c1c;
+  color: var(--color-foreground);
+  box-shadow: 0 0 0 3px rgba(94, 158, 80, 0.22);
 }
 
 .ppl-input::placeholder {
-  color: #6b6b6b;                            /* more visible than muted */
+  color: #6b6b6b;
   font-weight: 400;
+}
+
+/* WebKit date-picker calendar icon — default is near-black and invisible
+   on our dark inputs. Invert + slight desaturation lands it on a clean
+   white that matches the text tone. Firefox uses its own UA glyph in
+   the input and picks up color-scheme: dark from above. */
+.ppl-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.85) brightness(1.1);
+  opacity: 0.7;
+  cursor: pointer;
+  transition: opacity 160ms ease;
+}
+.ppl-input:hover::-webkit-calendar-picker-indicator,
+.ppl-input:focus::-webkit-calendar-picker-indicator {
+  opacity: 1;
+}
+
+/* Kill the obnoxious yellow Chrome autofill background so filled state
+   stays on-brand. Requires the box-shadow trick because Chrome ignores
+   direct `background` on autofilled fields. */
+.ppl-input:-webkit-autofill,
+.ppl-input:-webkit-autofill:hover,
+.ppl-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #1c1c1c inset;
+  -webkit-text-fill-color: var(--color-foreground);
+  caret-color: var(--color-foreground);
+  transition: background-color 0s 9999s; /* disable Chrome's yellow fade */
 }
 
 /* Labels — Manrope, medium weight, natural case. Aligned with the
