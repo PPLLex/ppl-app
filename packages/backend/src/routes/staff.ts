@@ -3,11 +3,41 @@ import { prisma } from '../utils/prisma';
 import { ApiError } from '../utils/apiError';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { createAuditLog } from '../services/auditService';
-import { sendStaffReinstateEmail, sendStaffInviteEmail } from '../services/emailService';
+import {
+  sendStaffReinstateEmail,
+  sendStaffInviteEmail,
+  sendInviteEmailByRole,
+} from '../services/emailService';
 import { config } from '../config';
 import { Role, LocationRole } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+
+/**
+ * Map the legacy (LocationRole + User.role) invite payload to a single
+ * "primary role" from the new 11-role enum. Used to pick the right email
+ * template for role-specific invites and to create UserRole rows on accept.
+ *
+ *   User.role=ADMIN                                  → Role.ADMIN
+ *   Any location with OWNER/*_COORDINATOR            → Role.COORDINATOR
+ *   Any location with COACH/TRAINER only             → Role.PERFORMANCE_COACH
+ *   No locations (unusual, shouldn't happen)         → Role.PERFORMANCE_COACH (safe default)
+ */
+function inferPrimaryRole(
+  inviteRole: Role,
+  locations: Array<{ locationId: string; roles: LocationRole[] }>
+): Role {
+  if (inviteRole === Role.ADMIN) return Role.ADMIN;
+  const flat = locations.flatMap((l) => l.roles);
+  if (
+    flat.includes(LocationRole.OWNER) ||
+    flat.includes(LocationRole.PITCHING_COORDINATOR) ||
+    flat.includes(LocationRole.YOUTH_COORDINATOR)
+  ) {
+    return Role.COORDINATOR;
+  }
+  return Role.PERFORMANCE_COACH;
+}
 
 const router = Router();
 
@@ -196,6 +226,35 @@ router.post('/invite', async (req: Request, res: Response, next: NextFunction) =
           await tx.staffLocation.createMany({ data: locationAssignments });
         }
 
+        // Mirror the role change in the new UserRole junction. Wipe the
+        // legacy STAFF/CLIENT-era rows for this user and insert fresh
+        // assignments matching the reinstate payload.
+        await tx.userRole.deleteMany({
+          where: {
+            userId: user.id,
+            role: { in: [Role.PERFORMANCE_COACH, Role.COORDINATOR, Role.ADMIN, Role.PARENT, Role.ATHLETE] },
+          },
+        });
+        const primaryRole = inferPrimaryRole(
+          userRole,
+          locations.map((l: any) => ({
+            locationId: l.locationId,
+            roles: l.roles as LocationRole[],
+          }))
+        );
+        if (primaryRole === Role.ADMIN) {
+          await tx.userRole.create({ data: { userId: user.id, role: Role.ADMIN } });
+        } else if (locationAssignments.length > 0) {
+          await tx.userRole.createMany({
+            data: locationAssignments.map((l) => ({
+              userId: user.id,
+              role: primaryRole,
+              locationId: l.locationId,
+            })),
+            skipDuplicates: true,
+          });
+        }
+
         return user;
       });
 
@@ -296,20 +355,57 @@ router.post('/invite', async (req: Request, res: Response, next: NextFunction) =
       select: { fullName: true },
     });
     const acceptUrl = `${config.frontendUrl}/join/staff/${invite.token}`;
-    sendStaffInviteEmail({
-      to: invite.email,
-      fullName: invite.fullName,
-      invitedByName: inviter?.fullName ?? null,
-      assignments: locations.map((l: any) => ({
-        locationName:
-          validLocations.find((vl) => vl.id === l.locationId)?.name || l.locationId,
-        roleLabels: l.roles.map((r: string) => ROLE_LABELS[r] || r),
-      })),
-      acceptUrl,
-      expiresInDays: 7,
-    }).catch((err) => {
-      console.error('Failed to send staff invite email:', err);
-    });
+
+    // Pick the role-specific invite email by inferring the primary Role from
+    // the invite payload. Falls back to the generic sendStaffInviteEmail for
+    // the edge case where inference gives us ADMIN/COORDINATOR/PERFORMANCE_COACH
+    // but the recipient is going to have multiple locations with mixed roles
+    // — in which case the generic "here's your full location list" template
+    // is actually clearer than a single-role blurb.
+    const primaryRole = inferPrimaryRole(
+      userRole,
+      locations.map((l: any) => ({
+        locationId: l.locationId,
+        roles: l.roles as LocationRole[],
+      }))
+    );
+    const singleLocation =
+      locations.length === 1
+        ? validLocations.find((vl) => vl.id === locations[0].locationId)?.name ?? null
+        : null;
+
+    if (locations.length <= 1) {
+      // Single-location (or global ADMIN) invite → use the tailored role email
+      sendInviteEmailByRole({
+        to: invite.email,
+        fullName: invite.fullName,
+        invitedByName: inviter?.fullName ?? null,
+        role: primaryRole,
+        locationName: primaryRole === Role.ADMIN ? null : singleLocation,
+        schoolName: null,
+        acceptUrl,
+        expiresInDays: 7,
+      }).catch((err) => {
+        console.error('Failed to send role-specific invite email:', err);
+      });
+    } else {
+      // Multi-location staff (a coach at both PPL locations, etc.) → use the
+      // generic template that renders the full location × role grid.
+      sendStaffInviteEmail({
+        to: invite.email,
+        fullName: invite.fullName,
+        invitedByName: inviter?.fullName ?? null,
+        assignments: locations.map((l: any) => ({
+          locationName:
+            validLocations.find((vl) => vl.id === l.locationId)?.name || l.locationId,
+          roleLabels: l.roles.map((r: string) => ROLE_LABELS[r] || r),
+        })),
+        acceptUrl,
+        expiresInDays: 7,
+      }).catch((err) => {
+        console.error('Failed to send staff invite email:', err);
+      });
+    }
 
     res.status(201).json({
       success: true,
@@ -671,6 +767,32 @@ staffPublicRouter.post('/invite/:token/accept', async (req: Request, res: Respon
             locationId: l.locationId,
             roles: l.roles as LocationRole[],
           })),
+        });
+      }
+
+      // Also populate the NEW UserRole junction table so this account shows
+      // up under the Apr 2026 role model. Infer the primary role from the
+      // invite payload and create one UserRole per location (or a single
+      // global row for ADMIN).
+      const primaryRole = inferPrimaryRole(
+        invite.role,
+        locationData.map((l: any) => ({
+          locationId: l.locationId,
+          roles: l.roles as LocationRole[],
+        }))
+      );
+      if (primaryRole === Role.ADMIN) {
+        await tx.userRole.create({
+          data: { userId: newUser.id, role: Role.ADMIN },
+        });
+      } else if (locationData.length > 0) {
+        await tx.userRole.createMany({
+          data: locationData.map((l: any) => ({
+            userId: newUser.id,
+            role: primaryRole,
+            locationId: l.locationId,
+          })),
+          skipDuplicates: true,
         });
       }
 
