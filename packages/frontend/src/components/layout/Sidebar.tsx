@@ -249,7 +249,7 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
                 ))}
               </div>
             ) : user.homeLocation ? (
-              <p className="text-xs text-primary-text mt-0.5">{user.homeLocation.name}</p>
+              <p className="text-xs text-primary-text mt-0.5 truncate">{user.homeLocation.name}</p>
             ) : null}
           </Link>
           <button

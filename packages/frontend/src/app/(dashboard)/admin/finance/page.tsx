@@ -474,7 +474,7 @@ function StatCard({
     <div className="ppl-card">
       <div className="text-[11px] uppercase tracking-[0.12em] text-muted">{label}</div>
       <div
-        className={`font-stat text-4xl leading-none mt-2 tabular-nums ${
+        className={`font-stat text-2xl sm:text-3xl md:text-4xl leading-none mt-2 tabular-nums ${
           accent ? 'text-accent-text' : tone === 'muted' ? 'text-muted' : 'text-foreground'
         }`}
       >

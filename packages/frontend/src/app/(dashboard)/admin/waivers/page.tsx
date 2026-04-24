@@ -239,8 +239,8 @@ export default function AdminWaiversPage() {
         <h2 className="font-display uppercase tracking-[0.04em] text-foreground text-base mt-10">
           Signature Log
         </h2>
-        <section className="mt-3 border border-border rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
+        <section className="mt-3 border border-border rounded-lg overflow-hidden overflow-x-auto">
+          <table className="w-full text-sm min-w-[600px]">
             <thead className="bg-surface">
               <tr className="text-left text-[11px] uppercase tracking-[0.12em] text-muted">
                 <th className="px-4 py-3 font-medium">Athlete</th>

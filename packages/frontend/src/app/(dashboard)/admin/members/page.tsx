@@ -133,9 +133,9 @@ export default function AdminMembersPage() {
                 </div>
 
                 {/* Info */}
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <Link href={`/admin/members/${client.id}`} className="font-semibold text-foreground hover:text-accent-text transition-colors" onClick={(e) => e.stopPropagation()}>{client.fullName}</Link>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Link href={`/admin/members/${client.id}`} className="font-semibold text-foreground hover:text-accent-text transition-colors truncate" onClick={(e) => e.stopPropagation()}>{client.fullName}</Link>
                     {client.membership ? (
                       <span
                         className={`ppl-badge ${
@@ -214,7 +214,7 @@ function ClientDetailPanel({
   };
 
   return (
-    <div className="fixed inset-y-0 right-0 w-96 bg-surface border-l border-border shadow-2xl z-50 overflow-y-auto"
+    <div className="fixed inset-y-0 right-0 w-full sm:w-96 max-w-[100vw] bg-surface border-l border-border shadow-2xl z-50 overflow-y-auto"
          style={{ top: 0 }}>
       <div className="p-5">
         <div className="flex items-center justify-between mb-5">
