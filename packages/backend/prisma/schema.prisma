@@ -12,10 +12,28 @@ datasource db {
 // ENUMS
 // ============================================================
 
+/// User roles — expanded to 11 fine-grained roles in Apr 2026 to match PPL's org structure.
+/// ADMIN / STAFF / CLIENT are LEGACY values kept for backward compat during migration to
+/// the UserRole junction table. New code should read from UserRole, not User.role directly.
+/// The migration script in scripts/migrate-user-roles.ts backfills UserRole rows from
+/// existing ADMIN/STAFF/CLIENT assignments with sensible defaults (STAFF→PERFORMANCE_COACH,
+/// CLIENT→PARENT or ATHLETE based on Family membership).
 enum Role {
-  ADMIN
-  STAFF
-  CLIENT
+  ADMIN // Legacy — migrate to UserRole(ADMIN)
+  STAFF // Legacy — migrate to UserRole(PERFORMANCE_COACH) or COORDINATOR/MEDICAL
+  CLIENT // Legacy — migrate to UserRole(PARENT) or UserRole(ATHLETE)
+
+  // ========== New fine-grained roles ==========
+  COORDINATOR // Everything at a specific location (Park-style)
+  PERFORMANCE_COACH // Calendar, reports, athlete dashboard, notes/goals/programs at 1+ locations
+  CONTENT_MARKETING_ADMIN // Global — oversees all social/marketing across all locations
+  CONTENT_MARKETING // Location-scoped — typically layered on a Coach/Coordinator
+  MEDICAL_ADMIN // Renewed Performance owner — sees weekly screening revenue per location
+  MEDICAL // Screening staff — PTs and similar
+  PARTNERSHIP_COACH // Scoped to 1+ partner schools (SchoolTeam), sees only their roster
+  OUTSIDE_COACH // Linked to specific athletes via OutsideCoachLink — read-only + messaging
+  PARENT // Manages 1+ athlete children via Family
+  ATHLETE // Own dashboard, program, resources
 }
 
 enum SessionType {
@@ -114,6 +132,29 @@ enum SchoolCoachRole {
   HEAD_COACH
   ASSISTANT_COACH
   DIRECTOR
+}
+
+/// Distinguishes the three partner-school segments so we can route athletes to
+/// the right dashboard variant (HighSchoolPartnerDashboard vs TravelTeamPartnerDashboard
+/// vs CollegePartnerDashboard) and so Partnership Coaches see the right UX.
+enum SchoolTeamType {
+  HIGH_SCHOOL
+  TRAVEL_TEAM
+  COLLEGE
+}
+
+/// Self-declared coach type on an OutsideCoachLink — drives the "Message from
+/// [Athlete]'s [CoachType]" subject prefix when an outside coach messages our
+/// admin/coordinator, per Chad's spec.
+enum OutsideCoachType {
+  REC_BALL
+  TRAVEL_BALL
+  MIDDLE_SCHOOL
+  HIGH_SCHOOL
+  COLLEGE
+  PITCHING_PRO
+  PITCHING_COORDINATOR_PRO
+  PLAYER_DEVELOPMENT
 }
 
 enum MetricType {
@@ -252,6 +293,9 @@ model Location {
   scheduleTemplates    ScheduleTemplate[]
   sessionTypeConfigs   SessionTypeConfig[]
   attendanceViolations AttendanceViolation[]
+  // UserRole assignments scoped to this location (COORDINATOR,
+  // PERFORMANCE_COACH, CONTENT_MARKETING, MEDICAL, MEDICAL_ADMIN roles).
+  userRoles            UserRole[]
 
   @@index([organizationId])
   @@map("locations")
@@ -336,12 +380,59 @@ model User {
   assessedViolations   AttendanceViolation[] @relation("ViolationAssessor")
 
   // Liability waiver signatures this user signed (as the signing adult — parent or self)
-  signedWaivers        LiabilityWaiverSignature[]
+  signedWaivers LiabilityWaiverSignature[]
+
+  // Role assignments — a user can hold multiple roles simultaneously (e.g. a
+  // Performance Coach who also does Content & Marketing). Supersedes the
+  // single `role` column above during the April 2026 role-model migration.
+  // See schema.prisma Role enum comment for the full list.
+  userRoles UserRole[]
 
   @@index([homeLocationId])
   @@index([role])
   @@index([email])
   @@map("users")
+}
+
+/// Multi-role assignment — a user can have 1+ UserRole rows. This supersedes
+/// the single `User.role` column, which is kept for backward compat during
+/// the transition.
+///
+/// Scoping semantics (nullable per row depending on role):
+///   - Global roles (ADMIN, CONTENT_MARKETING_ADMIN, MEDICAL_ADMIN, PARENT,
+///     ATHLETE): locationId=null, schoolTeamId=null
+///   - Location-scoped roles (COORDINATOR, PERFORMANCE_COACH,
+///     CONTENT_MARKETING, MEDICAL): locationId=X, schoolTeamId=null
+///   - Partnership Coach: locationId=null, schoolTeamId=X (1 row per school)
+///   - Outside Coach: represented elsewhere via OutsideCoachLink rows
+///
+/// A user who's a Performance Coach at TWO locations gets TWO rows (one per
+/// locationId). A user who's both a Performance Coach and a Content &
+/// Marketing team member at Lexington gets TWO rows (different role, same
+/// locationId). The UNIQUE constraint prevents accidental duplicates of the
+/// same (user, role, location, school) tuple.
+model UserRole {
+  id           String   @id @default(uuid())
+  userId       String
+  role         Role
+  // Null for global roles (ADMIN, CONTENT_MARKETING_ADMIN, MEDICAL_ADMIN,
+  // PARENT, ATHLETE) and for Partnership Coach (scoped by schoolTeamId).
+  locationId   String?
+  // Set ONLY when role=PARTNERSHIP_COACH — one row per partner school this
+  // coach is responsible for.
+  schoolTeamId String?
+  createdAt    DateTime @default(now())
+
+  // Relations
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  location   Location?   @relation(fields: [locationId], references: [id])
+  schoolTeam SchoolTeam? @relation(fields: [schoolTeamId], references: [id])
+
+  @@unique([userId, role, locationId, schoolTeamId])
+  @@index([userId])
+  @@index([role, locationId])
+  @@index([schoolTeamId])
+  @@map("user_roles")
 }
 
 model ClientProfile {
@@ -583,16 +674,16 @@ model SessionTypeConfig {
 // ============================================================
 
 model MembershipPlan {
-  id              String   @id @default(uuid())
-  organizationId  String   @default("ppl")
-  name            String // "Unlimited College Pitching", "Youth 1x/Week", etc.
-  slug            String   @unique
-  ageGroup        String // "college", "ms_hs", "youth"
-  sessionsPerWeek Int? // null = unlimited
-  priceCents      Int // e.g., 8500 = $85.00
-  billingCycle    String   @default("weekly")
-  description     String?
-  isActive        Boolean  @default(true)
+  id               String   @id @default(uuid())
+  organizationId   String   @default("ppl")
+  name             String // "Unlimited College Pitching", "Youth 1x/Week", etc.
+  slug             String   @unique
+  ageGroup         String // "college", "ms_hs", "youth"
+  sessionsPerWeek  Int? // null = unlimited
+  priceCents       Int // e.g., 8500 = $85.00
+  billingCycle     String   @default("weekly")
+  description      String?
+  isActive         Boolean  @default(true)
   // Discipline / bundling.
   //   includesHitting   — this plan covers hitting training in addition to pitching.
   //                       On PPL app, hitting is only available as an add-on; the
@@ -608,11 +699,11 @@ model MembershipPlan {
   //                         { "ppl": 5000, "hpl": 4000 }  for a $90/wk Youth combo.
   //                       Pitching-only plans are 100% PPL → { "ppl": <priceCents> }.
   //                       Used by the weekly inter-business settlement report.
-  includesHitting  Boolean @default(false)
+  includesHitting  Boolean  @default(false)
   pairedWithPlanId String?
-  revenueSplits    Json    @default("{}")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  revenueSplits    Json     @default("{}")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   // Relations
   clientMemberships ClientMembership[]
@@ -1149,18 +1240,25 @@ model AthleteProfile {
  * They CANNOT book, edit, or see scheduling info — just performance data.
  */
 model OutsideCoachLink {
-  id           String    @id @default(uuid())
+  id           String            @id @default(uuid())
   athleteId    String
   coachName    String // Full name of the outside coach
   coachEmail   String // Email for reports / login
   coachPhone   String?
   organization String? // "Central High School", "Louisville Sluggers Travel", etc.
+  // Legacy free-form coach role string — kept for existing rows. New data should
+  // set `coachType` below instead. A follow-up migration can backfill coachType
+  // from coachRole once we're confident in the enum values.
   coachRole    String? // "Head Coach", "Pitching Coach", "Travel Coach", etc.
-  isActive     Boolean   @default(true)
-  invitedAt    DateTime  @default(now())
+  // Structured coach type — drives the "Message from [Athlete]'s [CoachType]"
+  // subject line when this outside coach messages admin/coordinator. Nullable
+  // so pre-migration rows remain valid until Chad (or a backfill) sets it.
+  coachType    OutsideCoachType?
+  isActive     Boolean           @default(true)
+  invitedAt    DateTime          @default(now())
   acceptedAt   DateTime? // When the coach claimed their account
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
 
   // Relations
   athlete AthleteProfile @relation(fields: [athleteId], references: [id], onDelete: Cascade)
@@ -1201,13 +1299,17 @@ model OnboardingRecord {
 // ============================================================
 
 model SchoolTeam {
-  id                String  @id @default(uuid())
+  id                String         @id @default(uuid())
   name              String // "Lexington Catholic Baseball"
-  slug              String  @unique // "lexington-catholic" — used in signup URL
+  slug              String         @unique // "lexington-catholic" — used in signup URL
+  // Which partner-school segment this team belongs to. Drives dashboard
+  // variant selection (HS vs Travel vs College) per Chad's spec.
+  // Default HIGH_SCHOOL keeps existing rows valid without a manual backfill.
+  type              SchoolTeamType @default(HIGH_SCHOOL)
   primaryLocationId String?
   brandLogoUrl      String? // Uploaded school logo
   brandColors       Json? // { primary: "#1a3e72", secondary: "#c4a34d" }
-  signupUrl         String? @unique // Generated: /join/team/lexington-catholic
+  signupUrl         String?        @unique // Generated: /join/team/lexington-catholic
 
   // Coach info
   coachName         String?
@@ -1232,6 +1334,9 @@ model SchoolTeam {
   invoices        SchoolInvoice[]
   contracts       SchoolContract[]
   coaches         SchoolCoach[]
+  // Partnership Coach assignments — users in the PPL app who have the
+  // PARTNERSHIP_COACH role for this specific partner school.
+  userRoles       UserRole[]
 
   @@index([slug])
   @@index([coachInviteToken])
@@ -1392,31 +1497,28 @@ model AuditLog {
  * clients see on their parent dashboard. Feeds the EducationalContent
  * widget. Intentionally simple: title + short description + optional
  * video URL + optional body markdown + category tag + visibility flag.
- *
  * Visibility:
- *   ageGroupFilter — null = all clients; otherwise comma-separated list
- *     of age groups ('youth,ms_hs,college,pro'). Lets admins target,
- *     e.g. "only show this to Youth parents."
- *   isPublished — simple on/off switch for draft vs live content.
+ * ageGroupFilter — null = all clients; otherwise comma-separated list
+ * of age groups ('youth,ms_hs,college,pro'). Lets admins target,
+ * e.g. "only show this to Youth parents."
+ * isPublished — simple on/off switch for draft vs live content.
  */
 /**
  * PasswordResetToken — durable, DB-backed password reset tokens.
- *
  * The raw token is never stored. We store a SHA-256 hash of the token.
  * When a user hits POST /reset-password with a token, we hash the
  * submitted value and look it up. This means a DB read (leak, backup,
  * rogue DBA) can't be used to hijack a live reset link.
- *
  * Cleanup: expired rows are swept by the normal cleanup cron (every
  * 15 min — see cronService). Rows are also deleted on successful use.
  */
 model PasswordResetToken {
-  id         String   @id @default(uuid())
-  userId     String
-  tokenHash  String   @unique // SHA-256 of the raw token bytes
-  expiresAt  DateTime
-  usedAt     DateTime?
-  createdAt  DateTime @default(now())
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique // SHA-256 of the raw token bytes
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
 
   @@index([userId])
   @@index([expiresAt])
@@ -1424,19 +1526,19 @@ model PasswordResetToken {
 }
 
 model EducationalResource {
-  id              String   @id @default(uuid())
-  organizationId  String   @default("ppl")
-  title           String
-  description     String
-  body            String?  // optional markdown body for longer articles
-  videoUrl        String?  // optional Youtube/Vimeo embed URL
-  thumbnailUrl    String?  // optional card thumbnail image
-  category        String   @default("general") // 'onboarding' | 'mechanics' | 'mindset' | 'perks' | 'general'
-  ageGroupFilter  String?  // null = all; else comma-separated age groups
-  sortOrder       Int      @default(0)
-  isPublished     Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(uuid())
+  organizationId String   @default("ppl")
+  title          String
+  description    String
+  body           String? // optional markdown body for longer articles
+  videoUrl       String? // optional Youtube/Vimeo embed URL
+  thumbnailUrl   String? // optional card thumbnail image
+  category       String   @default("general") // 'onboarding' | 'mechanics' | 'mindset' | 'perks' | 'general'
+  ageGroupFilter String? // null = all; else comma-separated age groups
+  sortOrder      Int      @default(0)
+  isPublished    Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@index([organizationId, isPublished])
   @@map("educational_resources")
@@ -1447,25 +1549,24 @@ model EducationalResource {
  * signed the liability waiver. Stores the FULL waiver text + version that
  * was shown at signing time so the contract is preserved even when admins
  * later update the master waiver copy.
- *
  * One signature per (athleteProfileId, waiverVersion). If we bump the
  * waiver version, existing athletes must re-sign the new version before
  * their next booking.
  */
 model LiabilityWaiverSignature {
-  id                String         @id @default(uuid())
-  athleteProfileId  String
-  signedByUserId    String         // User who actually clicked "sign" (parent for Youth/MS-HS; the athlete for solo College/Pro)
-  signedByName      String         // Typed signature name
-  athleteName       String         // Snapshot of athlete's full name
-  waiverVersion     String         // e.g. '2026-04-23'
-  waiverText        String         @db.Text // Full waiver text snapshot
-  ipAddress         String?
-  userAgent         String?
-  signedAt          DateTime       @default(now())
+  id               String   @id @default(uuid())
+  athleteProfileId String
+  signedByUserId   String // User who actually clicked "sign" (parent for Youth/MS-HS; the athlete for solo College/Pro)
+  signedByName     String // Typed signature name
+  athleteName      String // Snapshot of athlete's full name
+  waiverVersion    String // e.g. '2026-04-23'
+  waiverText       String   @db.Text // Full waiver text snapshot
+  ipAddress        String?
+  userAgent        String?
+  signedAt         DateTime @default(now())
 
-  athleteProfile    AthleteProfile @relation(fields: [athleteProfileId], references: [id], onDelete: Cascade)
-  signedByUser      User           @relation(fields: [signedByUserId], references: [id])
+  athleteProfile AthleteProfile @relation(fields: [athleteProfileId], references: [id], onDelete: Cascade)
+  signedByUser   User           @relation(fields: [signedByUserId], references: [id])
 
   @@unique([athleteProfileId, waiverVersion])
   @@index([athleteProfileId])
@@ -1473,12 +1574,12 @@ model LiabilityWaiverSignature {
 }
 
 model OrgSettings {
-  id           String  @id @default("ppl") // singleton row
-  businessName String  @default("Pitching Performance Lab")
-  tagline      String  @default("Train like a pro.")
-  logoData     String? // base64 data URI for the logo image
-  primaryColor String  @default("#166534")
-  accentColor  String  @default("#4ade80")
+  id                     String  @id @default("ppl") // singleton row
+  businessName           String  @default("Pitching Performance Lab")
+  tagline                String  @default("Train like a pro.")
+  logoData               String? // base64 data URI for the logo image
+  primaryColor           String  @default("#166534")
+  accentColor            String  @default("#4ade80")
   // Liability waiver — admin-editable full text + version tag. When admins
   // update the text, bump the version so existing signatures force re-sign.
   liabilityWaiverText    String  @default("") @db.Text
@@ -1495,9 +1596,9 @@ model OrgSettings {
   // window begins). ISO-ish: 1 = Monday ... 7 = Sunday (matches JS getDay()
   // after normalizing Sunday=0→7). Defaults to a Mon-Sun week with the
   // reset running Monday at 05:00 local time.
-  financeWeekStartDay Int    @default(1) // 1=Mon ... 7=Sun
-  financeWeekResetDay Int    @default(1) // day the snapshot is taken
-  financeWeekResetHour Int   @default(5) // 24h local time
+  financeWeekStartDay  Int @default(1) // 1=Mon ... 7=Sun
+  financeWeekResetDay  Int @default(1) // day the snapshot is taken
+  financeWeekResetHour Int @default(5) // 24h local time
 
   updatedAt DateTime @updatedAt
 
