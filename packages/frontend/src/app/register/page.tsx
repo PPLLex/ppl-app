@@ -1622,7 +1622,7 @@ function RegisterForm() {
                 <button
                   key={opt.v}
                   type="button"
-                  onClick={() => handleStep3Select(opt.v)}
+                  onClick={() => setAthleteSelection(opt.v)}
                   disabled={isLoading}
                   className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
                     athleteSelection === opt.v
@@ -1638,6 +1638,29 @@ function RegisterForm() {
                   </div>
                 </button>
               ))}
+
+              {/* Back / Continue nav — step 3 used to auto-advance on tap
+                  which stranded the user with no way to correct a
+                  misclick. Now: make a selection, confirm with Continue,
+                  or go back to edit personal info on step 2. */}
+              <div className="flex gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setStep(2)}
+                  disabled={isLoading}
+                  className="text-sm font-medium text-muted hover:text-foreground transition-colors py-3 px-4"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={() => athleteSelection && handleStep3Select(athleteSelection)}
+                  disabled={isLoading || !athleteSelection}
+                  className="ppl-btn ppl-btn-primary flex-1 py-3 text-base disabled:opacity-60"
+                >
+                  {isLoading ? 'Saving…' : 'Continue'}
+                </button>
+              </div>
             </div>
           )}
 
