@@ -73,6 +73,12 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
   // Falls back to nodemailer SMTP when RESEND_API_KEY is unset so the
   // migration can happen on Chad's schedule without a big-bang cutover.
   // ───────────────────────────────────────────────────────────
+  // Attempt Resend first. If Resend fails (domain not yet verified,
+  // API outage, transient error) we FALL THROUGH to the nodemailer
+  // SMTP path below rather than swallowing the send. This makes the
+  // Resend migration zero-downtime: we can flip RESEND_API_KEY on in
+  // Railway even while DNS is still propagating, and every email keeps
+  // landing via Gmail SMTP until Resend is green.
   const resendKey = process.env.RESEND_API_KEY;
   if (resendKey) {
     try {
@@ -90,15 +96,20 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
           'X-PPL-Env': config.nodeEnv,
         },
       });
-      if (error) {
-        console.error('Resend send failed:', error);
-        return false;
+      if (!error) {
+        console.log(`Email sent via Resend to ${to}: ${subject}`);
+        return true;
       }
-      console.log(`Email sent via Resend to ${to}: ${subject}`);
-      return true;
+      console.warn(
+        `Resend send failed — falling back to SMTP. Reason: ${JSON.stringify(error)}`
+      );
+      // fall through to SMTP
     } catch (err) {
-      console.error('Resend transport error:', err);
-      return false;
+      console.warn(
+        'Resend transport error — falling back to SMTP:',
+        err instanceof Error ? err.message : err
+      );
+      // fall through to SMTP
     }
   }
 
