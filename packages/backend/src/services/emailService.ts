@@ -715,3 +715,202 @@ export function buildCardUpdateEmail(
     <p style="font-size:13px;color:#888;margin:0;">If your payment was already resolved, you can ignore this email.</p>
   `);
 }
+
+// ============================================================================
+// ROLE-SPECIFIC INVITE EMAILS
+// ----------------------------------------------------------------------------
+// Each of the 10 invitable roles gets a tailored welcome email explaining
+// exactly what they can do in the app. The generic `buildStaffInviteEmail`
+// above is kept for backward compat with the legacy STAFF+LocationRole flow;
+// new invites flowing through the UserRole model should use the dispatcher
+// `buildInviteEmailByRole(role, data)` below.
+//
+// Subject line is also role-specific so the recipient's inbox makes it
+// obvious what's in the envelope before they open it.
+// ============================================================================
+
+/** Short role label for subject lines / badges. */
+export function roleDisplayName(role: string): string {
+  switch (role) {
+    case 'ADMIN':                   return 'Admin';
+    case 'COORDINATOR':             return 'Coordinator';
+    case 'PERFORMANCE_COACH':       return 'Performance Coach';
+    case 'CONTENT_MARKETING_ADMIN': return 'Content & Marketing Admin';
+    case 'CONTENT_MARKETING':       return 'Content & Marketing';
+    case 'MEDICAL_ADMIN':           return 'Medical Admin';
+    case 'MEDICAL':                 return 'Medical';
+    case 'PARTNERSHIP_COACH':       return 'Partnership Coach';
+    case 'OUTSIDE_COACH':           return 'Outside Coach';
+    case 'PARENT':                  return 'Parent / Guardian';
+    case 'ATHLETE':                 return 'Athlete';
+    default:                        return role;
+  }
+}
+
+/** 2-3 bullet points describing what each role can do — used in invite body. */
+function roleResponsibilities(role: string): string[] {
+  switch (role) {
+    case 'ADMIN':
+      return [
+        'Full access across every PPL location',
+        'Manage staff, plans, billing, and org settings',
+        'View revenue and reports for all locations',
+      ];
+    case 'COORDINATOR':
+      return [
+        'Full access at your assigned location',
+        'Manage athletes, sessions, coaches, and the schedule',
+        'Run check-in, review coach notes, handle billing exceptions',
+      ];
+    case 'PERFORMANCE_COACH':
+      return [
+        'View the calendar and athlete dashboard at your location',
+        'Write coach notes, goals, and programs for athletes',
+        'Mark sessions as completed and review reports',
+      ];
+    case 'CONTENT_MARKETING_ADMIN':
+      return [
+        'Oversee social media and marketing across every PPL location',
+        'Send marketing email blasts to members',
+        'View schedule data to coordinate content timing',
+      ];
+    case 'CONTENT_MARKETING':
+      return [
+        'Access your location\u2019s schedule and marketing tools',
+        'Post to social media and prepare marketing content',
+        'Coordinate with the broader Content & Marketing team',
+      ];
+    case 'MEDICAL_ADMIN':
+      return [
+        'See the screening schedule and mark athletes present',
+        'View weekly screening revenue broken out per location',
+        'Make programming changes and reports for your screenings',
+      ];
+    case 'MEDICAL':
+      return [
+        'See the screening schedule and mark athletes present',
+        'Make programming changes and reports for your screenings',
+        'Focus on screenings \u2014 no revenue visibility',
+      ];
+    case 'PARTNERSHIP_COACH':
+      return [
+        'View and manage your partner school\u2019s PPL roster',
+        'Sign your athletes up for in-person training at PPL',
+        'Stay in sync with the PPL team supporting your players',
+      ];
+    case 'OUTSIDE_COACH':
+      return [
+        'View your athlete\u2019s notes, metrics, and reports',
+        'Message the PPL coaching team about your player',
+        'Read-only access \u2014 no booking or scheduling',
+      ];
+    case 'PARENT':
+      return [
+        'Book and manage sessions for your athlete(s)',
+        'Handle payments and view educational resources',
+        'Message the PPL team any time',
+      ];
+    case 'ATHLETE':
+      return [
+        'Your own dashboard, program, and training goals',
+        'Access educational resources built by PPL coaches',
+        'See your session history and progress over time',
+      ];
+    default:
+      return ['Access granted to the Pitching Performance Lab app'];
+  }
+}
+
+type RoleInviteData = {
+  fullName: string;
+  invitedByName: string | null;
+  role: string;
+  // For location-scoped roles.
+  locationName?: string | null;
+  // For Partnership Coach.
+  schoolName?: string | null;
+  acceptUrl: string;
+  expiresInDays: number;
+};
+
+/**
+ * Dispatch: build the correct HTML body for the given role. Reuses
+ * buildPPLEmail for branding and greenBtn for the CTA so all role-specific
+ * emails share the same visual language — only copy differs.
+ */
+export function buildInviteEmailByRole(data: RoleInviteData): string {
+  const firstName = data.fullName.split(' ')[0];
+  const roleLabel = roleDisplayName(data.role);
+  const responsibilities = roleResponsibilities(data.role);
+
+  const invitedLine = data.invitedByName
+    ? `<strong style="color:#F5F5F5;">${data.invitedByName}</strong> at Pitching Performance Lab added you as a <strong style="color:#95C83C;">${roleLabel}</strong>.`
+    : `You\u2019ve been added to Pitching Performance Lab as a <strong style="color:#95C83C;">${roleLabel}</strong>.`;
+
+  // Role-specific scope line — tells the recipient WHERE their access applies.
+  let scopeLine = '';
+  if (data.locationName) {
+    scopeLine = `<p style="margin:0 0 16px;color:#CCC;">Your access is at <strong style="color:#F5F5F5;">${data.locationName}</strong>.</p>`;
+  } else if (data.schoolName) {
+    scopeLine = `<p style="margin:0 0 16px;color:#CCC;">You\u2019re coaching for <strong style="color:#F5F5F5;">${data.schoolName}</strong> \u2014 you\u2019ll see that team\u2019s PPL roster and nothing else.</p>`;
+  } else if (data.role === 'ADMIN' || data.role === 'CONTENT_MARKETING_ADMIN' || data.role === 'MEDICAL_ADMIN') {
+    scopeLine = `<p style="margin:0 0 16px;color:#CCC;">You have global access \u2014 this role applies across every PPL location.</p>`;
+  }
+
+  const bulletsHtml = responsibilities
+    .map((r) => `<li style="margin:0 0 8px;">${r}</li>`)
+    .join('');
+
+  return buildPPLEmail(`You\u2019re invited to PPL as a ${roleLabel}`, `
+    <p style="margin:0 0 16px;color:#CCC;font-size:16px;">Hey ${firstName},</p>
+    <p style="margin:0 0 16px;color:#CCC;">${invitedLine}</p>
+    ${scopeLine}
+    <p style="margin:0 0 8px;color:#CCC;">Once you accept, you\u2019ll be able to:</p>
+    <ul style="margin:0 0 20px 18px;padding:0;color:#CCC;">${bulletsHtml}</ul>
+    <p style="margin:0 0 20px;text-align:center;">
+      <a href="${data.acceptUrl}" style="${greenBtn}">Accept & set a password</a>
+    </p>
+    <p style="font-size:13px;color:#888;margin:0;">
+      This invite link expires in ${data.expiresInDays} days. If it expires before you get to it,
+      just reply to this email and we\u2019ll send a fresh one.
+    </p>
+  `);
+}
+
+/**
+ * Send a role-specific invite email. Plain-text fallback mirrors the HTML
+ * so recipients without rich email clients (or SMTP stripping) still get the
+ * key info.
+ */
+export async function sendInviteEmailByRole(args: RoleInviteData & { to: string }): Promise<void> {
+  const html = buildInviteEmailByRole(args);
+  const roleLabel = roleDisplayName(args.role);
+  const firstName = args.fullName.split(' ')[0];
+  const scopeLineText = args.locationName
+    ? `Location: ${args.locationName}`
+    : args.schoolName
+    ? `Partner school: ${args.schoolName}`
+    : 'Global access across all PPL locations';
+
+  const lines = [
+    `Hey ${firstName},`,
+    '',
+    args.invitedByName
+      ? `${args.invitedByName} added you to PPL as a ${roleLabel}.`
+      : `You've been added to PPL as a ${roleLabel}.`,
+    scopeLineText,
+    '',
+    'Once you accept, you\u2019ll be able to:',
+    ...roleResponsibilities(args.role).map((r) => `  - ${r}`),
+    '',
+    `Accept and set a password: ${args.acceptUrl}`,
+    `This link expires in ${args.expiresInDays} days.`,
+  ];
+
+  await sendEmail({
+    to: args.to,
+    subject: `You\u2019re invited to PPL as a ${roleLabel}`,
+    text: lines.join('\n'),
+    html,
+  });
+}

@@ -40,6 +40,7 @@ import settingsRoutes from './routes/settings';
 import educationalResourcesRoutes from './routes/educationalResources';
 import waiverRoutes from './routes/waivers';
 import inboundEmailRoutes from './routes/inboundEmail';
+import roleRoutes from './routes/roles';
 import { membershipGuard } from './middleware/membershipGuard';
 
 const app = express();
@@ -140,6 +141,8 @@ app.use('/api/educational-resources', educationalResourcesRoutes);
 app.use('/api/waivers', waiverRoutes);
 // Inbound email + SMS — turns client replies into in-app messages
 app.use('/api/webhooks', inboundEmailRoutes);
+// Role lookup + invitable-roles list — powers the admin invite UI dropdown
+app.use('/api/roles', roleRoutes);
 
 // ============================================================
 // ERROR HANDLING
