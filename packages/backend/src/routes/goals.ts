@@ -35,7 +35,35 @@ router.post('/', authenticate, async (req: Request, res: Response, next: NextFun
       if (!athleteId) throw ApiError.badRequest('Athlete ID is required when creating goals as a coach');
       resolvedAthleteId = athleteId;
       coachId = user.userId;
+
+      // Location-scope IDOR defense: STAFF can only write goals for
+      // athletes at locations they're assigned to. ADMIN bypasses.
+      if (user.role === Role.STAFF) {
+        const athlete = await prisma.user.findUnique({
+          where: { id: resolvedAthleteId },
+          select: { role: true, homeLocationId: true },
+        });
+        if (!athlete || athlete.role !== Role.CLIENT) {
+          throw ApiError.notFound('Athlete not found');
+        }
+        if (athlete.homeLocationId) {
+          const assignment = await prisma.staffLocation.findUnique({
+            where: {
+              staffId_locationId: { staffId: user.userId, locationId: athlete.homeLocationId },
+            },
+          });
+          if (!assignment) {
+            throw ApiError.forbidden(
+              'You can only create goals for athletes at locations you are assigned to.'
+            );
+          }
+        }
+      }
     }
+
+    // Cap inputs to prevent abuse.
+    if (title && title.length > 200) throw ApiError.badRequest('Title too long (max 200 chars)');
+    if (description && description.length > 2000) throw ApiError.badRequest('Description too long (max 2000 chars)');
 
     const goal = await prisma.goal.create({
       data: {

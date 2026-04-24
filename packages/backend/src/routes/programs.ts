@@ -22,18 +22,36 @@ function param(req: Request, name: string): string {
 router.post('/', authenticate, requireStaffOrAdmin, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const coachId = req.user!.userId;
+    const coachRole = req.user!.role;
     const { athleteId, title, description, startDate, endDate } = req.body;
 
     if (!athleteId) throw ApiError.badRequest('Athlete ID is required');
     if (!title) throw ApiError.badRequest('Program title is required');
+    if (title.length > 200) throw ApiError.badRequest('Title too long (max 200 chars)');
+    if (description && description.length > 2000) throw ApiError.badRequest('Description too long (max 2000 chars)');
 
     // Verify athlete exists
     const athlete = await prisma.user.findUnique({
       where: { id: athleteId },
-      select: { id: true, role: true },
+      select: { id: true, role: true, homeLocationId: true },
     });
     if (!athlete || athlete.role !== Role.CLIENT) {
       throw ApiError.notFound('Athlete not found');
+    }
+
+    // Location-scope IDOR defense: STAFF can only create programs for
+    // athletes at locations they're assigned to. ADMIN bypasses.
+    if (coachRole === Role.STAFF && athlete.homeLocationId) {
+      const assignment = await prisma.staffLocation.findUnique({
+        where: {
+          staffId_locationId: { staffId: coachId, locationId: athlete.homeLocationId },
+        },
+      });
+      if (!assignment) {
+        throw ApiError.forbidden(
+          'You can only create programs for athletes at locations you are assigned to.'
+        );
+      }
     }
 
     const program = await prisma.program.create({

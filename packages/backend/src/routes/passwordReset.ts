@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../utils/prisma';
 import { ApiError } from '../utils/apiError';
 import { sendEmail, buildPPLEmail } from '../services/emailService';
+import { sensitiveLimiter } from '../middleware/rateLimit';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
@@ -13,8 +14,13 @@ const resetTokens = new Map<string, { userId: string; expiresAt: Date }>();
 /**
  * POST /api/auth/forgot-password
  * Send a password reset email.
+ *
+ * Rate-limited (5/hr/IP) to block attackers who'd spam reset emails at
+ * a target's inbox OR try to enumerate accounts by timing responses.
+ * Handler also silently accepts unknown emails so the response shape
+ * never leaks account existence.
  */
-router.post('/forgot-password', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/forgot-password', sensitiveLimiter, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email } = req.body;
     if (!email) throw ApiError.badRequest('Email is required');

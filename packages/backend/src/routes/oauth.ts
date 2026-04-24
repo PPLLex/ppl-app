@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { prisma } from '../utils/prisma';
 import { ApiError } from '../utils/apiError';
 import { generateToken, JwtPayload } from '../middleware/auth';
+import { sensitiveLimiter } from '../middleware/rateLimit';
 import { config } from '../config';
 import { Role } from '@prisma/client';
 
@@ -255,7 +256,10 @@ router.post('/apple', async (req: Request, res: Response, next: NextFunction) =>
 // Send a magic link email for passwordless login
 // ============================================================
 
-router.post('/magic-link', async (req: Request, res: Response, next: NextFunction) => {
+// Rate-limited (5/hr/IP) — magic-link is an email-spam + enumeration
+// target just like password reset. Handler already returns a generic
+// success response regardless of whether the email exists.
+router.post('/magic-link', sensitiveLimiter, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email } = req.body;
 

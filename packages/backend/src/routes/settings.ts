@@ -6,16 +6,21 @@ import { authenticate, requireAdmin } from '../middleware/auth';
 
 const router = Router();
 
-// Multer — in-memory storage, max 10MB for logos
+// Multer — in-memory storage, max 10MB for logos. SVG deliberately
+// excluded from the allow-list: SVG is XML and can carry inline
+// <script> tags, event handlers (onclick, onload), and foreignObject
+// payloads that execute as JS when rendered inline on a trusted domain.
+// Raster-only formats are safe. If an SVG logo is needed later, serve
+// it with Content-Disposition: attachment so browsers won't execute it.
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
   fileFilter: (_req, file, cb) => {
-    const allowed = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml', 'image/gif'];
+    const allowed = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
     if (allowed.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new ApiError(400, 'Only PNG, JPEG, WebP, SVG, and GIF images are allowed'));
+      cb(new ApiError(400, 'Only PNG, JPEG, WebP, and GIF images are allowed'));
     }
   },
 });
