@@ -202,14 +202,28 @@ function RegisterForm() {
         // Safety: if we can't determine ageGroup, we'd land on step 5 with
         // no filter and show every plan. Skip the resume in that case and
         // let the user start fresh instead of seeing all plans.
+        const stepLabels = ['Playing Level', 'Your Info', 'Enrollment', 'Preferences', 'Membership', 'Checkout'];
+        let resumedTo: number | null = null;
         if (!onb?.onboardingRecord) {
           setStep(3);
+          resumedTo = 3;
         } else if (!user.homeLocation?.id) {
           setStep(4);
+          resumedTo = 4;
         } else if (storedAgeGroup) {
           setStep(5);
+          resumedTo = 5;
         }
         // else: stay on step 1 — user must pick a playing level first
+
+        // Nudge the user to let them know they can go back. The clickable
+        // progress bar + Back buttons now give them the tools; this toast
+        // tells them the tools exist. Fires once on mount, non-blocking.
+        if (resumedTo !== null) {
+          toast.info(
+            `Picked up at "${stepLabels[resumedTo - 1]}". Tap a bar above to go back.`
+          );
+        }
       } catch {
         // If /me fails (expired token, etc.) silently stay on step 1.
         // The normal register flow will overwrite the token on step 2.
@@ -935,28 +949,42 @@ function RegisterForm() {
           </h1>
         </div>
 
-        {/* Progress indicator — 6 bars + contextual label. The label tells
-            users how far they are in the flow ("Step 1 of 6 · Playing Level"),
-            which drops abandonment on multi-step forms. The active bar is
-            brighter PPL green; completed bars are solid; future bars are border. */}
+        {/* Progress indicator — CLICKABLE bars for completed/current steps.
+            Tapping a completed segment jumps straight back to that step so
+            a user can edit something they already answered without walking
+            through every intermediate step. Future steps are disabled (the
+            user hasn't unlocked them yet — forms still need to validate in
+            order). This is the standard pattern on modern multi-step forms
+            (Stripe Checkout, Shopify signup, TurboTax).
+
+            ARIA: each segment is a <button> with a descriptive label so
+            screen readers announce "Step 2 of 6: Your Info, completed" etc. */}
         <div className="mb-6">
           <div className="flex items-center gap-2">
             {(() => {
               const labels = ['Playing Level', 'Your Info', 'Enrollment', 'Preferences', 'Membership', 'Checkout'];
-              return labels.map((_, i) => {
+              return labels.map((label, i) => {
                 const stepNum = i + 1;
                 const isComplete = step > stepNum;
                 const isActive = step === stepNum;
+                const isClickable = isComplete || isActive; // future steps locked
                 return (
-                  <div
+                  <button
                     key={stepNum}
+                    type="button"
+                    onClick={() => isClickable && setStep(stepNum)}
+                    disabled={!isClickable}
                     aria-current={isActive ? 'step' : undefined}
+                    aria-label={`Step ${stepNum} of 6: ${label}${
+                      isComplete ? ', completed' : isActive ? ', current' : ', locked'
+                    }`}
+                    title={isClickable ? `Go to ${label}` : `${label} — finish earlier steps first`}
                     className={`h-1 flex-1 rounded-full transition-all duration-300 ${
                       isActive
                         ? 'bg-[#95C83C] shadow-[0_0_8px_rgba(149,200,60,0.5)]'
                         : isComplete
-                        ? 'bg-[#5E9E50]'
-                        : 'bg-border'
+                        ? 'bg-[#5E9E50] hover:bg-[#95C83C] cursor-pointer'
+                        : 'bg-border cursor-not-allowed'
                     }`}
                   />
                 );
