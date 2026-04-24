@@ -44,6 +44,7 @@ import roleRoutes from './routes/roles';
 import partnerDashboardRoutes from './routes/partnerDashboard';
 import leadRoutes from './routes/leads';
 import screeningRoutes from './routes/screenings';
+import campaignRoutes from './routes/campaigns';
 import { membershipGuard } from './middleware/membershipGuard';
 
 const app = express();
@@ -152,6 +153,8 @@ app.use('/api/partner-dashboard', partnerDashboardRoutes);
 app.use('/api/leads', leadRoutes);
 // Medical screenings — Renewed Performance integration for Medical + Medical Admin
 app.use('/api/screenings', screeningRoutes);
+// Marketing email campaigns — Content & Marketing role (fan-out worker lands later)
+app.use('/api/campaigns', campaignRoutes);
 
 // ============================================================
 // ERROR HANDLING

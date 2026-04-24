@@ -217,6 +217,51 @@ enum ScreeningStatus {
   CANCELLED
 }
 
+// --- Marketing campaign enums ---
+
+enum CampaignType {
+  MARKETING // Bulk promotional blast
+  ANNOUNCEMENT // One-off announcement (new location, schedule change, etc.)
+  NURTURE // Drip-sequence step (automations ship later)
+  TRANSACTIONAL // System event trigger (tracked for analytics parity)
+}
+
+enum CampaignStatus {
+  DRAFT // Being edited
+  SCHEDULED // Saved + scheduled for a future send
+  SENDING // In-flight; fan-out in progress
+  SENT // All recipients processed
+  CANCELLED // Cancelled before send
+  FAILED // Fan-out failed mid-run
+}
+
+/// Audience selectors — each campaign targets one of these segments.
+/// audienceFilter JSON carries the parameters (e.g. locationId for
+/// LOCATION_MEMBERS, ageGroup for AGE_GROUP).
+enum CampaignAudience {
+  ALL_MEMBERS // Every active member (not past-due, not cancelled)
+  ALL_PARENTS // All PARENT users
+  ALL_ATHLETES // All ATHLETE users
+  ALL_LEADS // Every Lead in the CRM
+  PAST_DUE_MEMBERS // Past-due / churned — win-back audience
+  LOCATION_MEMBERS // Members at a specific location
+  AGE_GROUP // Members in a specific age group
+  CUSTOM_SEGMENT // Reserved for future segment builder
+  IMPORTED_LIST // Uploaded CSV of email addresses
+}
+
+/// Per-recipient lifecycle. Maps roughly to Resend's webhook events.
+enum RecipientStatus {
+  PENDING // Queued, not yet handed to Resend
+  SENT // Handed to Resend
+  DELIVERED // Resend confirmed delivery
+  OPENED // At least one open registered
+  CLICKED // At least one click registered
+  BOUNCED // Hard bounce
+  FAILED // Resend-level failure
+  UNSUBSCRIBED // Recipient unsubscribed after receiving
+}
+
 enum MetricType {
   FASTBALL_VELO
   CHANGEUP_VELO
@@ -464,6 +509,10 @@ model User {
   // MEDICAL_ADMIN roles). Null providerUserId on a screening means
   // it's been scheduled but not yet assigned to a PT.
   providedScreenings MedicalScreening[] @relation("ScreeningProvider")
+
+  // Email campaigns this user created + campaigns this user received.
+  createdCampaigns      EmailCampaign[]     @relation("CampaignCreator")
+  receivedCampaignSends CampaignRecipient[] @relation("CampaignUserRecipient")
 
   @@index([homeLocationId])
   @@index([role])
@@ -1727,10 +1776,11 @@ model Lead {
   updatedAt         DateTime      @updatedAt
 
   // Relations
-  location        Location?      @relation(fields: [locationId], references: [id])
-  owner           User?          @relation("LeadOwner", fields: [ownerUserId], references: [id])
-  convertedToUser User?          @relation("LeadConverted", fields: [convertedToUserId], references: [id])
+  location        Location?           @relation(fields: [locationId], references: [id])
+  owner           User?               @relation("LeadOwner", fields: [ownerUserId], references: [id])
+  convertedToUser User?               @relation("LeadConverted", fields: [convertedToUserId], references: [id])
   activities      LeadActivity[]
+  campaignSends   CampaignRecipient[] @relation("CampaignLeadRecipient")
 
   @@unique([organizationId, email])
   @@index([stage, ownerUserId])
@@ -1825,6 +1875,99 @@ model MedicalScreening {
   @@index([status])
   @@index([organizationId])
   @@map("medical_screenings")
+}
+
+// ============================================================
+// MARKETING EMAIL CAMPAIGNS (April 2026)
+// ============================================================
+// Bulk email sends managed by the CONTENT_MARKETING / CONTENT_MARKETING_ADMIN
+// roles. Ships as a foundation — schema + basic CRUD endpoints. Automation
+// (drip sequences) + Resend fan-out worker arrive in follow-up commits.
+//
+// Design notes:
+//   - EmailCampaign is the message template + targeting + stats rollup.
+//   - CampaignRecipient is per-recipient state, produced by fan-out when
+//     the campaign transitions SCHEDULED → SENDING. Denormalizes email
+//     so we preserve history even if the underlying User/Lead is deleted.
+//   - Resend message IDs are stored on each recipient so the inbound
+//     webhook handler (added later) can flip status to DELIVERED / OPENED
+//     / BOUNCED etc. when Resend fires tracking events.
+
+model EmailCampaign {
+  id             String           @id @default(uuid())
+  organizationId String           @default("ppl")
+  name           String // Internal name (never sent)
+  subject        String
+  fromName       String           @default("Pitching Performance Lab")
+  fromAddress    String           @default("info@pitchingperformancelab.com")
+  replyToAddress String?
+  bodyHtml       String
+  bodyText       String?
+  type           CampaignType     @default(MARKETING)
+  audience       CampaignAudience @default(CUSTOM_SEGMENT)
+  // JSON parameters for the audience selector:
+  //   LOCATION_MEMBERS → { locationId: '...' }
+  //   AGE_GROUP        → { ageGroup: 'ms_hs' }
+  //   IMPORTED_LIST    → { emails: ['a@b.com', ...] }
+  audienceFilter Json?
+  status         CampaignStatus   @default(DRAFT)
+  scheduledFor   DateTime?
+  sentAt         DateTime?
+
+  // Stats rollup — maintained by the webhook handler as events flow in.
+  totalRecipients  Int @default(0)
+  sentCount        Int @default(0)
+  deliveredCount   Int @default(0)
+  openCount        Int @default(0)
+  clickCount       Int @default(0)
+  bounceCount      Int @default(0)
+  unsubscribeCount Int @default(0)
+
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  createdBy  User                @relation("CampaignCreator", fields: [createdByUserId], references: [id])
+  recipients CampaignRecipient[]
+
+  @@index([status, scheduledFor])
+  @@index([createdByUserId])
+  @@index([organizationId])
+  @@map("email_campaigns")
+}
+
+model CampaignRecipient {
+  id         String  @id @default(uuid())
+  campaignId String
+  // Denormalized — survives User/Lead deletion so historical stats stay intact.
+  email      String
+  fullName   String?
+  // At most one of these is set, depending on which source the recipient
+  // was pulled from. Nullable so a direct email (e.g. IMPORTED_LIST) has
+  // no user/lead linkage.
+  userId     String?
+  leadId     String?
+
+  status          RecipientStatus @default(PENDING)
+  sentAt          DateTime?
+  deliveredAt     DateTime?
+  openedAt        DateTime?
+  clickedAt       DateTime?
+  bouncedAt       DateTime?
+  bounceReason    String?
+  unsubscribedAt  DateTime?
+  resendMessageId String?         @unique
+
+  createdAt DateTime @default(now())
+
+  campaign EmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user     User?         @relation("CampaignUserRecipient", fields: [userId], references: [id], onDelete: SetNull)
+  lead     Lead?         @relation("CampaignLeadRecipient", fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([campaignId, status])
+  @@index([email])
+  @@index([userId])
+  @@map("campaign_recipients")
 }
 
 model ScreeningResult {
