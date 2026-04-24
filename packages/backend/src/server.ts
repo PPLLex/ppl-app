@@ -1,11 +1,20 @@
+// Initialize Sentry BEFORE any other imports so its instrumentation
+// catches module loading and all subsequent require() calls. This is a
+// no-op when SENTRY_DSN is unset — telemetry turns on the moment the
+// env var is added in Railway.
+import { initSentry, captureError } from './utils/sentry';
+initSentry();
+
 // Register global error handlers FIRST (before imports can throw)
 process.on('uncaughtException', (err: Error) => {
   console.error('[FATAL] Uncaught exception:', err.message);
   console.error(err.stack);
+  captureError(err, { tags: { source: 'uncaughtException' } });
   setTimeout(() => process.exit(1), 500);
 });
 process.on('unhandledRejection', (reason: unknown) => {
   console.error('[FATAL] Unhandled rejection:', reason);
+  captureError(reason, { tags: { source: 'unhandledRejection' } });
   setTimeout(() => process.exit(1), 500);
 });
 
