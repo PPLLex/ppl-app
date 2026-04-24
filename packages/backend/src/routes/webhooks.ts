@@ -4,6 +4,10 @@ import { stripe } from '../services/stripeService';
 import { prisma } from '../utils/prisma';
 import { config } from '../config';
 import { notify } from '../services/notificationService';
+import {
+  buildPaymentSuccessEmail,
+  buildPaymentFailedEmail,
+} from '../services/emailService';
 import { createAuditLog } from '../services/auditService';
 import {
   MembershipStatus,
@@ -190,6 +194,20 @@ async function handlePaymentSucceeded(invoice: Stripe.Invoice) {
       });
     }
 
+    // Rich payment-success template with the credits-refreshed line
+    // when this is a repeating weekly/monthly charge that reset credits.
+    const successClient = await prisma.user.findUnique({
+      where: { id: membership.clientId },
+      select: { fullName: true },
+    });
+    const successHtml = buildPaymentSuccessEmail({
+      athleteName: successClient?.fullName || 'Athlete',
+      planName: membership.plan.name,
+      amount: `$${(invoice.amount_paid / 100).toFixed(2)}`,
+      status: 'succeeded',
+      creditsRestored: membership.plan.sessionsPerWeek !== null,
+    });
+
     await notify({
       userId: membership.clientId,
       type: NotificationType.PAYMENT_SUCCEEDED,
@@ -197,6 +215,7 @@ async function handlePaymentSucceeded(invoice: Stripe.Invoice) {
       body: `Your weekly payment of $${(invoice.amount_paid / 100).toFixed(2)} for ${membership.plan.name} was processed successfully.`,
       channels: [NotificationChannel.EMAIL],
       metadata: { membershipId: membership.id, amountCents: invoice.amount_paid },
+      emailHtml: successHtml,
     });
   }
 
@@ -363,6 +382,13 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
 
   // Notify the client via ALL channels — push, SMS, and email
   const amount = `$${(invoice.amount_due / 100).toFixed(2)}`;
+  const failedHtml = buildPaymentFailedEmail({
+    athleteName: membership.client.fullName || 'Athlete',
+    planName: membership.plan.name,
+    amount,
+    status: 'failed',
+    failureReason: friendlyReason,
+  });
   await notify({
     userId: membership.clientId,
     type: NotificationType.PAYMENT_FAILED,
@@ -375,6 +401,7 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
       failureReason: friendlyReason,
       action: 'UPDATE_PAYMENT',
     },
+    emailHtml: failedHtml,
   });
 
   // Notify coordinators at the athlete's location (not all staff)

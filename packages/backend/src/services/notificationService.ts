@@ -12,6 +12,14 @@ interface NotifyParams {
   body: string;
   channels?: NotificationChannel[];
   metadata?: Record<string, unknown>;
+  /**
+   * Optional full HTML override. When provided, replaces the generic
+   * buildPPLEmail(title, body) wrapper — callers use this to send
+   * richer templates like buildBookingConfirmationEmail or
+   * buildPaymentSuccessEmail. The `title` still becomes the email
+   * subject and the `body` still feeds the SMS + in-app record.
+   */
+  emailHtml?: string;
 }
 
 /**
@@ -54,7 +62,7 @@ export async function notify(params: NotifyParams) {
           to: user.email,
           subject: params.title,
           text: params.body,
-          html: buildPPLEmail(params.title, params.body.replace(/\n/g, '<br>')),
+          html: params.emailHtml ?? buildPPLEmail(params.title, params.body.replace(/\n/g, '<br>')),
         });
       } else if (channel === NotificationChannel.SMS && user.phone) {
         // SMS gets a shorter version — strip HTML, keep it under 160 chars if possible

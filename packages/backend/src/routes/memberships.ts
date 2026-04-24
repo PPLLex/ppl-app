@@ -4,6 +4,7 @@ import { ApiError } from '../utils/apiError';
 import { authenticate, requireAdmin, requireStaffOrAdmin } from '../middleware/auth';
 import { createAuditLog } from '../services/auditService';
 import { notify } from '../services/notificationService';
+import { buildCardUpdateEmail } from '../services/emailService';
 import {
   createSubscription,
   cancelSubscription,
@@ -977,6 +978,13 @@ router.post(
         },
       });
 
+      // Rich card-update email with the green CTA button.
+      const cardHtml = buildCardUpdateEmail(
+        request.client.fullName || 'Athlete',
+        '••••',
+        portalUrl,
+      );
+
       // Notify client with the portal link
       await notify({
         userId: request.clientId,
@@ -985,6 +993,7 @@ router.post(
         body: `Here's your secure link to update your payment card: ${portalUrl}\n\nThis link expires in 24 hours.`,
         channels: [NotificationChannel.EMAIL, NotificationChannel.SMS],
         metadata: { requestId, portalUrl },
+        emailHtml: cardHtml,
       });
 
       await createAuditLog({

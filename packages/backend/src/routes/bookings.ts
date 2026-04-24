@@ -4,6 +4,10 @@ import { ApiError } from '../utils/apiError';
 import { authenticate, requireStaffOrAdmin } from '../middleware/auth';
 import { createAuditLog } from '../services/auditService';
 import { notify } from '../services/notificationService';
+import {
+  buildBookingConfirmationEmail,
+  buildBookingCancellationEmail,
+} from '../services/emailService';
 import { Role, BookingStatus, NotificationType, NotificationChannel } from '@prisma/client';
 
 const router = Router();
@@ -225,6 +229,25 @@ router.post('/', authenticate, async (req: Request, res: Response, next: NextFun
       minute: '2-digit',
     });
 
+    // Resolve the booker's name for the email template. We pull the
+    // booker's User row because that's whom we're actually emailing;
+    // the athlete name might differ for family-managed accounts but
+    // the email subject + salutation always speaks to the account
+    // holder.
+    const bookerUser = await prisma.user.findUnique({
+      where: { id: user.userId },
+      select: { fullName: true, homeLocation: { select: { name: true } } },
+    });
+    const bookingHtml = buildBookingConfirmationEmail({
+      athleteName: bookerUser?.fullName || 'Athlete',
+      sessionTitle: session.title,
+      date: sessionDate,
+      time: sessionTime,
+      coach: session.coach?.fullName,
+      room: session.room?.name,
+      location: bookerUser?.homeLocation?.name,
+    });
+
     await notify({
       userId: user.userId,
       type: NotificationType.BOOKING_CONFIRMED,
@@ -234,6 +257,7 @@ router.post('/', authenticate, async (req: Request, res: Response, next: NextFun
       }${session.coach ? ` Coach: ${session.coach.fullName}.` : ''}`,
       channels: [NotificationChannel.EMAIL, NotificationChannel.SMS],
       metadata: { bookingId: booking.id, sessionId: session.id },
+      emailHtml: bookingHtml,
     });
 
     await createAuditLog({
@@ -376,7 +400,18 @@ router.delete('/:id', authenticate, async (req: Request, res: Response, next: Ne
       minute: '2-digit',
     });
 
-    // Send cancellation confirmation
+    // Send cancellation confirmation — use the rich HTML template.
+    const cancelClient = await prisma.user.findUnique({
+      where: { id: booking.clientId },
+      select: { fullName: true },
+    });
+    const cancelHtml = buildBookingCancellationEmail({
+      athleteName: cancelClient?.fullName || 'Athlete',
+      sessionTitle: booking.session.title,
+      date: sessionDate,
+      time: sessionTime,
+      creditRestored,
+    });
     await notify({
       userId: booking.clientId,
       type: NotificationType.BOOKING_CANCELLED,
@@ -384,6 +419,7 @@ router.delete('/:id', authenticate, async (req: Request, res: Response, next: Ne
       body: `Your ${booking.session.title} session on ${sessionDate} at ${sessionTime} has been cancelled.${creditBalanceMsg}`,
       channels: [NotificationChannel.EMAIL, NotificationChannel.SMS],
       metadata: { bookingId, sessionId: booking.sessionId, creditRestored },
+      emailHtml: cancelHtml,
     });
 
     await createAuditLog({
