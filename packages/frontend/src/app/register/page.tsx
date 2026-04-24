@@ -1631,7 +1631,7 @@ function RegisterForm() {
                       : 'border-border hover:border-border-light bg-surface'
                   } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  <div className="font-bold text-foreground text-base leading-tight">
+                  <div className="font-accent italic font-black uppercase tracking-[0.04em] text-foreground text-base leading-none">
                     {opt.label}
                   </div>
                   <div className="text-xs text-muted/80 mt-1.5 font-normal">
