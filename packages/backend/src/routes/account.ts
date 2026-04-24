@@ -3,8 +3,9 @@ import { prisma } from '../utils/prisma';
 import { ApiError } from '../utils/apiError';
 import { authenticate } from '../middleware/auth';
 import { createAuditLog } from '../services/auditService';
-import { BookingStatus } from '@prisma/client';
+import { BookingStatus, Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 
 const router = Router();
 router.use(authenticate);
@@ -251,6 +252,168 @@ router.get('/bookings', async (req: Request, res: Response, next: NextFunction) 
     });
   } catch (error) {
     next(error);
+  }
+});
+
+/**
+ * GET /api/account/athletes
+ * List all athletes under the authenticated user's Family. Returns the
+ * parent's own AthleteProfile too (if they self-manage on top of being
+ * a parent). Used by the parent dashboard to show "your athletes" +
+ * feed per-athlete widgets like Recent Coach Notes.
+ *
+ * Returns:
+ *   [{ id, firstName, lastName, ageGroup, dateOfBirth, relationToParent }, ...]
+ */
+router.get('/athletes', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.userId;
+
+    // Family the user parents (if any)
+    const family = await prisma.family.findUnique({ where: { parentUserId: userId } });
+    const familyId = family?.id;
+
+    // Pull every AthleteProfile whose User is either THIS user (self-managing)
+    // or a child in their Family.
+    const athletes = await prisma.athleteProfile.findMany({
+      where: {
+        OR: [
+          { userId: userId },
+          ...(familyId ? [{ familyId: familyId }] : []),
+        ],
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        ageGroup: true,
+        dateOfBirth: true,
+        relationToParent: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    res.json({ success: true, data: athletes });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/account/athletes
+ * Add a new athlete (sibling / additional kid) under the authenticated
+ * parent's Family AFTER they've already registered. Used by the "Add
+ * another athlete" flow on the parent dashboard.
+ *
+ * Creates a child User (no login, family+athlete-<tag> email) and an
+ * AthleteProfile linked to the existing Family. If the parent doesn't
+ * have a Family row yet (unusual edge case — they self-managed during
+ * signup), one is created for them here.
+ *
+ * Body: { firstName, lastName, dateOfBirth?, ageGroup }
+ *
+ * NOTE: this does NOT create a subscription for the new athlete. The
+ * frontend should route the parent to the Choose Plan flow for this
+ * athleteId after creation. Per-athlete subscribe support lands in the
+ * membership/subscribe refactor (deferred — see commit notes).
+ */
+router.post('/athletes', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.userId;
+    const { firstName, lastName, dateOfBirth, ageGroup } = req.body as {
+      firstName?: string;
+      lastName?: string;
+      dateOfBirth?: string;
+      ageGroup?: string;
+    };
+
+    // ── Validation ────────────────────────────────────────────
+    if (!firstName || !firstName.trim() || !lastName || !lastName.trim()) {
+      throw ApiError.badRequest("Athlete's first and last name are required.");
+    }
+    if (!ageGroup || !['youth', 'ms_hs', 'college', 'pro'].includes(ageGroup)) {
+      throw ApiError.badRequest(
+        'Playing level must be youth, ms_hs, college, or pro.'
+      );
+    }
+
+    // Load the parent user for email tag generation + enforce CLIENT role.
+    const parent = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, role: true, homeLocationId: true },
+    });
+    if (!parent) throw ApiError.notFound('Parent account not found');
+    if (parent.role !== Role.CLIENT) {
+      throw ApiError.forbidden('Only client accounts can add athletes.');
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Get-or-create the Family. Most parents have one from registration;
+      // the `findUnique` covers the rare case where a user registered solo
+      // and later becomes a parent.
+      let family = await tx.family.findUnique({ where: { parentUserId: userId } });
+      if (!family) {
+        family = await tx.family.create({
+          data: {
+            parentUserId: userId,
+            primaryLocationId: parent.homeLocationId,
+          },
+        });
+      }
+
+      // Create the athlete's User row — no login, family+athlete tag email.
+      const tag = randomBytes(4).toString('hex');
+      const parentLocal = parent.email.toLowerCase().split('@')[0];
+      const parentDomain = parent.email.toLowerCase().split('@')[1];
+      const athleteEmail = `${parentLocal}+athlete-${tag}@${parentDomain}`;
+
+      const athleteUser = await tx.user.create({
+        data: {
+          email: athleteEmail,
+          passwordHash: null,
+          fullName: `${firstName!.trim()} ${lastName!.trim()}`,
+          role: Role.CLIENT,
+          authProvider: 'family',
+          homeLocationId: parent.homeLocationId,
+        },
+      });
+
+      const profile = await tx.athleteProfile.create({
+        data: {
+          userId: athleteUser.id,
+          familyId: family.id,
+          firstName: firstName!.trim(),
+          lastName: lastName!.trim(),
+          dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+          ageGroup,
+          relationToParent: 'CHILD',
+        },
+      });
+
+      return { family, profile };
+    });
+
+    await createAuditLog({
+      userId,
+      action: 'athlete.added',
+      resourceType: 'athlete_profile',
+      resourceId: result.profile.id,
+      changes: { athleteFirstName: firstName, ageGroup },
+    });
+
+    res.status(201).json({
+      success: true,
+      data: {
+        athleteId: result.profile.id,
+        firstName: result.profile.firstName,
+        lastName: result.profile.lastName,
+        ageGroup: result.profile.ageGroup,
+      },
+      message: `${firstName} has been added to your family. Next, pick a plan for them.`,
+    });
+  } catch (err) {
+    next(err);
   }
 });
 

@@ -628,6 +628,47 @@ class ApiClient {
     });
   }
 
+  /**
+   * List every athlete in the authenticated user's family (including
+   * themselves if they self-manage on top of being a parent). Used by
+   * the parent dashboard to show their kids + let them add more.
+   */
+  async getMyAthletes() {
+    return this.request<
+      Array<{
+        id: string;
+        firstName: string;
+        lastName: string;
+        ageGroup: string | null;
+        dateOfBirth: string | null;
+        relationToParent: string;
+        createdAt: string;
+      }>
+    >('/account/athletes');
+  }
+
+  /**
+   * Add a sibling / additional athlete under the parent's Family AFTER
+   * initial signup. Returns the new athleteId so the caller can route
+   * the parent into the "choose a plan" flow for this athlete.
+   */
+  async addAthlete(data: {
+    firstName: string;
+    lastName: string;
+    dateOfBirth?: string;
+    ageGroup: string;
+  }) {
+    return this.request<{
+      athleteId: string;
+      firstName: string;
+      lastName: string;
+      ageGroup: string | null;
+    }>('/account/athletes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   async changePassword(data: { currentPassword: string; newPassword: string }) {
     return this.request('/account/password', {
       method: 'PUT',

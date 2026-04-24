@@ -16,6 +16,7 @@
 import type { WidgetDefinition } from './types';
 import {
   UpcomingSessionsWidget,
+  MyAthletesWidget,
   RecentCoachNotesWidget,
   MessagesWidget,
   BillingStatusWidget,
@@ -38,6 +39,13 @@ import {
  */
 export const WIDGETS: Record<string, WidgetDefinition> = {
   // ─── Parent dashboard ─────────────────────────────────────────────────
+  'my-athletes': {
+    id: 'my-athletes',
+    title: 'My Athletes',
+    defaultSize: '1x2',
+    allowedRoles: ['CLIENT'],
+    component: MyAthletesWidget,
+  },
   'upcoming-sessions': {
     id: 'upcoming-sessions',
     title: 'Upcoming Sessions',

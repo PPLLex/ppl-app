@@ -6,6 +6,7 @@
  */
 
 export { UpcomingSessionsWidget } from './UpcomingSessions';
+export { MyAthletesWidget } from './MyAthletes';
 export { RecentCoachNotesWidget } from './RecentCoachNotes';
 export { MessagesWidget } from './Messages';
 export { BillingStatusWidget } from './BillingStatus';

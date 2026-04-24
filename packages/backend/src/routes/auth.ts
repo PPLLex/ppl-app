@@ -148,7 +148,31 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
       // Athlete self-signup for College only: acknowledge full responsibility
       // (no parent account created). Ignored for any other combo.
       parentOptOut,
-    } = req.body;
+      // Multi-athlete registration — parent adds EXTRA kids beyond the
+      // primary athlete above. Each entry creates another User +
+      // AthleteProfile under the same Family. Validated + clamped to 9
+      // extra athletes (10 total including primary) per Chad 2026-04-23.
+      // Only honored when registeringAs === 'PARENT'.
+      additionalAthletes,
+    } = req.body as {
+      email?: string;
+      password?: string;
+      fullName?: string;
+      phone?: string;
+      locationId?: string;
+      ageGroup?: string;
+      registeringAs?: string;
+      athleteFirstName?: string;
+      athleteLastName?: string;
+      athleteDateOfBirth?: string;
+      parentOptOut?: boolean;
+      additionalAthletes?: Array<{
+        firstName?: string;
+        lastName?: string;
+        dateOfBirth?: string;
+        ageGroup?: string;
+      }>;
+    };
 
     if (!email || !password || !fullName) {
       throw ApiError.badRequest('Email, password, and full name are required');
@@ -164,6 +188,28 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
         throw ApiError.badRequest(
           "Parent registration requires the athlete's first and last name"
         );
+      }
+      // Validate any additional athletes up front so we fail cleanly
+      // BEFORE we've started the create-user transaction.
+      if (additionalAthletes && Array.isArray(additionalAthletes)) {
+        if (additionalAthletes.length > 9) {
+          throw ApiError.badRequest(
+            'A family can register up to 10 athletes at once (1 primary + 9 additional).'
+          );
+        }
+        for (let i = 0; i < additionalAthletes.length; i++) {
+          const a = additionalAthletes[i];
+          if (!a.firstName || !a.lastName) {
+            throw ApiError.badRequest(
+              `Additional athlete #${i + 2} is missing a first or last name.`
+            );
+          }
+          if (!a.ageGroup || !['youth', 'ms_hs', 'college', 'pro'].includes(a.ageGroup)) {
+            throw ApiError.badRequest(
+              `Additional athlete #${i + 2} must have a valid playing level (youth / ms_hs / college / pro).`
+            );
+          }
+        }
       }
     } else {
       // Athlete self-signup enforcement:
@@ -266,13 +312,49 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
           data: {
             userId: athleteUser.id,
             familyId: family.id,
-            firstName: athleteFirstName,
-            lastName: athleteLastName,
+            // Non-null assertions are safe — we validated these are present
+            // at the top of the handler for any parent registration.
+            firstName: athleteFirstName!,
+            lastName: athleteLastName!,
             dateOfBirth: athleteDateOfBirth ? new Date(athleteDateOfBirth) : null,
             ageGroup: ageGroup || null,
             relationToParent: 'CHILD',
           },
         });
+
+        // Multi-athlete extension — create additional User + AthleteProfile
+        // rows under the same Family for each extra kid the parent is
+        // registering. Each kid gets a unique "+athlete-<tag>" email so
+        // our UNIQUE email index stays clean without fake domains. Per-kid
+        // subscriptions get created later when the parent picks plans on
+        // step 5 (one POST /api/memberships/subscribe per athleteId).
+        if (additionalAthletes && additionalAthletes.length > 0) {
+          for (const a of additionalAthletes) {
+            const tag = randomBytes(4).toString('hex');
+            const extraEmail = `${parentLocalPart}+athlete-${tag}@${parentDomain}`;
+            const extraUser = await tx.user.create({
+              data: {
+                email: extraEmail,
+                passwordHash: null,
+                fullName: `${a.firstName} ${a.lastName}`.trim(),
+                role: Role.CLIENT,
+                authProvider: 'family',
+                homeLocationId: effectiveLocationId,
+              },
+            });
+            await tx.athleteProfile.create({
+              data: {
+                userId: extraUser.id,
+                familyId: family.id,
+                firstName: a.firstName!,
+                lastName: a.lastName!,
+                dateOfBirth: a.dateOfBirth ? new Date(a.dateOfBirth) : null,
+                ageGroup: a.ageGroup || null,
+                relationToParent: 'CHILD',
+              },
+            });
+          }
+        }
       } else if (parentOptOut === true && (ageGroup === 'college' || ageGroup === 'ms_hs')) {
         // Solo College or MS/HS athlete: create their AthleteProfile up front
         // with relationToParent=SELF and a logged opt-out acknowledgment.
