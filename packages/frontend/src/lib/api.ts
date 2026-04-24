@@ -419,6 +419,81 @@ class ApiClient {
     });
   }
 
+  // ============================================================
+  // CRM — LEADS & SALES PIPELINE
+  // ============================================================
+
+  async listLeads(params: {
+    stage?: string;
+    source?: string;
+    ownerUserId?: string;
+    locationId?: string;
+    q?: string;
+  } = {}) {
+    const qs = new URLSearchParams();
+    if (params.stage) qs.set('stage', params.stage);
+    if (params.source) qs.set('source', params.source);
+    if (params.ownerUserId) qs.set('ownerUserId', params.ownerUserId);
+    if (params.locationId) qs.set('locationId', params.locationId);
+    if (params.q) qs.set('q', params.q);
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+    return this.request<
+      Array<{
+        id: string;
+        firstName: string;
+        lastName: string;
+        email: string;
+        phone: string | null;
+        ageGroup: string | null;
+        source: string;
+        stage: string;
+        locationId: string | null;
+        ownerUserId: string | null;
+        nextFollowUpAt: string | null;
+        notes: string | null;
+        createdAt: string;
+        updatedAt: string;
+        owner: { id: string; fullName: string; email: string } | null;
+        location: { id: string; name: string } | null;
+      }>
+    >(`/leads${query}`);
+  }
+
+  async createLead(data: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone?: string;
+    ageGroup?: string;
+    source?: string;
+    stage?: string;
+    locationId?: string;
+    ownerUserId?: string;
+    notes?: string;
+    sourceMetadata?: Record<string, unknown>;
+  }) {
+    return this.request(`/leads`, { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async updateLead(
+    id: string,
+    patch: {
+      stage?: string;
+      ownerUserId?: string | null;
+      notes?: string;
+      nextFollowUpAt?: string | null;
+      locationId?: string | null;
+      lostReason?: string;
+      phone?: string;
+      ageGroup?: string;
+    }
+  ) {
+    return this.request(`/leads/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  }
+
   /**
    * Role-first invite (April 2026). Supports all 11 roles — pass the target
    * Role enum value + optional scope (locationId for location-scoped roles,
