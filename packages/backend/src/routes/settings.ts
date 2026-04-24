@@ -97,11 +97,18 @@ router.put('/branding', authenticate, requireAdmin, async (req: Request, res: Re
       return Math.max(min, Math.min(max, n));
     };
 
+    // Hex-color validator — accepts #RGB, #RRGGBB, #RRGGBBAA. Rejects
+    // anything else so the branding UI can't be poisoned with CSS
+    // expressions or other injection payloads. Falls back silently
+    // to not-updating the color so a bad POST can't DOS the site.
+    const isHexColor = (v: unknown): v is string =>
+      typeof v === 'string' && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(v.trim());
+
     const data: Record<string, unknown> = {};
-    if (businessName !== undefined) data.businessName = businessName;
-    if (tagline !== undefined) data.tagline = tagline;
-    if (primaryColor !== undefined) data.primaryColor = primaryColor;
-    if (accentColor !== undefined) data.accentColor = accentColor;
+    if (typeof businessName === 'string') data.businessName = businessName.slice(0, 120);
+    if (typeof tagline === 'string') data.tagline = tagline.slice(0, 200);
+    if (isHexColor(primaryColor)) data.primaryColor = primaryColor.trim();
+    if (isHexColor(accentColor)) data.accentColor = accentColor.trim();
     if (defaultCapacity !== undefined) data.defaultCapacity = parseInt(defaultCapacity) || 8;
     if (sessionDurationMinutes !== undefined) data.sessionDurationMinutes = parseInt(sessionDurationMinutes) || 60;
     if (registrationCutoffHours !== undefined) data.registrationCutoffHours = parseInt(registrationCutoffHours) || 1;

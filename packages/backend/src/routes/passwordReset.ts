@@ -8,8 +8,18 @@ import crypto from 'crypto';
 
 const router = Router();
 
-// In-memory token store for dev. In production, use Redis or a DB table.
-const resetTokens = new Map<string, { userId: string; expiresAt: Date }>();
+/**
+ * Hash the raw token with SHA-256 before it ever touches the DB.
+ * A DB leak (backup, read-only access) can't be turned into live reset
+ * links because the hash is one-way. Only the email the user already
+ * received contains the raw token.
+ */
+function hashToken(raw: string): string {
+  return crypto.createHash('sha256').update(raw).digest('hex');
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const p: any = prisma;
 
 /**
  * POST /api/auth/forgot-password
@@ -36,16 +46,27 @@ router.post('/forgot-password', sensitiveLimiter, async (req: Request, res: Resp
       return;
     }
 
-    // Generate token
+    // Generate a cryptographically random 32-byte token, email the raw
+    // hex, store only the SHA-256 hash. Expires in 1 hour.
     const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    const tokenHash = hashToken(token);
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
-    resetTokens.set(token, { userId: user.id, expiresAt });
+    await p.passwordResetToken.create({
+      data: { userId: user.id, tokenHash, expiresAt },
+    });
 
-    // Clean up expired tokens
-    for (const [key, val] of resetTokens.entries()) {
-      if (val.expiresAt < new Date()) resetTokens.delete(key);
-    }
+    // Opportunistic sweep of expired/used rows (cheap — indexed).
+    // A dedicated cron could do the same; this keeps the table small
+    // without a separate job.
+    await p.passwordResetToken.deleteMany({
+      where: {
+        OR: [
+          { expiresAt: { lt: new Date() } },
+          { usedAt: { not: null } },
+        ],
+      },
+    });
 
     // In production, this URL would point to the deployed frontend
     const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${token}`;
@@ -89,22 +110,31 @@ router.post('/reset-password', async (req: Request, res: Response, next: NextFun
       throw ApiError.badRequest('Password must be at least 8 characters');
     }
 
-    const resetData = resetTokens.get(token);
-    if (!resetData) throw ApiError.badRequest('Invalid or expired reset token');
-    if (resetData.expiresAt < new Date()) {
-      resetTokens.delete(token);
+    const tokenHash = hashToken(token);
+    const resetRow = await p.passwordResetToken.findUnique({
+      where: { tokenHash },
+    });
+    if (!resetRow) throw ApiError.badRequest('Invalid or expired reset token');
+    if (resetRow.usedAt) throw ApiError.badRequest('This reset link has already been used');
+    if (resetRow.expiresAt < new Date()) {
+      await p.passwordResetToken.delete({ where: { id: resetRow.id } });
       throw ApiError.badRequest('Reset token has expired');
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 12);
 
-    await prisma.user.update({
-      where: { id: resetData.userId },
-      data: { passwordHash },
-    });
-
-    // Consume the token
-    resetTokens.delete(token);
+    // Atomically set the new password + mark the token used so a race
+    // condition can't let the same token reset two passwords.
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: resetRow.userId },
+        data: { passwordHash },
+      }),
+      p.passwordResetToken.update({
+        where: { id: resetRow.id },
+        data: { usedAt: new Date() },
+      }),
+    ]);
 
     res.json({ success: true, message: 'Password has been reset. You can now log in.' });
   } catch (error) {

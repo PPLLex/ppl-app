@@ -57,7 +57,7 @@ export async function sendPush(userId: string, payload: PushPayload): Promise<bo
   });
 
   if (tokens.length === 0) {
-    console.log(`[Push] No active tokens for user ${userId}`);
+    console.log(`[Push] No active tokens for user u:${userId.slice(0, 8)}`);
     return false;
   }
 
@@ -108,15 +108,15 @@ export async function sendPush(userId: string, payload: PushPayload): Promise<bo
         where: { id: { in: staleTokenIds } },
         data: { isActive: false },
       });
-      console.log(`[Push] Deactivated ${staleTokenIds.length} stale token(s) for user ${userId}`);
+      console.log(`[Push] Deactivated ${staleTokenIds.length} stale token(s) for user u:${userId.slice(0, 8)}`);
     }
 
     const successCount = response.successCount;
-    console.log(`[Push] Sent to ${successCount}/${tokens.length} device(s) for user ${userId}`);
+    console.log(`[Push] Sent to ${successCount}/${tokens.length} device(s) for user u:${userId.slice(0, 8)}`);
 
     return successCount > 0;
   } catch (error) {
-    console.error(`[Push] Failed to send to user ${userId}:`, error);
+    console.error(`[Push] Failed to send to user u:${userId.slice(0, 8)}:`, error);
     return false;
   }
 }

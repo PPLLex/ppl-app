@@ -1399,6 +1399,30 @@ model AuditLog {
  *     e.g. "only show this to Youth parents."
  *   isPublished — simple on/off switch for draft vs live content.
  */
+/**
+ * PasswordResetToken — durable, DB-backed password reset tokens.
+ *
+ * The raw token is never stored. We store a SHA-256 hash of the token.
+ * When a user hits POST /reset-password with a token, we hash the
+ * submitted value and look it up. This means a DB read (leak, backup,
+ * rogue DBA) can't be used to hijack a live reset link.
+ *
+ * Cleanup: expired rows are swept by the normal cleanup cron (every
+ * 15 min — see cronService). Rows are also deleted on successful use.
+ */
+model PasswordResetToken {
+  id         String   @id @default(uuid())
+  userId     String
+  tokenHash  String   @unique // SHA-256 of the raw token bytes
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
+}
+
 model EducationalResource {
   id              String   @id @default(uuid())
   organizationId  String   @default("ppl")
