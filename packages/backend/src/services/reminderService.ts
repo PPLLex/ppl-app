@@ -1,5 +1,6 @@
 import { prisma } from '../utils/prisma';
 import { notify } from './notificationService';
+import { buildSessionReminderEmail } from './emailService';
 import {
   BookingStatus,
   NotificationType,
@@ -80,6 +81,21 @@ export async function sendSessionReminders() {
       const locationStr = session.location?.name || 'PPL';
       const roomStr = session.room ? ` — ${session.room.name}` : '';
 
+      // How many hours until start? 1-2 is the active window, so round.
+      const hoursUntil = Math.max(
+        1,
+        Math.round((startTime.getTime() - now.getTime()) / (60 * 60 * 1000))
+      );
+      const reminderHtml = buildSessionReminderEmail({
+        athleteName: booking.client.fullName || 'Athlete',
+        sessionTitle: session.title,
+        date: dateStr,
+        time: timeStr,
+        coach: undefined,
+        room: session.room?.name,
+        hoursUntil,
+      });
+
       await notify({
         userId: booking.clientId,
         type: NotificationType.BOOKING_REMINDER,
@@ -91,6 +107,7 @@ export async function sendSessionReminders() {
           sessionId: session.id,
           startTime: session.startTime.toISOString(),
         },
+        emailHtml: reminderHtml,
       });
 
       sentCount++;
