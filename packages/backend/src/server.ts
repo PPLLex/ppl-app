@@ -23,6 +23,8 @@ import { config, validateProductionConfig } from './config';
 import { startCronJobs, stopCronJobs } from './services/cronService';
 import { bootstrapOrganizations } from './bootstrapOrgs';
 import { bootstrapMembershipPlans } from './bootstrapMembershipPlans';
+import { bootstrapUserRoles } from './bootstrapUserRoles';
+import { prisma } from './utils/prisma';
 
 console.log('[Server] Modules imported successfully');
 
@@ -40,6 +42,11 @@ const start = async () => {
     // Idempotent (upserts + soft-retire of legacy plans). Swallows its own
     // errors so a bad plan entry can never block server startup.
     await bootstrapMembershipPlans();
+    // Backfill UserRole rows from the legacy User.role column for any users
+    // that haven't been migrated yet. Idempotent — short-circuits if every
+    // legacy user already has at least one UserRole row. Removes the need
+    // for a manual `railway run -- npx tsx scripts/migrate-user-roles.ts`.
+    await bootstrapUserRoles(prisma);
 
     console.log('[Server] Starting listener on port', config.port);
     const server = app.listen(config.port, () => {
