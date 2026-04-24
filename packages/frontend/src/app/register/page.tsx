@@ -179,87 +179,38 @@ function RegisterForm() {
   // is already asking for a specific position.
   // ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    // Skip auto-resume when the URL already specifies where we should
-    // be. That covers three cases:
-    //   1. ?step=after-fee&payment=success — Stripe return URL
-    //   2. ?oauth=google — OAuth landing
-    //   3. ?step=<1-6> — refresh/deep-link preserving user's position
-    // Without this guard, a user on step 1 or 2 who hit refresh would
-    // get auto-bumped forward to step 4 because the backend thinks
-    // they're past that point. URL wins.
-    const numeric = stepParam ? parseInt(stepParam, 10) : NaN;
-    const explicitUrlStep =
-      (stepParam === 'after-fee' && paymentStatus === 'success') ||
-      !!oauthProvider ||
-      (!Number.isNaN(numeric) && numeric >= 1 && numeric <= 6);
-    if (explicitUrlStep) return;
+    // Auto-resume behavior (disabled per Chad's 2026-04-24 call): /register
+    // now ALWAYS starts at step 1 on a fresh visit. Refresh preserves the
+    // current step via the ?step=N URL sync above. Users who abandoned a
+    // previous signup can walk the flow again; their typed draft data is
+    // preserved in localStorage and re-hydrates automatically.
+    //
+    // The only exceptions are URL-driven entries which must still work:
+    //   • ?step=after-fee&payment=success — post-Stripe return
+    //   • ?oauth=google — OAuth landing
+    //   • ?step=<1-6> — direct deep-link / refresh
+    // All three are already handled by getInitialStep above. Nothing
+    // else auto-jumps.
+    //
+    // We DO still redirect fully-onboarded CLIENTs (who already have an
+    // ACTIVE membership) to the dashboard — hitting /register when your
+    // signup is done is just confusing.
     if (typeof window === 'undefined') return;
     const token = localStorage.getItem('ppl_token');
-    if (!token) return; // fresh signup — start at step 1
+    if (!token) return;
 
     (async () => {
       try {
-        const [meRes, onboardRes] = await Promise.all([
-          api.getMe(),
-          api.getOnboardingStatus(),
-        ]);
+        const meRes = await api.getMe();
         const user = meRes.data;
-        const onb = onboardRes.data;
-        if (!user) return;
+        if (!user || user.role !== 'CLIENT') return;
 
-        // ONLY auto-resume for CLIENT users. Admins and staff visiting
-        // /register (e.g. to preview what the flow looks like, or to register
-        // an athlete on someone else's behalf) should always start at step 1.
-        if (user.role !== 'CLIENT') return;
-
-        // If they've already got an ACTIVE membership, they're fully
-        // onboarded — ship them to the dashboard, not back into /register.
         const hasActiveMembership = user.memberships?.some(
           (m) => m.status === 'ACTIVE'
         );
         if (hasActiveMembership) {
           router.push('/client');
           return;
-        }
-
-        // Preload playingLevel so downstream steps render the right plans.
-        // Pull from the /onboarding/me response which now includes the
-        // AthleteProfile.ageGroup (the source of truth, per audit #11).
-        // Fall back to user.ageGroup (legacy ClientProfile cache).
-        const storedAgeGroup =
-          (onb?.ageGroup as PlayingLevel | undefined) ||
-          (user.ageGroup as PlayingLevel | undefined);
-        if (storedAgeGroup) setPlayingLevel(storedAgeGroup);
-
-        // Decide the resume step.
-        // step 3 — account exists but no onboarding record yet
-        // step 4 — onboarding picked but no location yet
-        // step 5 — location picked but no membership yet
-        //
-        // Safety: if we can't determine ageGroup, we'd land on step 5 with
-        // no filter and show every plan. Skip the resume in that case and
-        // let the user start fresh instead of seeing all plans.
-        const stepLabels = ['Playing Level', 'Your Info', 'Enrollment', 'Preferences', 'Membership', 'Checkout'];
-        let resumedTo: number | null = null;
-        if (!onb?.onboardingRecord) {
-          setStep(3);
-          resumedTo = 3;
-        } else if (!user.homeLocation?.id) {
-          setStep(4);
-          resumedTo = 4;
-        } else if (storedAgeGroup) {
-          setStep(5);
-          resumedTo = 5;
-        }
-        // else: stay on step 1 — user must pick a playing level first
-
-        // Nudge the user to let them know they can go back. The clickable
-        // progress bar + Back buttons now give them the tools; this toast
-        // tells them the tools exist. Fires once on mount, non-blocking.
-        if (resumedTo !== null) {
-          toast.info(
-            `Picked up at "${stepLabels[resumedTo - 1]}". Tap a bar above to go back.`
-          );
         }
       } catch {
         // If /me fails (expired token, etc.) silently stay on step 1.
