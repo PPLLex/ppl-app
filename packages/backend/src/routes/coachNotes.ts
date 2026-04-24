@@ -24,11 +24,16 @@ function param(req: Request, name: string): string {
 router.post('/', authenticate, requireStaffOrAdmin, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const coachId = req.user!.userId;
+    const coachRole = req.user!.role;
     const { athleteId, trainingCategory, content, sessionDate, bookingId } = req.body;
 
     if (!athleteId) throw ApiError.badRequest('Athlete ID is required');
     if (!trainingCategory) throw ApiError.badRequest('Training category is required');
     if (!content || content.trim().length === 0) throw ApiError.badRequest('Note content is required');
+    // Cap content at 20KB so abusive payloads can't bloat the DB or email body.
+    if (content.length > 20000) {
+      throw ApiError.badRequest('Note content is too long (max 20,000 characters).');
+    }
 
     // Validate the training category
     if (!Object.values(TrainingCategory).includes(trainingCategory)) {
@@ -38,10 +43,26 @@ router.post('/', authenticate, requireStaffOrAdmin, async (req: Request, res: Re
     // Verify athlete exists and is a CLIENT
     const athlete = await prisma.user.findUnique({
       where: { id: athleteId },
-      select: { id: true, role: true, fullName: true, isActive: true },
+      select: { id: true, role: true, fullName: true, isActive: true, homeLocationId: true },
     });
     if (!athlete || athlete.role !== Role.CLIENT) {
       throw ApiError.notFound('Athlete not found');
+    }
+
+    // Location-scope check (IDOR defense): STAFF users must be assigned
+    // to the athlete's home location before they can write a note. ADMINs
+    // bypass this — they can write notes for any athlete.
+    if (coachRole === Role.STAFF && athlete.homeLocationId) {
+      const assignment = await prisma.staffLocation.findUnique({
+        where: {
+          staffId_locationId: { staffId: coachId, locationId: athlete.homeLocationId },
+        },
+      });
+      if (!assignment) {
+        throw ApiError.forbidden(
+          'You can only write notes for athletes at locations you are assigned to.'
+        );
+      }
     }
 
     // Check if athlete has an active membership (payment enforcement)

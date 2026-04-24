@@ -9,121 +9,15 @@ import { sendEmail, buildWelcomeEmail } from '../services/emailService';
 
 const router = Router();
 
-/**
- * POST /api/auth/seed-admin
- * One-time admin account creation. Creates the PPL admin user + locations if they don't exist.
- * TODO: Remove this endpoint after initial production seed.
- */
-router.post('/seed-admin', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const seedKey = req.headers['x-seed-key'];
-    if (seedKey !== 'ppl-seed-2026') {
-      throw ApiError.unauthorized('Invalid seed key');
-    }
-
-    // Check if admin already exists
-    const existing = await prisma.user.findUnique({
-      where: { email: 'cmart@pitchingperformancelab.com' },
-    });
-    if (existing) {
-      res.json({ success: true, message: 'Admin already exists', userId: existing.id });
-      return;
-    }
-
-    const passwordHash = await bcrypt.hash('PPLadmin2026!', 12);
-
-    // Create locations first
-    const loc1 = await prisma.location.upsert({
-      where: { id: 'loc-1' },
-      update: {},
-      create: {
-        id: 'loc-1',
-        name: 'PPL Southlake',
-        address: '1234 Training Way, Southlake, TX 76092',
-        phone: '(817) 555-0101',
-        timezone: 'America/Chicago',
-        closedDay: 'sunday',
-        operatingHours: {
-          monday: { open: '06:00', close: '21:00' },
-          tuesday: { open: '06:00', close: '21:00' },
-          wednesday: { open: '06:00', close: '21:00' },
-          thursday: { open: '06:00', close: '21:00' },
-          friday: { open: '06:00', close: '21:00' },
-          saturday: { open: '08:00', close: '18:00' },
-          sunday: null,
-        },
-      },
-    });
-
-    const loc2 = await prisma.location.upsert({
-      where: { id: 'loc-2' },
-      update: {},
-      create: {
-        id: 'loc-2',
-        name: 'PPL Keller',
-        address: '5678 Performance Blvd, Keller, TX 76248',
-        phone: '(817) 555-0202',
-        timezone: 'America/Chicago',
-        closedDay: 'sunday',
-        operatingHours: {
-          monday: { open: '06:00', close: '21:00' },
-          tuesday: { open: '06:00', close: '21:00' },
-          wednesday: { open: '06:00', close: '21:00' },
-          thursday: { open: '06:00', close: '21:00' },
-          friday: { open: '06:00', close: '21:00' },
-          saturday: { open: '08:00', close: '18:00' },
-          sunday: null,
-        },
-      },
-    });
-
-    // Create rooms for each location
-    for (const loc of [loc1, loc2]) {
-      await prisma.room.upsert({
-        where: { id: `${loc.id}-room-1` },
-        update: {},
-        create: { id: `${loc.id}-room-1`, locationId: loc.id, name: 'Pitching Lab', sortOrder: 1 },
-      });
-      await prisma.room.upsert({
-        where: { id: `${loc.id}-room-2` },
-        update: {},
-        create: { id: `${loc.id}-room-2`, locationId: loc.id, name: 'Training Bay', sortOrder: 2 },
-      });
-    }
-
-    // Create admin user
-    const admin = await prisma.user.create({
-      data: {
-        email: 'cmart@pitchingperformancelab.com',
-        passwordHash,
-        fullName: 'Chad Martinez',
-        phone: '(817) 555-0001',
-        role: Role.ADMIN,
-        authProvider: 'email',
-        homeLocationId: loc1.id,
-      },
-    });
-
-    // Assign admin to all locations as staff
-    for (const loc of [loc1, loc2]) {
-      await prisma.staffLocation.upsert({
-        where: { staffId_locationId: { staffId: admin.id, locationId: loc.id } },
-        update: {},
-        create: { staffId: admin.id, locationId: loc.id },
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'Admin account created successfully',
-      userId: admin.id,
-      email: admin.email,
-      locations: [loc1.name, loc2.name],
-    });
-  } catch (error) {
-    next(error);
-  }
-});
+// POST /api/auth/seed-admin was removed 2026-04-24 (security audit).
+// It was a one-time bootstrap endpoint with a hardcoded seed key and
+// hardcoded admin password in source code — both visible to anyone with
+// repo access. The PPL admin account is already created in production,
+// the endpoint served no further purpose, and leaving it in place meant
+// anyone who guessed/leaked the seed key could re-seed the default
+// admin credentials. If admin bootstrapping is ever needed again, do it
+// via a one-off SQL script run manually against the DB, not a live
+// HTTP endpoint.
 
 /**
  * POST /api/auth/register

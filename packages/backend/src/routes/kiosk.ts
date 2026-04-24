@@ -1,14 +1,24 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../utils/prisma';
 import { ApiError } from '../utils/apiError';
+import { kioskPinLimiter } from '../middleware/rateLimit';
 import { BookingStatus } from '@prisma/client';
 
 const router = Router();
+
+// Every kiosk route validates the PIN in the body/query. Apply the
+// aggressive rate limiter globally so a brute-forcer can't rotate
+// endpoints to extend their attempt budget.
+router.use(kioskPinLimiter);
 
 /**
  * POST /api/kiosk/auth
  * Validate a kiosk PIN and return the location info + today's sessions.
  * No user auth required — PIN is the access control.
+ *
+ * Rate-limited aggressively: a 4-digit PIN has 10,000 combinations, so
+ * without limiting an attacker could brute-force the whole space in a
+ * few hours. 10 attempts per 15 min per IP makes that infeasible.
  */
 router.post('/auth', async (req: Request, res: Response, next: NextFunction) => {
   try {

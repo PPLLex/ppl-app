@@ -73,3 +73,21 @@ export const apiLimiter = rateLimit({
   max: 100,             // 100 requests per minute
   keyPrefix: 'api',
 });
+
+/** Aggressive limiter for the 4-digit kiosk PIN. A 4-digit PIN has only
+ * 10,000 possible values, so even a slow brute-force could enumerate
+ * the space. 10 attempts per 15 minutes per IP makes that infeasible. */
+export const kioskPinLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  keyPrefix: 'kiosk-pin',
+});
+
+/** Limiter for email-based flows (password reset, magic link, invites).
+ * Keyed by IP to block rotation; backend handlers should also silently
+ * accept requests so enumeration is impossible regardless of rate. */
+export const sensitiveLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,
+  keyPrefix: 'sensitive',
+});
