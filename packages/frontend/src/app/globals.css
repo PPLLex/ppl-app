@@ -357,11 +357,11 @@ html {
   font-family: var(--font-manrope), system-ui, -apple-system, "Segoe UI", sans-serif;
   font-weight: 500;
   font-style: normal;
-  font-size: 0.8125rem;      /* 13px — readable mixed case */
-  color: #c4c4c4;            /* slightly brighter now that it's not all-caps */
+  font-size: 0.6875rem;      /* 11px — softer, less shouty */
+  color: #a3a3a3;            /* muted gray; labels should sit quietly above inputs */
   text-transform: none;
-  letter-spacing: 0.01em;    /* a hair of tracking, still feels refined */
-  margin-bottom: 0.4rem;
+  letter-spacing: 0.02em;
+  margin-bottom: 0.35rem;
 }
 
 .ppl-badge {
