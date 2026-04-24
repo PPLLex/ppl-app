@@ -41,6 +41,7 @@ import educationalResourcesRoutes from './routes/educationalResources';
 import waiverRoutes from './routes/waivers';
 import inboundEmailRoutes from './routes/inboundEmail';
 import roleRoutes from './routes/roles';
+import partnerDashboardRoutes from './routes/partnerDashboard';
 import { membershipGuard } from './middleware/membershipGuard';
 
 const app = express();
@@ -143,6 +144,8 @@ app.use('/api/waivers', waiverRoutes);
 app.use('/api/webhooks', inboundEmailRoutes);
 // Role lookup + invitable-roles list — powers the admin invite UI dropdown
 app.use('/api/roles', roleRoutes);
+// Partner school dashboard — Partnership Coach + Admin + athletes-on-roster
+app.use('/api/partner-dashboard', partnerDashboardRoutes);
 
 // ============================================================
 // ERROR HANDLING

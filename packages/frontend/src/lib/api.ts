@@ -631,6 +631,43 @@ class ApiClient {
     });
   }
 
+  // ============================================================
+  // PARTNER SCHOOL DASHBOARD — /partner/[slug]
+  // ============================================================
+
+  /**
+   * Partner school dashboard payload for a given slug. Backend enforces
+   * access (Admin / Partnership Coach for this school / Athlete on roster).
+   * Returns null if the school exists but the caller lacks access — the
+   * page renders a friendly 403 in that case.
+   */
+  async getPartnerDashboard(slug: string) {
+    return this.request<{
+      schoolTeam: {
+        id: string;
+        name: string;
+        slug: string;
+        type: 'HIGH_SCHOOL' | 'TRAVEL_TEAM' | 'COLLEGE';
+        brandLogoUrl: string | null;
+        brandColors: { primary?: string; secondary?: string } | null;
+        coachName: string | null;
+        primaryLocation: { id: string; name: string } | null;
+      };
+      roster: Array<{
+        id: string;
+        firstName: string;
+        lastName: string;
+        ageGroup: string | null;
+        dateOfBirth: string | null;
+        userId: string;
+        email: string;
+        phone: string | null;
+        sessionsAtPpl: number;
+      }>;
+      viewerRole: 'ADMIN' | 'PARTNERSHIP_COACH' | 'ATHLETE';
+    }>(`/partner-dashboard/${encodeURIComponent(slug)}`);
+  }
+
   /**
    * List every athlete in the authenticated user's family (including
    * themselves if they self-manage on top of being a parent). Used by
