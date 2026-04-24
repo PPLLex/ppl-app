@@ -458,21 +458,64 @@ router.get('/my', authenticate, async (req: Request, res: Response, next: NextFu
 router.post('/subscribe', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
-    const { planId } = req.body;
+    const { planId, athleteProfileId: rawAthleteProfileId } = req.body as {
+      planId?: string;
+      athleteProfileId?: string;
+    };
 
     if (!planId) throw ApiError.badRequest('Plan ID is required');
 
-    // Check if client already has an active membership
+    // Resolve which athlete this subscription is for.
+    //
+    // If athleteProfileId is supplied (parent signing up a specific
+    // kid), verify the caller is authorized for that profile: either
+    // the athlete themselves, OR the parent of the Family the athlete
+    // belongs to. Unauthorized → 403 (IDOR defense).
+    //
+    // If not supplied, fall back to the caller's own AthleteProfile
+    // (self-managed athlete). This keeps the old single-kid flow
+    // working without any changes from the frontend.
+    let athleteProfileId: string | null = null;
+    if (rawAthleteProfileId) {
+      const requested = await prisma.athleteProfile.findUnique({
+        where: { id: rawAthleteProfileId },
+        include: { family: { select: { parentUserId: true } } },
+      });
+      if (!requested) throw ApiError.notFound('Athlete not found');
+      const isSelf = requested.userId === user.userId;
+      const isParent = requested.family?.parentUserId === user.userId;
+      if (!isSelf && !isParent) {
+        throw ApiError.forbidden('You are not authorized to subscribe for this athlete.');
+      }
+      athleteProfileId = requested.id;
+    } else {
+      const selfProfile = await prisma.athleteProfile.findUnique({
+        where: { userId: user.userId },
+        select: { id: true },
+      });
+      if (selfProfile) athleteProfileId = selfProfile.id;
+    }
+
+    // Per-athlete dedupe: block a second ACTIVE/PAST_DUE subscription
+    // for the SAME athlete, but allow a parent to hold simultaneous
+    // subscriptions for different kids. The old behavior blocked any
+    // second subscription on the parent account, which broke
+    // multi-athlete families.
     const existingMembership = await prisma.clientMembership.findFirst({
       where: {
         clientId: user.userId,
         status: { in: [MembershipStatus.ACTIVE, MembershipStatus.PAST_DUE] },
+        // Scope to this athlete when we know it; otherwise keep the old
+        // behavior (block any active subscription) for safety.
+        ...(athleteProfileId ? { athleteId: athleteProfileId } : {}),
       },
     });
 
     if (existingMembership) {
       throw ApiError.conflict(
-        'You already have an active membership. Please contact an admin if you want to change your plan.'
+        athleteProfileId
+          ? 'This athlete already has an active membership. Contact an admin to change plans.'
+          : 'You already have an active membership. Please contact an admin if you want to change your plan.'
       );
     }
 
@@ -529,11 +572,13 @@ router.post('/subscribe', authenticate, async (req: Request, res: Response, next
       );
     }
 
-    // Create the Stripe subscription
+    // Create the Stripe subscription. athleteProfileId tags the resulting
+    // ClientMembership so bookings + credits can scope to the right kid.
     const result = await createSubscription({
       userId: user.userId,
       planId,
       locationId: homeLocationId,
+      athleteProfileId: athleteProfileId ?? undefined,
     });
 
     await createAuditLog({

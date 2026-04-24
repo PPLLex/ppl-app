@@ -306,10 +306,10 @@ class ApiClient {
     return this.request<MembershipDetail | null>('/memberships/my');
   }
 
-  async subscribe(planId: string) {
+  async subscribe(planId: string, athleteProfileId?: string) {
     return this.request<SubscribeResult>('/memberships/subscribe', {
       method: 'POST',
-      body: JSON.stringify({ planId }),
+      body: JSON.stringify({ planId, ...(athleteProfileId ? { athleteProfileId } : {}) }),
     });
   }
 

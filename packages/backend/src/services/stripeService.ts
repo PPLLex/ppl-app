@@ -202,13 +202,17 @@ export async function createSubscription(params: {
   userId: string;
   planId: string;
   locationId: string;
+  /** Specific AthleteProfile this subscription covers. Required for
+   * multi-athlete families so credits + bookings route to the right kid.
+   * Optional for single-athlete accounts (legacy flow still works). */
+  athleteProfileId?: string;
 }): Promise<{
   subscriptionId: string;
   clientSecret: string;
   billingDay: BillingDay;
   billingAnchorDate: Date;
 }> {
-  const { userId, planId, locationId } = params;
+  const { userId, planId, locationId, athleteProfileId } = params;
 
   // Load the plan once — we need its billingCycle to decide whether to
   // anchor to Mon/Thu (weekly plans) or leave on the signup-date cycle
@@ -252,6 +256,9 @@ export async function createSubscription(params: {
       ppl_plan_id: planId,
       ppl_location_id: locationId,
       ppl_billing_day: billingDay,
+      // Stamp the athlete on the Stripe side too so webhooks can
+      // resolve the right kid even without a DB roundtrip.
+      ...(athleteProfileId ? { ppl_athlete_profile_id: athleteProfileId } : {}),
     },
   };
 
@@ -275,6 +282,7 @@ export async function createSubscription(params: {
       clientId: userId,
       planId,
       locationId,
+      athleteId: athleteProfileId ?? null,
       status: MembershipStatus.ACTIVE, // Will be confirmed by webhook
       stripeSubscriptionId: subscription.id,
       stripePriceId,
