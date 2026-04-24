@@ -2478,6 +2478,8 @@ export interface OrgSettings {
   sessionDurationMinutes: number;
   registrationCutoffHours: number;
   cancellationCutoffHours: number;
+  liabilityWaiverText?: string;
+  liabilityWaiverVersion?: string;
   updatedAt: string;
 }
 

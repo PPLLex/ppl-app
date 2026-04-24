@@ -108,6 +108,8 @@ const adminNav: NavItem[] = [
   { label: 'Locations', href: '/admin/locations', icon: <Icons.Location /> },
   { label: 'Messages', href: '/admin/messages', icon: <Icons.Chat /> },
   { label: 'Educational Resources', href: '/admin/educational-resources', icon: <Icons.Pencil /> },
+  { label: 'Coach Notes Moderation', href: '/admin/coach-notes/moderation', icon: <Icons.Shield /> },
+  { label: 'Waivers', href: '/admin/waivers', icon: <Icons.Shield /> },
   { label: 'Audit Log', href: '/admin/audit-logs', icon: <Icons.Shield /> },
   { label: 'Settings', href: '/admin/settings', icon: <Icons.Settings /> },
   { label: 'My Profile', href: '/profile', icon: <UserIcon /> },
@@ -133,6 +135,7 @@ const clientNav: NavItem[] = [
   { label: 'My Programs', href: '/client/programs', icon: <Icons.Dumbbell /> },
   { label: 'Coach View', href: '/client/coaches', icon: <Icons.Users /> },
   { label: 'Membership', href: '/client/membership', icon: <Icons.CreditCard /> },
+  { label: 'Liability Waiver', href: '/client/waiver', icon: <Icons.Shield /> },
   { label: 'Messages', href: '/client/messages', icon: <Icons.Chat /> },
   { label: 'My Account', href: '/client/account', icon: <Icons.Settings /> },
 ];
