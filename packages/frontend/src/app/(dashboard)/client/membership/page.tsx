@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { api, MembershipPlan, MembershipDetail, PaymentRecord, SubscribeResult } from '@/lib/api';
 import StripeCheckout from '@/components/payments/StripeCheckout';
 
@@ -10,35 +11,66 @@ const AGE_GROUP_LABELS: Record<string, string> = {
   youth: 'Youth (12 & Under)',
 };
 
-export default function ClientMembershipPage() {
+type AthleteSummary = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  ageGroup: string | null;
+  relationToParent: string;
+};
+
+function ClientMembershipPageInner() {
+  const searchParams = useSearchParams();
+  // Parents managing multiple kids land here with ?athleteId=X so each
+  // sibling's subscription is scoped to their own AthleteProfile. When
+  // the param is absent we fall back to the self-managed athlete flow
+  // (single user subscribing for themselves).
+  const athleteId = searchParams.get('athleteId') || undefined;
+
   const [membershipData, setMembershipData] = useState<MembershipDetail | null>(null);
   const [plans, setPlans] = useState<MembershipPlan[]>([]);
+  const [athletes, setAthletes] = useState<AthleteSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showPlans, setShowPlans] = useState(false);
   const [actionInProgress, setActionInProgress] = useState(false);
   const [checkoutData, setCheckoutData] = useState<SubscribeResult | null>(null);
 
+  // Resolve the active athlete (when parent is managing a specific kid).
+  // null = self-managed / no selection. Used for the header name +
+  // plan filter below.
+  const activeAthlete = useMemo<AthleteSummary | null>(() => {
+    if (!athleteId) return null;
+    return athletes.find((a) => a.id === athleteId) || null;
+  }, [athleteId, athletes]);
+
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [membershipRes, plansRes] = await Promise.all([
-        api.getMyMembership(),
+      // Fire all three in parallel — membership lookup is scoped by
+      // athleteId when present; athletes list is used to render the
+      // kid's name in the header.
+      const [membershipRes, plansRes, athletesRes] = await Promise.all([
+        api.getMyMembership(athleteId),
         api.getMembershipPlans(),
+        api.getMyAthletes().catch(() => ({ data: [] })),
       ]);
       setMembershipData(membershipRes.data || null);
       if (plansRes.data) setPlans(plansRes.data);
+      if (athletesRes.data) setAthletes(athletesRes.data);
 
-      // If no membership, show plan selection
+      // If no membership for this scope, default to showing plans.
       if (!membershipRes.data) {
         setShowPlans(true);
+      } else {
+        setShowPlans(false);
       }
     } catch (err) {
       console.error('Failed to load membership data:', err);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [athleteId]);
 
   useEffect(() => {
     loadData();
@@ -48,7 +80,10 @@ export default function ClientMembershipPage() {
     setMessage(null);
     setActionInProgress(true);
     try {
-      const res = await api.subscribe(planId);
+      // Pass athleteId through so parents with multiple kids get one
+      // subscription per AthleteProfile rather than a single one on the
+      // parent user that gets reused/overwritten.
+      const res = await api.subscribe(planId, athleteId);
       if (res.data) {
         // Open Stripe Elements checkout modal
         setCheckoutData(res.data);
@@ -118,11 +153,30 @@ export default function ClientMembershipPage() {
   const credits = membershipData?.credits;
   const payments = membershipData?.recentPayments || [];
 
+  // When a parent is managing a specific kid, scope the plan list to
+  // that athlete's age group so we aren't offering Youth plans to a
+  // college athlete (and vice-versa).
+  const visiblePlans = activeAthlete?.ageGroup
+    ? plans.filter((p) => p.ageGroup === activeAthlete.ageGroup)
+    : plans;
+
+  const headerTitle = activeAthlete
+    ? `${activeAthlete.firstName}${activeAthlete.lastName ? ' ' + activeAthlete.lastName : ''}`
+    : 'My Membership';
+  const headerSubtitle = activeAthlete
+    ? 'Manage this athlete\u2019s plan, credits, and billing'
+    : 'Manage your plan, credits, and billing';
+
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground">My Membership</h1>
-        <p className="text-muted text-sm mt-1">Manage your plan, credits, and billing</p>
+        {activeAthlete && (
+          <p className="text-xs text-muted uppercase tracking-[0.12em] mb-1">
+            Membership for
+          </p>
+        )}
+        <h1 className="text-2xl font-bold text-foreground">{headerTitle}</h1>
+        <p className="text-muted text-sm mt-1">{headerSubtitle}</p>
       </div>
 
       {/* Status message */}
@@ -339,7 +393,7 @@ export default function ClientMembershipPage() {
 
               {/* Group plans by age group */}
               {Object.entries(
-                plans.reduce<Record<string, MembershipPlan[]>>((groups, plan) => {
+                visiblePlans.reduce<Record<string, MembershipPlan[]>>((groups, plan) => {
                   const group = plan.ageGroup;
                   if (!groups[group]) groups[group] = [];
                   groups[group].push(plan);
@@ -403,5 +457,23 @@ export default function ClientMembershipPage() {
         />
       )}
     </div>
+  );
+}
+
+// useSearchParams requires a Suspense boundary for Next.js App Router
+// prerendering; the inner component reads `?athleteId=X` so parents
+// managing multiple kids each get their own scoped membership view.
+export default function ClientMembershipPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="max-w-2xl mx-auto space-y-4">
+          <div className="h-8 bg-surface-hover rounded animate-pulse w-48" />
+          <div className="ppl-card animate-pulse h-48" />
+        </div>
+      }
+    >
+      <ClientMembershipPageInner />
+    </Suspense>
   );
 }

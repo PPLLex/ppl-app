@@ -302,8 +302,11 @@ class ApiClient {
     return this.request<MembershipPlan[]>('/memberships/plans');
   }
 
-  async getMyMembership() {
-    return this.request<MembershipDetail | null>('/memberships/my');
+  async getMyMembership(athleteProfileId?: string) {
+    const q = athleteProfileId
+      ? `?athleteProfileId=${encodeURIComponent(athleteProfileId)}`
+      : '';
+    return this.request<MembershipDetail | null>(`/memberships/my${q}`);
   }
 
   async subscribe(planId: string, athleteProfileId?: string) {

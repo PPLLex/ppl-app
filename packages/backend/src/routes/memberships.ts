@@ -366,15 +366,44 @@ router.put('/plans/:id', authenticate, requireAdmin, async (req: Request, res: R
 /**
  * GET /api/memberships/my
  * Client: get my current membership status, plan, credits.
+ *
+ * Optional `?athleteProfileId=X` scopes the lookup to a specific athlete
+ * under the caller's family — used by parents managing multiple kids,
+ * each with their own subscription. Ownership is enforced: the caller
+ * must either BE the athlete, or be the `parentUserId` on the athlete's
+ * Family, or the endpoint returns 403 to prevent cross-family snooping.
  */
 router.get('/my', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
+    const rawAthleteProfileId =
+      typeof req.query.athleteProfileId === 'string' ? req.query.athleteProfileId : undefined;
+
+    // Ownership gate — if an athleteProfileId was supplied, verify the
+    // caller is allowed to see this athlete's membership before we query
+    // the membership table by it.
+    let filterAthleteId: string | undefined;
+    if (rawAthleteProfileId) {
+      const athlete = await prisma.athleteProfile.findUnique({
+        where: { id: rawAthleteProfileId },
+        include: { family: { select: { parentUserId: true } } },
+      });
+      if (!athlete) {
+        throw ApiError.notFound('Athlete not found');
+      }
+      const isSelf = athlete.userId === user.userId;
+      const isParent = athlete.family?.parentUserId === user.userId;
+      if (!isSelf && !isParent) {
+        throw ApiError.forbidden('You do not have access to this athlete');
+      }
+      filterAthleteId = athlete.id;
+    }
 
     const membership = await prisma.clientMembership.findFirst({
       where: {
         clientId: user.userId,
         status: { in: [MembershipStatus.ACTIVE, MembershipStatus.PAST_DUE] },
+        ...(filterAthleteId ? { athleteId: filterAthleteId } : {}),
       },
       include: {
         plan: true,
