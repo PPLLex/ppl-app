@@ -419,6 +419,49 @@ class ApiClient {
     });
   }
 
+  /**
+   * Role-first invite (April 2026). Supports all 11 roles — pass the target
+   * Role enum value + optional scope (locationId for location-scoped roles,
+   * schoolTeamId for PARTNERSHIP_COACH). Used by the /admin/invite v2 page.
+   */
+  async inviteStaffV2(data: {
+    fullName: string;
+    email: string;
+    phone?: string;
+    role: string;
+    locationId?: string;
+    schoolTeamId?: string;
+  }) {
+    return this.request<StaffInvite>('/staff/invite-v2', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * List of roles the authenticated caller is allowed to invite, pulled
+   * from the backend invite matrix in roleService. Drives the role
+   * dropdown on /admin/invite.
+   */
+  async getInvitableRoles() {
+    return this.request<string[]>('/roles/invitable');
+  }
+
+  /**
+   * All partner schools — used by the invite UI when Partnership Coach is
+   * selected so the admin can pick which school the coach is assigned to.
+   */
+  async listSchoolTeams() {
+    return this.request<
+      Array<{
+        id: string;
+        name: string;
+        slug: string;
+        type: 'HIGH_SCHOOL' | 'TRAVEL_TEAM' | 'COLLEGE';
+      }>
+    >('/schools');
+  }
+
   async revokeStaffInvite(inviteId: string) {
     return this.request(`/staff/invites/${inviteId}`, { method: 'DELETE' });
   }

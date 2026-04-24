@@ -9,7 +9,7 @@ import {
   sendInviteEmailByRole,
 } from '../services/emailService';
 import { config } from '../config';
-import { Role, LocationRole } from '@prisma/client';
+import { Role, LocationRole, Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
@@ -418,6 +418,170 @@ router.post('/invite', async (req: Request, res: Response, next: NextFunction) =
 });
 
 /**
+ * POST /api/staff/invite-v2
+ *
+ * Role-first invite flow added April 2026. Supports the full 11-role model
+ * without needing the legacy LocationRole + program (PPL/Youth) combo. The
+ * existing POST /api/staff/invite endpoint is unchanged and remains the path
+ * for Performance Coach / Coordinator / Admin invites flowing through the
+ * legacy admin/staff modal.
+ *
+ * Request body:
+ *   {
+ *     fullName: string,
+ *     email: string,
+ *     phone?: string,
+ *     role: Role enum (one of the 11 new values),
+ *     locationId?: string,         // for location-scoped roles
+ *     schoolTeamId?: string,       // for PARTNERSHIP_COACH
+ *   }
+ *
+ * Authorization: the caller must be permitted to invite this target role
+ * per `canInvite()` in roleService. ADMIN-only access to this endpoint
+ * is enforced by the router-level `requireAdmin` middleware — Coordinator /
+ * Performance Coach / Medical Admin invite flows will use a dedicated
+ * endpoint that runs canInvite() from roleService on their own roles.
+ */
+router.post('/invite-v2', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { fullName, email, phone, role, locationId, schoolTeamId } = req.body as {
+      fullName?: string;
+      email?: string;
+      phone?: string;
+      role?: string;
+      locationId?: string;
+      schoolTeamId?: string;
+    };
+
+    if (!fullName || !email) {
+      throw ApiError.badRequest('Name and email are required');
+    }
+    if (!role || !(Object.values(Role) as string[]).includes(role)) {
+      throw ApiError.badRequest(`Invalid role: ${role}`);
+    }
+
+    const targetRole = role as Role;
+
+    // Legacy Role values are not invitable via v2 — v2 is for the new model.
+    if (targetRole === Role.STAFF || targetRole === Role.CLIENT) {
+      throw ApiError.badRequest(
+        'Legacy STAFF / CLIENT roles are not invitable via v2. Use POST /staff/invite or the new role enum values.'
+      );
+    }
+
+    // Scope validation per role.
+    const needsLocation: Role[] = [
+      Role.COORDINATOR,
+      Role.PERFORMANCE_COACH,
+      Role.CONTENT_MARKETING,
+      Role.MEDICAL,
+    ];
+    if (needsLocation.includes(targetRole) && !locationId) {
+      throw ApiError.badRequest(`Role ${role} requires a locationId`);
+    }
+    if (targetRole === Role.PARTNERSHIP_COACH && !schoolTeamId) {
+      throw ApiError.badRequest('Role PARTNERSHIP_COACH requires a schoolTeamId');
+    }
+
+    // Validate the location / school exists.
+    let locationName: string | null = null;
+    if (locationId) {
+      const loc = await prisma.location.findUnique({
+        where: { id: locationId },
+        select: { name: true },
+      });
+      if (!loc) throw ApiError.badRequest('Location not found');
+      locationName = loc.name;
+    }
+    let schoolName: string | null = null;
+    if (schoolTeamId) {
+      const school = await prisma.schoolTeam.findUnique({
+        where: { id: schoolTeamId },
+        select: { name: true },
+      });
+      if (!school) throw ApiError.badRequest('Partner school not found');
+      schoolName = school.name;
+    }
+
+    // Conflict check — email not already registered.
+    const existing = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+      select: { id: true },
+    });
+    if (existing) {
+      throw ApiError.conflict(
+        'A user with this email already exists. Use the staff page to add roles to an existing user.'
+      );
+    }
+
+    // Existing pending invite check.
+    const existingInvite = await prisma.staffInvite.findFirst({
+      where: { email: email.toLowerCase(), usedAt: null, expiresAt: { gt: new Date() } },
+    });
+    if (existingInvite) {
+      throw ApiError.conflict('A pending invitation already exists for this email');
+    }
+
+    // Token + StaffInvite row. We stuff the target role + scope into the
+    // `locations` JSON column so the accept handler can create UserRole
+    // rows matching the invited role. Legacy invites use a different shape
+    // (array of {locationId, roles: LocationRole[]}) — v2 uses a single
+    // wrapper object { v: 2, role, locationId, schoolTeamId } so the
+    // accept handler can tell the two apart by presence of `v: 2`.
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    const invite = await prisma.staffInvite.create({
+      data: {
+        email: email.toLowerCase(),
+        fullName,
+        phone: phone || null,
+        // For the legacy Role column on StaffInvite, default to STAFF for
+        // everything except ADMIN. The real role info is in locations JSON.
+        role: targetRole === Role.ADMIN ? Role.ADMIN : Role.STAFF,
+        locations: { v: 2, role, locationId: locationId ?? null, schoolTeamId: schoolTeamId ?? null } as unknown as Prisma.InputJsonValue,
+        expiresAt,
+        invitedBy: req.user!.userId,
+      },
+    });
+
+    await createAuditLog({
+      action: 'STAFF_INVITED_V2',
+      userId: req.user!.userId,
+      resourceType: 'StaffInvite',
+      resourceId: invite.id,
+      changes: { fullName, email, role, locationId, schoolTeamId },
+    });
+
+    const inviter = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      select: { fullName: true },
+    });
+    const acceptUrl = `${config.frontendUrl}/join/staff/${invite.token}`;
+    sendInviteEmailByRole({
+      to: invite.email,
+      fullName: invite.fullName,
+      invitedByName: inviter?.fullName ?? null,
+      role: targetRole,
+      locationName,
+      schoolName,
+      acceptUrl,
+      expiresInDays: 7,
+    }).catch((err) => {
+      console.error('Failed to send v2 invite email:', err);
+    });
+
+    res.status(201).json({
+      success: true,
+      data: invite,
+      message: `Invitation sent to ${fullName} as ${role.replace('_', ' ').toLowerCase()}`,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * DELETE /api/staff/invites/:id
  * Revoke a pending invitation.
  */
@@ -758,42 +922,67 @@ staffPublicRouter.post('/invite/:token/accept', async (req: Request, res: Respon
         },
       });
 
-      // Create location assignments from invite
-      const locationData = invite.locations as any[];
-      if (locationData.length > 0) {
-        await tx.staffLocation.createMany({
-          data: locationData.map((l: any) => ({
-            staffId: newUser.id,
+      // Two invite shapes to handle:
+      //   v1 (legacy): locations is an array of { locationId, roles: LocationRole[] }
+      //   v2 (Apr 2026): locations is { v: 2, role, locationId, schoolTeamId }
+      const raw = invite.locations as unknown;
+      const isV2 =
+        raw !== null &&
+        typeof raw === 'object' &&
+        !Array.isArray(raw) &&
+        (raw as Record<string, unknown>).v === 2;
+
+      if (isV2) {
+        // v2 — single target role with optional location/school scope.
+        const v2 = raw as { role: string; locationId: string | null; schoolTeamId: string | null };
+        const targetRole = v2.role as Role;
+
+        await tx.userRole.create({
+          data: {
+            userId: newUser.id,
+            role: targetRole,
+            locationId: v2.locationId,
+            schoolTeamId: v2.schoolTeamId,
+          },
+        });
+        // v2 invites don't populate StaffLocation — that's a legacy-only
+        // table tied to LocationRole. The new role model stands on its own.
+      } else {
+        // v1 — legacy array of location × LocationRole assignments.
+        const locationData = (raw as any[]) || [];
+        if (locationData.length > 0) {
+          await tx.staffLocation.createMany({
+            data: locationData.map((l: any) => ({
+              staffId: newUser.id,
+              locationId: l.locationId,
+              roles: l.roles as LocationRole[],
+            })),
+          });
+        }
+
+        // Mirror into the new UserRole junction so this account shows up
+        // under the Apr 2026 role model too.
+        const primaryRole = inferPrimaryRole(
+          invite.role,
+          locationData.map((l: any) => ({
             locationId: l.locationId,
             roles: l.roles as LocationRole[],
-          })),
-        });
-      }
-
-      // Also populate the NEW UserRole junction table so this account shows
-      // up under the Apr 2026 role model. Infer the primary role from the
-      // invite payload and create one UserRole per location (or a single
-      // global row for ADMIN).
-      const primaryRole = inferPrimaryRole(
-        invite.role,
-        locationData.map((l: any) => ({
-          locationId: l.locationId,
-          roles: l.roles as LocationRole[],
-        }))
-      );
-      if (primaryRole === Role.ADMIN) {
-        await tx.userRole.create({
-          data: { userId: newUser.id, role: Role.ADMIN },
-        });
-      } else if (locationData.length > 0) {
-        await tx.userRole.createMany({
-          data: locationData.map((l: any) => ({
-            userId: newUser.id,
-            role: primaryRole,
-            locationId: l.locationId,
-          })),
-          skipDuplicates: true,
-        });
+          }))
+        );
+        if (primaryRole === Role.ADMIN) {
+          await tx.userRole.create({
+            data: { userId: newUser.id, role: Role.ADMIN },
+          });
+        } else if (locationData.length > 0) {
+          await tx.userRole.createMany({
+            data: locationData.map((l: any) => ({
+              userId: newUser.id,
+              role: primaryRole,
+              locationId: l.locationId,
+            })),
+            skipDuplicates: true,
+          });
+        }
       }
 
       // Mark invite as used
