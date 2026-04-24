@@ -129,12 +129,32 @@ router.post('/', authenticate, async (req: Request, res: Response, next: NextFun
       }
     }
 
-    // Check: credits (for limited plans)
+    // Check: credits (for limited plans).
+    //
+    // Advance-booking window: clients can book up to 60 days out, which
+    // means a booking may pull from a FUTURE week's credit allotment.
+    // We key the WeeklyCredit row to the session's own week (not today's
+    // week). If that week's row doesn't exist yet (it won't, for a future
+    // week the client has never booked into) we create it with the same
+    // creditsTotal as their plan.
+    //
+    // If their card fails in the meantime, webhooks.ts's paymentFailed
+    // handler cancels every future CONFIRMED booking and returns the
+    // credits to the correct WeeklyCredit row before freezing all credits
+    // — so the pre-booked future slots evaporate cleanly.
     let creditsUsed = 0;
     if (membership.plan.sessionsPerWeek !== null) {
-      // Limited plan — check weekly credits
-      const now = new Date();
-      const weekStart = getWeekStart(now, membership.billingDay);
+      // Enforce 60-day advance-booking cap.
+      const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
+      if (session.startTime.getTime() - Date.now() > SIXTY_DAYS_MS) {
+        throw ApiError.badRequest(
+          'You can only book sessions up to 60 days in advance.'
+        );
+      }
+
+      // Key the WeeklyCredit row to the session's week — this is what lets
+      // advance-booking work across weeks without double-spending.
+      const weekStart = getWeekStart(session.startTime, membership.billingDay);
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekEnd.getDate() + 7);
 
@@ -162,8 +182,14 @@ router.post('/', authenticate, async (req: Request, res: Response, next: NextFun
 
       const creditsRemaining = weeklyCredit.creditsTotal - weeklyCredit.creditsUsed;
       if (creditsRemaining <= 0) {
+        // Surface whether the cap was hit THIS week vs. a future week so
+        // the error message is actually useful.
+        const isFuture = weekStart > new Date();
+        const weekLabel = isFuture
+          ? `the week of ${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+          : 'this week';
         throw ApiError.badRequest(
-          `You've used all ${weeklyCredit.creditsTotal} credit(s) for this week. Credits reset on your billing day (${membership.billingDay}).`
+          `You've used all ${weeklyCredit.creditsTotal} credit(s) for ${weekLabel}.`
         );
       }
 
@@ -348,7 +374,10 @@ router.delete('/:id', authenticate, async (req: Request, res: Response, next: Ne
       });
 
       if (membership && membership.plan.sessionsPerWeek !== null) {
-        const weekStart = getWeekStart(new Date(), membership.billingDay);
+        // Restore to the SESSION'S week, not the current week — matches
+        // the advance-booking model where a credit may live in a future
+        // WeeklyCredit row.
+        const weekStart = getWeekStart(booking.session.startTime, membership.billingDay);
         await prisma.weeklyCredit.updateMany({
           where: {
             clientId: booking.clientId,
@@ -379,13 +408,20 @@ router.delete('/:id', authenticate, async (req: Request, res: Response, next: Ne
         where: { clientId: booking.clientId, status: 'ACTIVE' },
       });
       if (membership) {
-        const weekStart = getWeekStart(new Date(), membership.billingDay);
+        // Report on the session's week so the message is accurate for
+        // advance-booked cancellations too (e.g. "3/5 credits for the
+        // week of May 12" instead of lying about "this week").
+        const sessionWeekStart = getWeekStart(booking.session.startTime, membership.billingDay);
         const weeklyCredit = await prisma.weeklyCredit.findFirst({
-          where: { clientId: booking.clientId, membershipId: membership.id, weekStartDate: weekStart },
+          where: { clientId: booking.clientId, membershipId: membership.id, weekStartDate: sessionWeekStart },
         });
         if (weeklyCredit) {
           const remaining = weeklyCredit.creditsTotal - weeklyCredit.creditsUsed;
-          creditBalanceMsg = ` Your credit has been restored. Current balance: ${remaining}/${weeklyCredit.creditsTotal} credits this week.`;
+          const isFuture = sessionWeekStart > new Date();
+          const weekLabel = isFuture
+            ? `the week of ${sessionWeekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+            : 'this week';
+          creditBalanceMsg = ` Your credit has been restored. Current balance: ${remaining}/${weeklyCredit.creditsTotal} credits for ${weekLabel}.`;
         }
       }
     }

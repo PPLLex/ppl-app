@@ -172,6 +172,29 @@ export default function ClientBookPage() {
     try {
       const res = await api.bookSession(session.id);
       setMessage({ type: 'success', text: res.message || 'Session booked!' });
+
+      // Optimistic credit decrement — only when the session is in the
+      // CURRENT week. Bookings that consume future-week credits don't
+      // change the current-week counter on screen; they'll show up in
+      // the "future bookings" list via loadData.
+      const sessionStart = new Date(session.startTime);
+      const isInCurrentWeek =
+        sessionStart.getTime() >= weekStart.getTime() &&
+        sessionStart.getTime() < weekStart.getTime() + 7 * 24 * 60 * 60 * 1000;
+      if (isInCurrentWeek) {
+        setMyWeek((prev) => {
+          if (!prev?.credits) return prev;
+          return {
+            ...prev,
+            credits: {
+              ...prev.credits,
+              used: prev.credits.used + 1,
+              remaining: Math.max(0, prev.credits.remaining - 1),
+            },
+          };
+        });
+      }
+
       await loadData();
       // Offer "same time on other days this week?" — the modal filters to
       // matching sessions itself and closes silently if none exist.
@@ -195,6 +218,33 @@ export default function ClientBookPage() {
           res.message ||
           `${sessionIds.length} more session${sessionIds.length === 1 ? '' : 's'} booked!`,
       });
+
+      // Optimistic counter update — only count the sessions that fall
+      // in the current week, since future-week bookings pull from that
+      // week's pool (see backend bookings.ts key-to-session-week logic).
+      const currentWeekCount = sessionIds.filter((id) => {
+        const s = sessions.find((x) => x.id === id);
+        if (!s) return false;
+        const st = new Date(s.startTime).getTime();
+        return (
+          st >= weekStart.getTime() &&
+          st < weekStart.getTime() + 7 * 24 * 60 * 60 * 1000
+        );
+      }).length;
+      if (currentWeekCount > 0) {
+        setMyWeek((prev) => {
+          if (!prev?.credits) return prev;
+          return {
+            ...prev,
+            credits: {
+              ...prev.credits,
+              used: prev.credits.used + currentWeekCount,
+              remaining: Math.max(0, prev.credits.remaining - currentWeekCount),
+            },
+          };
+        });
+      }
+
       await loadData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Booking failed';
@@ -294,23 +344,35 @@ export default function ClientBookPage() {
       {/* ── MY WEEK CARD ── */}
       {myWeek?.membership && (
         <div className="mb-6 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 border border-highlight/20 p-4">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-3 gap-4">
             <h2 className="text-base font-semibold text-foreground">My Week</h2>
             {myWeek.credits ? (
-              <div className="flex items-center gap-1.5">
-                {Array.from({ length: myWeek.credits.total }, (_, i) => (
-                  <div
-                    key={i}
-                    className={`w-3 h-3 rounded-full ${
-                      i < myWeek.credits!.used
-                        ? 'bg-muted/30'
-                        : 'bg-accent'
-                    }`}
-                  />
-                ))}
-                <span className="text-xs text-muted ml-1.5">
-                  {myWeek.credits.remaining} left
-                </span>
+              <div className="flex items-center gap-3">
+                {/* Big live counter — the number animates when it changes
+                    via a CSS key on `remaining` that triggers the pulse
+                    keyframe. Bebas Neue (font-stat) keeps it readable at
+                    this size and matches the admin dashboard. */}
+                <div className="flex items-baseline gap-1 leading-none">
+                  <span
+                    key={myWeek.credits.remaining}
+                    className="font-stat text-3xl tabular-nums text-foreground ppl-credit-pulse"
+                  >
+                    {myWeek.credits.remaining}
+                  </span>
+                  <span className="text-xs text-muted">/ {myWeek.credits.total}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: myWeek.credits.total }, (_, i) => (
+                    <div
+                      key={i}
+                      className={`w-2.5 h-2.5 rounded-full transition-colors ${
+                        i < myWeek.credits!.used
+                          ? 'bg-muted/30'
+                          : 'bg-accent'
+                      }`}
+                    />
+                  ))}
+                </div>
               </div>
             ) : (
               <span className="text-xs font-medium text-accent-text px-2 py-0.5 rounded-full bg-accent/10">
@@ -318,6 +380,12 @@ export default function ClientBookPage() {
               </span>
             )}
           </div>
+
+          {myWeek.credits && (
+            <p className="text-[11px] uppercase tracking-[0.12em] text-muted mb-2">
+              credits left this week · book up to 60 days out
+            </p>
+          )}
 
           {myWeek.bookings.length === 0 ? (
             <p className="text-sm text-muted">No sessions booked this week yet. Pick a day below to get started!</p>
