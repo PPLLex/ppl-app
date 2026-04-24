@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { api, SessionWithAvailability, Booking, MyWeekData, BookingWithCancelInfo } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { SameTimeOtherDaysModal } from './SameTimeOtherDaysModal';
 import {
   roomBucket,
   roomChipLabel,
@@ -40,6 +41,11 @@ export default function ClientBookPage() {
   const [bookingMode, setBookingMode] = useState<BookingMode>('single');
   const [selectedForBatch, setSelectedForBatch] = useState<Set<string>>(new Set());
   const [showModeChoice, setShowModeChoice] = useState(false);
+
+  // Same-time-other-days prompt — anchor session is whatever the user just
+  // booked; the modal finds matching other-day slots this week and offers
+  // a day-picker UI to book them in bulk.
+  const [sameTimeAnchor, setSameTimeAnchor] = useState<SessionWithAvailability | null>(null);
 
   // Current week starting Monday
   const [weekStart, setWeekStart] = useState(() => {
@@ -167,11 +173,34 @@ export default function ClientBookPage() {
       const res = await api.bookSession(session.id);
       setMessage({ type: 'success', text: res.message || 'Session booked!' });
       await loadData();
+      // Offer "same time on other days this week?" — the modal filters to
+      // matching sessions itself and closes silently if none exist.
+      setSameTimeAnchor(session);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Booking failed';
       setMessage({ type: 'error', text: msg });
     } finally {
       setBookingInProgress(false);
+    }
+  };
+
+  /** Called from SameTimeOtherDaysModal with the user's picked session IDs. */
+  const handleSameTimeConfirm = async (sessionIds: string[]) => {
+    setMessage(null);
+    try {
+      const res = await api.batchBookSessions(sessionIds);
+      setMessage({
+        type: 'success',
+        text:
+          res.message ||
+          `${sessionIds.length} more session${sessionIds.length === 1 ? '' : 's'} booked!`,
+      });
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Booking failed';
+      setMessage({ type: 'error', text: msg });
+    } finally {
+      setSameTimeAnchor(null);
     }
   };
 
@@ -614,6 +643,23 @@ export default function ClientBookPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Post-booking intelligence: ask if they want the same time on
+          other days this week. Modal filters candidates internally and
+          returns null when nothing matches — so we can just always
+          mount it while anchor is set. */}
+      {sameTimeAnchor && (
+        <SameTimeOtherDaysModal
+          anchorSession={sameTimeAnchor}
+          allSessions={sessions}
+          alreadyBookedSessionIds={new Set(
+            (myWeek?.bookings ?? []).map((b) => b.session.id)
+          )}
+          creditsRemaining={myWeek?.credits?.remaining ?? null}
+          onClose={() => setSameTimeAnchor(null)}
+          onConfirm={handleSameTimeConfirm}
+        />
       )}
     </div>
   );
