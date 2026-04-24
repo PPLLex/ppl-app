@@ -692,6 +692,47 @@ class ApiClient {
   }
 
   /**
+   * Admin: every coach note (visible + hidden) with optional filters.
+   * Powers /admin/coach-notes/moderation.
+   */
+  async listModerationNotes(params?: {
+    visibility?: 'all' | 'visible' | 'hidden';
+    coachId?: string;
+    athleteId?: string;
+    limit?: number;
+    offset?: number;
+  }) {
+    const q = new URLSearchParams();
+    if (params?.visibility) q.append('visibility', params.visibility);
+    if (params?.coachId) q.append('coachId', params.coachId);
+    if (params?.athleteId) q.append('athleteId', params.athleteId);
+    if (params?.limit) q.append('limit', String(params.limit));
+    if (params?.offset) q.append('offset', String(params.offset));
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return this.request<
+      Array<{
+        id: string;
+        rawContent: string;
+        cleanedContent: string | null;
+        displayContent: string;
+        trainingCategory: string | null;
+        sessionDate: string;
+        isVisible: boolean;
+        coach: { id: string; fullName: string };
+        athlete: { id: string; fullName: string; email: string };
+      }>
+    >(`/coach-notes/moderation${qs}`);
+  }
+
+  /** Admin: flip a note's visibility — used on the moderation page. */
+  async setNoteVisibility(noteId: string, isVisible: boolean) {
+    return this.request<{ id: string; isVisible: boolean }>(`/coach-notes/${noteId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ isVisible }),
+    });
+  }
+
+  /**
    * Self-managed athlete view of notes written ABOUT them (not by them).
    * Hits the /coach-notes/my endpoint. Named differently from the
    * staff-focused getMyCoachNotes to avoid a name collision — that one

@@ -194,6 +194,61 @@ router.get('/athlete/:athleteId', authenticate, async (req: Request, res: Respon
 });
 
 /**
+ * GET /api/coach-notes/moderation
+ * Admin: list EVERY note — visible or hidden — with optional filters.
+ * Powers the admin moderation page (/admin/coach-notes/moderation)
+ * where Chad can review notes before parents see them, hide/unhide,
+ * or edit grammar.
+ *
+ * Query params (all optional):
+ *   ?visibility=all|visible|hidden   (default: all)
+ *   ?coachId=<uuid>                  (filter to one coach's notes)
+ *   ?athleteId=<uuid>                (filter to one athlete)
+ *   ?limit / ?offset                 (paging)
+ */
+router.get('/moderation', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = req.user!;
+    if (user.role !== Role.ADMIN) {
+      throw ApiError.forbidden('Admin only');
+    }
+    const { visibility, coachId, athleteId, limit, offset } = req.query;
+
+    const where: Record<string, unknown> = {};
+    if (visibility === 'visible') where.isVisible = true;
+    else if (visibility === 'hidden') where.isVisible = false;
+    if (coachId) where.coachId = coachId as string;
+    if (athleteId) where.athleteId = athleteId as string;
+
+    const notes = await prisma.coachNote.findMany({
+      where,
+      include: {
+        coach: { select: { id: true, fullName: true } },
+        athlete: { select: { id: true, fullName: true, email: true } },
+        booking: {
+          select: {
+            session: { select: { title: true, sessionType: true, startTime: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit ? parseInt(limit as string) : 100,
+      skip: offset ? parseInt(offset as string) : 0,
+    });
+
+    // Return both raw and cleaned, admins moderate based on what parents would see.
+    const formatted = notes.map((n) => ({
+      ...n,
+      displayContent: n.cleanedContent || n.rawContent,
+    }));
+
+    res.json({ data: formatted });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * GET /api/coach-notes/my-notes
  * Staff: get all notes I've written (for the coach's own dashboard)
  */
@@ -231,7 +286,7 @@ router.put('/:noteId', authenticate, requireStaffOrAdmin, async (req: Request, r
   try {
     const user = req.user!;
     const noteId = param(req, 'noteId');
-    const { content, trainingCategory } = req.body;
+    const { content, trainingCategory, isVisible } = req.body;
 
     const existing = await prisma.coachNote.findUnique({ where: { id: noteId } });
     if (!existing) throw ApiError.notFound('Note not found');
@@ -246,6 +301,14 @@ router.put('/:noteId', authenticate, requireStaffOrAdmin, async (req: Request, r
     if (trainingCategory) updateData.trainingCategory = trainingCategory;
     // Reset cleaned content since raw content changed
     if (content) updateData.cleanedContent = null;
+    // Visibility toggle — admin only. Used by the moderation page to
+    // hide inappropriate notes or un-hide ones that were soft-deleted.
+    if (typeof isVisible === 'boolean') {
+      if (user.role !== Role.ADMIN) {
+        throw ApiError.forbidden('Only admins can change note visibility');
+      }
+      updateData.isVisible = isVisible;
+    }
 
     const updated = await prisma.coachNote.update({
       where: { id: noteId },
