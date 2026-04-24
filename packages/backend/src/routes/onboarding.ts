@@ -89,27 +89,23 @@ router.post('/status', authenticate, async (req: Request, res: Response, next: N
 
     // Determine onboarding status and fee requirement.
     //
-    // ONLY self-reported "new" athletes pay the $300 onboarding fee.
-    // Three paths bypass the fee:
-    //   - returning       — already onboarded in a past enrollment
-    //   - youth_graduate  — aged up from the Youth program; the Youth
-    //                       program onboarding fee already covers them
-    //   - free_assessment — invited for a complimentary trial or team
-    //                       assessment, which is our sales funnel
+    // Only "returning" athletes bypass the $300 fee — they paid it the
+    // first time they enrolled. Everyone else (brand-new, Youth program
+    // graduates, free-assessment visitors) has NOT paid the adult-
+    // program onboarding fee yet, so they're charged now.
     const isReturning = selection === 'returning';
     const isYouthGraduate = selection === 'youth_graduate';
     const hadFreeAssessment = selection === 'free_assessment';
-    const bypassFee = isReturning || isYouthGraduate || hadFreeAssessment;
 
     const onboardingStatus = isReturning ? 'RETURNING' : 'NEW';
-    const feeStatus = bypassFee ? 'NOT_APPLICABLE' : 'REQUIRED';
+    const feeStatus = isReturning ? 'NOT_APPLICABLE' : 'REQUIRED';
 
     const onboardingRecord = await prisma.onboardingRecord.create({
       data: {
         athleteId: athleteProfile.id,
         onboardingStatus,
         feeStatus,
-        onboardingFeeCents: bypassFee ? 0 : 30000,
+        onboardingFeeCents: isReturning ? 0 : 30000,
         isYouthGraduate,
         hadFreeAssessment,
         selfReportedStatus: selection,

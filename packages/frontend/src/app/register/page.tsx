@@ -1615,8 +1615,8 @@ function RegisterForm() {
                 [
                   { v: 'new' as const, label: 'New to PPL', desc: 'First-time athlete. A one-time $300 onboarding fee will be added.' },
                   { v: 'returning' as const, label: 'Returning athlete', desc: 'I have trained at PPL before. No onboarding fee required.' },
-                  { v: 'youth_graduate' as const, label: 'PPL Youth graduate', desc: 'I moved up from the Youth program to 13+.' },
-                  { v: 'free_assessment' as const, label: 'I did a free assessment', desc: 'I either took advantage of a free offer or my team came in for free assessments.' },
+                  { v: 'youth_graduate' as const, label: 'PPL Youth graduate', desc: 'I moved up from the Youth program to 13+. A one-time $300 onboarding fee will be added.' },
+                  { v: 'free_assessment' as const, label: 'I did a free assessment', desc: 'I took advantage of a free offer or my team came in for a free assessment. A one-time $300 onboarding fee will be added.' },
                 ]
               ).map((opt) => (
                 <button
