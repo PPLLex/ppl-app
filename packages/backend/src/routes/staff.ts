@@ -3,7 +3,7 @@ import { prisma } from '../utils/prisma';
 import { ApiError } from '../utils/apiError';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { createAuditLog } from '../services/auditService';
-import { sendStaffReinstateEmail } from '../services/emailService';
+import { sendStaffReinstateEmail, sendStaffInviteEmail } from '../services/emailService';
 import { config } from '../config';
 import { Role, LocationRole } from '@prisma/client';
 import bcrypt from 'bcryptjs';
@@ -283,6 +283,32 @@ router.post('/invite', async (req: Request, res: Response, next: NextFunction) =
       resourceType: 'StaffInvite',
       resourceId: invite.id,
       changes: { fullName, email, role: userRole, locations: roleSummary },
+    });
+
+    // Fire the actual invite email. Previously this endpoint created the
+    // StaffInvite row but never sent the invite — admins saw "Invitation
+    // sent" in the UI while the invitee saw nothing. Fix: send the email
+    // with the tokenized accept URL. Fire-and-forget; bad SMTP shouldn't
+    // block the admin's response, and the manual resend endpoint is
+    // still available as a backstop.
+    const inviter = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      select: { fullName: true },
+    });
+    const acceptUrl = `${config.frontendUrl}/join/staff/${invite.token}`;
+    sendStaffInviteEmail({
+      to: invite.email,
+      fullName: invite.fullName,
+      invitedByName: inviter?.fullName ?? null,
+      assignments: locations.map((l: any) => ({
+        locationName:
+          validLocations.find((vl) => vl.id === l.locationId)?.name || l.locationId,
+        roleLabels: l.roles.map((r: string) => ROLE_LABELS[r] || r),
+      })),
+      acceptUrl,
+      expiresInDays: 7,
+    }).catch((err) => {
+      console.error('Failed to send staff invite email:', err);
     });
 
     res.status(201).json({

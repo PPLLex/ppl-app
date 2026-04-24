@@ -473,6 +473,92 @@ export async function sendStaffReinstateEmail(args: {
 }
 
 /**
+ * Staff invitation email — sent to someone who does NOT yet have a PPL
+ * account when an admin clicks "Invite staff." The recipient clicks the
+ * link, which lands them on /join/staff/<token> where they set a password
+ * and the account is minted.
+ */
+export function buildStaffInviteEmail(data: {
+  fullName: string;
+  invitedByName: string | null;
+  assignments: { locationName: string; roleLabels: string[] }[];
+  acceptUrl: string;
+  expiresInDays: number;
+}): string {
+  const locationRows = data.assignments
+    .map((a) =>
+      detailRow(
+        a.locationName,
+        `<span style="color:#95C83C;">${a.roleLabels.join(', ')}</span>`
+      )
+    )
+    .join('');
+
+  const invitedLine = data.invitedByName
+    ? `<strong style="color:#F5F5F5;">${data.invitedByName}</strong> at Pitching Performance Lab added you to the staff roster.`
+    : `You've been added to the Pitching Performance Lab staff roster.`;
+
+  return buildPPLEmail("You're invited to the PPL staff", `
+    <p style="margin:0 0 16px;color:#CCC;font-size:16px;">
+      Hey ${data.fullName.split(' ')[0]},
+    </p>
+    <p style="margin:0 0 16px;color:#CCC;">${invitedLine}</p>
+    <p style="margin:0 0 16px;color:#CCC;">Here's what you'll have access to once you accept:</p>
+    <div style="background:#1A1A1A;border-radius:8px;padding:16px;margin:0 0 20px;border:1px solid #2A2A2A;">
+      <table cellpadding="0" cellspacing="0" style="width:100%;">${locationRows}</table>
+    </div>
+    <p style="margin:0 0 20px;text-align:center;">
+      <a href="${data.acceptUrl}" style="${greenBtn}">Accept & set a password</a>
+    </p>
+    <p style="font-size:13px;color:#888;margin:0;">
+      This invite link expires in ${data.expiresInDays} days. If it expires before you get to it,
+      just reply to this email and we'll send a fresh one.
+    </p>
+  `);
+}
+
+/**
+ * Send a staff invite email (fresh invite — not a reinstate).
+ * Fire-and-forget — callers should .catch() and log, never await the
+ * HTTP response path.
+ */
+export async function sendStaffInviteEmail(args: {
+  to: string;
+  fullName: string;
+  invitedByName: string | null;
+  assignments: { locationName: string; roleLabels: string[] }[];
+  acceptUrl: string;
+  expiresInDays: number;
+}): Promise<void> {
+  const html = buildStaffInviteEmail({
+    fullName: args.fullName,
+    invitedByName: args.invitedByName,
+    assignments: args.assignments,
+    acceptUrl: args.acceptUrl,
+    expiresInDays: args.expiresInDays,
+  });
+  const lines = [
+    `Hey ${args.fullName.split(' ')[0]},`,
+    '',
+    args.invitedByName
+      ? `${args.invitedByName} added you to the PPL staff roster.`
+      : `You've been added to the PPL staff roster.`,
+    '',
+    'Access:',
+    ...args.assignments.map((a) => `  - ${a.locationName}: ${a.roleLabels.join(', ')}`),
+    '',
+    `Accept and set a password: ${args.acceptUrl}`,
+    `This link expires in ${args.expiresInDays} days.`,
+  ];
+  await sendEmail({
+    to: args.to,
+    subject: "You're invited to the PPL staff",
+    text: lines.join('\n'),
+    html,
+  });
+}
+
+/**
  * Send a coach invite email (convenience wrapper).
  */
 export async function sendCoachInviteEmail(
