@@ -42,6 +42,7 @@ import waiverRoutes from './routes/waivers';
 import inboundEmailRoutes from './routes/inboundEmail';
 import roleRoutes from './routes/roles';
 import partnerDashboardRoutes from './routes/partnerDashboard';
+import leadRoutes from './routes/leads';
 import { membershipGuard } from './middleware/membershipGuard';
 
 const app = express();
@@ -146,6 +147,8 @@ app.use('/api/webhooks', inboundEmailRoutes);
 app.use('/api/roles', roleRoutes);
 // Partner school dashboard — Partnership Coach + Admin + athletes-on-roster
 app.use('/api/partner-dashboard', partnerDashboardRoutes);
+// CRM — leads + sales pipeline for Content & Marketing + Admin + Coordinator
+app.use('/api/leads', leadRoutes);
 
 // ============================================================
 // ERROR HANDLING

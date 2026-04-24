@@ -157,6 +157,52 @@ enum OutsideCoachType {
   PLAYER_DEVELOPMENT
 }
 
+// --- CRM enums ---
+
+/// Where the lead came from. Drives attribution reports + which nurture
+/// sequence they land in (e.g. WEBSITE_FORM leads get the "we saw your
+/// form" email; REFERRAL leads get a warmer opening). Values are append-only
+/// — add new sources at the bottom, never rename existing ones.
+enum LeadSource {
+  WEBSITE_FORM // Landed on /register or the public contact form
+  REFERRAL // Someone brought them in
+  WALK_IN // Showed up at a PPL facility
+  EVENT // Met us at an event / tournament
+  PARTNER_SCHOOL // Partner-school coach referred their athlete
+  COLD_OUTREACH // We reached out first
+  PAID_AD // Clicked through from a paid ad (Meta, Google, etc.)
+  SOCIAL // Organic social
+  OTHER
+}
+
+/// Sales pipeline stages — ordered loosely by funnel progression, but the
+/// CRM UI treats them as a kanban board so stage order is presentational.
+enum PipelineStage {
+  NEW // Just captured, haven't reached out
+  CONTACTED // First outreach made
+  QUALIFIED // Interested + a good fit
+  ASSESSMENT_BOOKED // Booked a free assessment session
+  ASSESSMENT_DONE // Assessment complete, we've pitched
+  CLOSED_WON // Bought a membership
+  CLOSED_LOST // Not a fit / no interest
+  NURTURE // Long-term prospect, check back later
+}
+
+/// Activity types logged against a lead — the stream that makes up a
+/// lead's history. STAGE_CHANGE + ASSIGNED are system-generated; everything
+/// else is user-logged.
+enum LeadActivityType {
+  NOTE
+  EMAIL_SENT
+  EMAIL_OPENED
+  CALL
+  TEXT
+  MEETING
+  FORM_SUBMISSION
+  STAGE_CHANGE // System — stage moved
+  ASSIGNED // System — owner changed
+}
+
 enum MetricType {
   FASTBALL_VELO
   CHANGEUP_VELO
@@ -296,6 +342,8 @@ model Location {
   // UserRole assignments scoped to this location (COORDINATOR,
   // PERFORMANCE_COACH, CONTENT_MARKETING, MEDICAL, MEDICAL_ADMIN roles).
   userRoles            UserRole[]
+  // Leads interested in this location.
+  leads                Lead[]
 
   @@index([organizationId])
   @@map("locations")
@@ -387,6 +435,13 @@ model User {
   // single `role` column above during the April 2026 role-model migration.
   // See schema.prisma Role enum comment for the full list.
   userRoles UserRole[]
+
+  // CRM relations — staff-side (ownedLeads, loggedLeadActivities) + the
+  // reverse link from the Lead that converted into this user (nullable
+  // because direct signups don't have a preceding Lead row).
+  ownedLeads           Lead[]         @relation("LeadOwner")
+  convertedFromLead    Lead?          @relation("LeadConverted")
+  loggedLeadActivities LeadActivity[] @relation("LeadActivityAuthor")
 
   @@index([homeLocationId])
   @@index([role])
@@ -1603,4 +1658,84 @@ model OrgSettings {
   updatedAt DateTime @updatedAt
 
   @@map("org_settings")
+}
+
+// ============================================================
+// CRM — LEADS & SALES PIPELINE (April 2026)
+// ============================================================
+// Core sales-funnel primitives for the Content & Marketing role + anyone
+// shepherding prospects into memberships. Separate from `AthleteProfile`
+// on purpose — a Lead is someone we HOPE becomes a member; conversion
+// links them to a real User + AthleteProfile via `convertedToUserId`.
+//
+// Design notes:
+//   - Email is UNIQUE so we can dedupe inbound form submissions to the
+//     same prospect instead of creating a new Lead every time.
+//   - After conversion, the Lead stays around for attribution reporting;
+//     we never delete won leads.
+//   - `source_json` holds the raw form payload / referrer / ad creative
+//     metadata so marketing can analyze which creatives are working
+//     without us having to predict every field up front.
+
+model Lead {
+  id                String        @id @default(uuid())
+  organizationId    String        @default("ppl")
+  firstName         String
+  lastName          String
+  email             String
+  phone             String?
+  // 'youth' | 'ms_hs' | 'college' | 'pro' — helps route to the right coach
+  ageGroup          String?
+  source            LeadSource    @default(OTHER)
+  stage             PipelineStage @default(NEW)
+  locationId        String? // Location they're interested in; nullable
+  ownerUserId       String? // Staff shepherding this lead
+  convertedToUserId String?       @unique // Links to User after CLOSED_WON
+  convertedAt       DateTime?
+  lostReason        String? // Why CLOSED_LOST if applicable
+  nextFollowUpAt    DateTime? // Used by the CRM inbox to sort by "due"
+  notes             String? // Free-form — activity stream carries history
+  // Raw source payload (GHL form submission, referrer, UTM params, etc.)
+  // so we can analyze which creatives / sources convert best without
+  // having to predict every field schema-side.
+  sourceMetadata    Json?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  // Relations
+  location        Location?      @relation(fields: [locationId], references: [id])
+  owner           User?          @relation("LeadOwner", fields: [ownerUserId], references: [id])
+  convertedToUser User?          @relation("LeadConverted", fields: [convertedToUserId], references: [id])
+  activities      LeadActivity[]
+
+  @@unique([organizationId, email])
+  @@index([stage, ownerUserId])
+  @@index([source])
+  @@index([nextFollowUpAt])
+  @@index([organizationId])
+  @@map("leads")
+}
+
+model LeadActivity {
+  id           String           @id @default(uuid())
+  leadId       String
+  type         LeadActivityType
+  // Body of the activity — for NOTE, this is the note text; for
+  // EMAIL_SENT, the email body; for CALL, the call summary, etc.
+  content      String?
+  // Who logged the activity (nullable for system-generated STAGE_CHANGE
+  // and ASSIGNED entries).
+  authorUserId String?
+  // Structured payload for system activities:
+  //   STAGE_CHANGE: { from: 'NEW', to: 'CONTACTED' }
+  //   ASSIGNED:     { fromUserId: '...', toUserId: '...' }
+  //   EMAIL_SENT:   { subject: '...', messageId: '...' }
+  metadata     Json?
+  createdAt    DateTime         @default(now())
+
+  lead   Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  author User? @relation("LeadActivityAuthor", fields: [authorUserId], references: [id])
+
+  @@index([leadId, createdAt])
+  @@map("lead_activities")
 }
