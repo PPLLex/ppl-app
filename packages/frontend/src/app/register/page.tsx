@@ -1608,16 +1608,15 @@ function RegisterForm() {
           {step === 3 && (
             <div className="space-y-2.5">
               <p className="text-sm text-muted mb-2">
-                This helps us route you correctly. New athletes pay a one-time
-                <strong className="text-foreground"> $300 onboarding fee per athlete</strong>.
-                Returning athletes and partner-school players don&apos;t.
+                New athletes are required to pay a one-time
+                <strong className="text-foreground"> $300 onboarding fee</strong>.
               </p>
               {(
                 [
-                  { v: 'new' as const, label: 'New to PPL', desc: 'First-time athlete — includes the $300 onboarding fee per athlete.' },
-                  { v: 'returning' as const, label: 'Returning athlete', desc: 'I\u2019ve trained at PPL before — no onboarding fee.' },
+                  { v: 'new' as const, label: 'New to PPL', desc: 'First-time athlete. A one-time $300 onboarding fee will be added.' },
+                  { v: 'returning' as const, label: 'Returning athlete', desc: 'I have trained at PPL before. No onboarding fee required.' },
                   { v: 'youth_graduate' as const, label: 'PPL Youth graduate', desc: 'I moved up from the Youth program to 13+.' },
-                  { v: 'free_assessment' as const, label: 'Free assessment', desc: 'I was invited for a complimentary assessment.' },
+                  { v: 'free_assessment' as const, label: 'I did a free assessment', desc: 'I either took advantage of a free offer or my team came in for free assessments.' },
                 ]
               ).map((opt) => (
                 <button
