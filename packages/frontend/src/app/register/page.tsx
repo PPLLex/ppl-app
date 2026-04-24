@@ -942,7 +942,7 @@ function RegisterForm() {
         <div className="mb-6">
           <div className="flex items-center gap-2">
             {(() => {
-              const labels = ['Playing Level', 'Your Info', 'History', 'Training', 'Membership', 'Checkout'];
+              const labels = ['Playing Level', 'Your Info', 'Enrollment', 'Preferences', 'Membership', 'Checkout'];
               return labels.map((_, i) => {
                 const stepNum = i + 1;
                 const isComplete = step > stepNum;
@@ -963,16 +963,17 @@ function RegisterForm() {
               });
             })()}
           </div>
-          {/* Step counter — standard SaaS multi-step pattern: all-caps
-              tracking with a single font-weight across both numerals so
-              neither gets orphan emphasis, separator dot, then the step
-              name on the right. Matches Stripe/Linear/Vercel onboarding. */}
-          <div className="mt-2 flex items-center justify-between gap-2 text-[11px] uppercase tracking-[0.16em] text-muted font-medium">
-            <span className="whitespace-nowrap flex-shrink-0 tabular-nums">
+          {/* Step counter — standard SaaS multi-step pattern: all-caps,
+              uniform weight + tracking across both halves so neither side
+              visually outweighs the other. Only difference is color: the
+              counter stays muted (context), the step name brightens to
+              foreground (current location). Matches Stripe/Linear/Vercel. */}
+          <div className="mt-2 flex items-center justify-between gap-2 text-[11px] uppercase tracking-[0.16em] font-medium">
+            <span className="whitespace-nowrap flex-shrink-0 tabular-nums text-muted">
               Step {step} <span className="text-muted/50">/</span> 6
             </span>
-            <span className="text-foreground truncate min-w-0 text-right tracking-[0.12em]">
-              {(['Playing Level', 'Your Info', 'History', 'Training', 'Membership', 'Checkout'] as const)[step - 1]}
+            <span className="text-foreground/90 truncate min-w-0 text-right">
+              {(['Playing Level', 'Your Info', 'Enrollment', 'Preferences', 'Membership', 'Checkout'] as const)[step - 1]}
             </span>
           </div>
         </div>
