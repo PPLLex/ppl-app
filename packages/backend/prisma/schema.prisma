@@ -1383,6 +1383,37 @@ model AuditLog {
 // ORGANIZATION SETTINGS (PPL branding & defaults)
 // ============================================================
 
+/**
+ * EducationalResource — admin-curated content (videos + guides) that
+ * clients see on their parent dashboard. Feeds the EducationalContent
+ * widget. Intentionally simple: title + short description + optional
+ * video URL + optional body markdown + category tag + visibility flag.
+ *
+ * Visibility:
+ *   ageGroupFilter — null = all clients; otherwise comma-separated list
+ *     of age groups ('youth,ms_hs,college,pro'). Lets admins target,
+ *     e.g. "only show this to Youth parents."
+ *   isPublished — simple on/off switch for draft vs live content.
+ */
+model EducationalResource {
+  id              String   @id @default(uuid())
+  organizationId  String   @default("ppl")
+  title           String
+  description     String
+  body            String?  // optional markdown body for longer articles
+  videoUrl        String?  // optional Youtube/Vimeo embed URL
+  thumbnailUrl    String?  // optional card thumbnail image
+  category        String   @default("general") // 'onboarding' | 'mechanics' | 'mindset' | 'perks' | 'general'
+  ageGroupFilter  String?  // null = all; else comma-separated age groups
+  sortOrder       Int      @default(0)
+  isPublished     Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([organizationId, isPublished])
+  @@map("educational_resources")
+}
+
 model OrgSettings {
   id           String  @id @default("ppl") // singleton row
   businessName String  @default("Pitching Performance Lab")

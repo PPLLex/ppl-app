@@ -37,6 +37,7 @@ import revenueRoutes from './routes/revenue';
 import kioskRoutes from './routes/kiosk';
 import outsideCoachRoutes from './routes/outsideCoaches';
 import settingsRoutes from './routes/settings';
+import educationalResourcesRoutes from './routes/educationalResources';
 import { membershipGuard } from './middleware/membershipGuard';
 
 const app = express();
@@ -133,6 +134,7 @@ app.use('/api/revenue', revenueRoutes);
 app.use('/api/kiosk', kioskRoutes);
 app.use('/api/outside-coaches', outsideCoachRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/educational-resources', educationalResourcesRoutes);
 
 // ============================================================
 // ERROR HANDLING
