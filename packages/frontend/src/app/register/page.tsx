@@ -239,6 +239,19 @@ function RegisterForm() {
   const [msHsSoloAck1, setMsHsSoloAck1] = useState(false);
   const [msHsSoloAck2, setMsHsSoloAck2] = useState(false);
 
+  // Additional athletes (siblings) — only shown for PARENT registrations. Lets
+  // a parent stage up to 3 extra kids during signup; backend creates one
+  // AthleteProfile per entry under the same Family. The parent picks a plan
+  // for the PRIMARY athlete during step 5, then goes to
+  // /client/membership?athleteId=X for each sibling after signup completes.
+  interface AdditionalAthleteDraft {
+    firstName: string;
+    lastName: string;
+    dateOfBirth: string;
+    ageGroup: '' | 'youth' | 'ms_hs' | 'college' | 'pro';
+  }
+  const [additionalAthletes, setAdditionalAthletes] = useState<AdditionalAthleteDraft[]>([]);
+
   // Step 3 / 4 / 5
   const [athleteSelection, setAthleteSelection] = useState<AthleteSelection | ''>('');
   const [locations, setLocations] = useState<Location[]>([]);
@@ -291,6 +304,24 @@ function RegisterForm() {
       if (d.parentLastName) setParentLastName(d.parentLastName);
       if (d.parentEmail) setParentEmail(d.parentEmail);
       if (d.parentPhone) setParentPhone(d.parentPhone);
+      if (Array.isArray(d.additionalAthletes)) {
+        setAdditionalAthletes(
+          d.additionalAthletes
+            .slice(0, 3)
+            .map((a: Partial<AdditionalAthleteDraft>) => ({
+              firstName: String(a.firstName ?? ''),
+              lastName: String(a.lastName ?? ''),
+              dateOfBirth: String(a.dateOfBirth ?? ''),
+              ageGroup:
+                a.ageGroup === 'youth' ||
+                a.ageGroup === 'ms_hs' ||
+                a.ageGroup === 'college' ||
+                a.ageGroup === 'pro'
+                  ? a.ageGroup
+                  : '',
+            }))
+        );
+      }
       setRestoredDraft(true);
     } catch {
       // Malformed JSON — discard silently, no need to surface this.
@@ -316,7 +347,8 @@ function RegisterForm() {
       parentFirstName ||
       parentLastName ||
       parentEmail ||
-      parentPhone;
+      parentPhone ||
+      additionalAthletes.length > 0;
     if (!anyValue) return;
     const t = setTimeout(() => {
       try {
@@ -333,6 +365,7 @@ function RegisterForm() {
             parentLastName,
             parentEmail,
             parentPhone,
+            additionalAthletes,
             savedAt: Date.now(),
           })
         );
@@ -352,6 +385,7 @@ function RegisterForm() {
     parentLastName,
     parentEmail,
     parentPhone,
+    additionalAthletes,
   ]);
 
   const clearDraft = useCallback(() => {
@@ -704,6 +738,20 @@ function RegisterForm() {
           (isCollege && collegeOptOut) ||
           (isMsHs && msHsOptedOut)
         ) && { parentOptOut: true }),
+        // Additional athletes — only include when (a) this is a parent
+        // registration and (b) at least one entry has a full name.
+        // Strips incomplete rows so the backend never sees a half-filled
+        // sibling (backend already validates, but don't tempt it).
+        ...(hasParent && additionalAthletes.length > 0 && {
+          additionalAthletes: additionalAthletes
+            .filter((a) => a.firstName.trim() && a.lastName.trim())
+            .map((a) => ({
+              firstName: a.firstName.trim(),
+              lastName: a.lastName.trim(),
+              dateOfBirth: a.dateOfBirth || undefined,
+              ageGroup: a.ageGroup || undefined,
+            })),
+        }),
       };
 
       const res = await api.register(registerPayload);
@@ -1395,6 +1443,144 @@ function RegisterForm() {
                     </div>
                   </div>
                 </section>
+
+                {/* Additional athletes — parent-registration-only. Lets a
+                    parent stage siblings during signup; they're created at
+                    submit time under the same Family. The parent will pick
+                    a plan for the PRIMARY athlete in step 5, then use the
+                    My Athletes widget on the dashboard to pick plans for
+                    each sibling after signup. */}
+                {hasParent && (
+                  <section className="ppl-register-step">
+                    <div className="rounded-xl border border-border p-4 sm:p-5 bg-card">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <h3 className="font-display uppercase tracking-[0.04em] text-foreground text-sm">
+                          Add a sibling (optional)
+                        </h3>
+                        <span className="text-[10px] uppercase tracking-[0.12em] text-muted">
+                          {additionalAthletes.length}/3
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted mt-1 leading-relaxed">
+                        Have more than one athlete? Add them here and you&apos;ll
+                        pick plans for each one from your dashboard after
+                        signup.
+                      </p>
+
+                      {additionalAthletes.map((a, idx) => (
+                        <div
+                          key={idx}
+                          className="mt-4 pt-4 border-t border-border/60 space-y-3"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] uppercase tracking-[0.12em] text-muted">
+                              Sibling {idx + 1}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setAdditionalAthletes((prev) =>
+                                  prev.filter((_, i) => i !== idx)
+                                )
+                              }
+                              className="text-[11px] text-muted hover:text-destructive"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="ppl-label">First name</label>
+                              <input
+                                type="text"
+                                value={a.firstName}
+                                onChange={(e) =>
+                                  setAdditionalAthletes((prev) => {
+                                    const next = [...prev];
+                                    next[idx] = { ...next[idx], firstName: e.target.value };
+                                    return next;
+                                  })
+                                }
+                                className="ppl-input text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="ppl-label">Last name</label>
+                              <input
+                                type="text"
+                                value={a.lastName}
+                                onChange={(e) =>
+                                  setAdditionalAthletes((prev) => {
+                                    const next = [...prev];
+                                    next[idx] = { ...next[idx], lastName: e.target.value };
+                                    return next;
+                                  })
+                                }
+                                className="ppl-input text-sm"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="ppl-label">Date of birth</label>
+                              <input
+                                type="date"
+                                value={a.dateOfBirth}
+                                onChange={(e) =>
+                                  setAdditionalAthletes((prev) => {
+                                    const next = [...prev];
+                                    next[idx] = { ...next[idx], dateOfBirth: e.target.value };
+                                    return next;
+                                  })
+                                }
+                                className="ppl-input text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="ppl-label">Playing level</label>
+                              <select
+                                value={a.ageGroup}
+                                onChange={(e) =>
+                                  setAdditionalAthletes((prev) => {
+                                    const next = [...prev];
+                                    next[idx] = {
+                                      ...next[idx],
+                                      ageGroup: e.target.value as AdditionalAthleteDraft['ageGroup'],
+                                    };
+                                    return next;
+                                  })
+                                }
+                                className="ppl-input text-sm"
+                              >
+                                <option value="">Choose…</option>
+                                <option value="youth">Youth (12 &amp; under)</option>
+                                <option value="ms_hs">Middle / High School</option>
+                                <option value="college">College</option>
+                                <option value="pro">Pro</option>
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                      {additionalAthletes.length < 3 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            haptic.light();
+                            setAdditionalAthletes((prev) => [
+                              ...prev,
+                              { firstName: '', lastName: '', dateOfBirth: '', ageGroup: '' },
+                            ]);
+                          }}
+                          className="mt-4 text-xs font-medium text-accent-text hover:brightness-110"
+                        >
+                          + Add another athlete
+                        </button>
+                      )}
+                    </div>
+                  </section>
+                )}
 
                 <div className="flex gap-3 pt-1">
                   <button
