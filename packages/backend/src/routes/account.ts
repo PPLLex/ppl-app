@@ -301,6 +301,102 @@ router.get('/athletes', async (req: Request, res: Response, next: NextFunction) 
 });
 
 /**
+ * GET /api/account/assessment-prompt
+ * Returns which of the caller's athletes should see the "book a pitching
+ * assessment" prompt on the booking page. An athlete qualifies if:
+ *   - They have no completed training sessions yet (fresh PPL athlete), AND
+ *   - They haven't already booked a PITCHING_ASSESSMENT (either upcoming
+ *     or completed)
+ *
+ * The front-end shows a one-time CTA on /client/book when this endpoint
+ * flags an athlete. Dismissal state lives client-side for now; we can
+ * promote it to a Prisma field later if Chad wants the nudge to survive
+ * across devices.
+ *
+ * Returns:
+ *   [{ athleteId, athleteName, shouldPrompt: boolean, reason: string }, ...]
+ */
+router.get(
+  '/assessment-prompt',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.user!.userId;
+      const family = await prisma.family.findUnique({
+        where: { parentUserId: userId },
+      });
+      const familyId = family?.id;
+
+      const athletes = await prisma.athleteProfile.findMany({
+        where: {
+          OR: [{ userId }, ...(familyId ? [{ familyId }] : [])],
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          userId: true,
+        },
+      });
+      if (athletes.length === 0) {
+        return res.json({ success: true, data: [] });
+      }
+
+      // Per-athlete booking counts + assessment presence in one trip.
+      const athleteUserIds = athletes.map((a) => a.userId);
+      const [completedBookings, assessmentBookings] = await Promise.all([
+        prisma.booking.groupBy({
+          by: ['clientId'],
+          where: {
+            clientId: { in: athleteUserIds },
+            status: 'COMPLETED',
+            session: { sessionType: { not: 'PITCHING_ASSESSMENT' } },
+          },
+          _count: { _all: true },
+        }),
+        prisma.booking.findMany({
+          where: {
+            clientId: { in: athleteUserIds },
+            status: { in: ['CONFIRMED', 'COMPLETED'] },
+            session: { sessionType: 'PITCHING_ASSESSMENT' },
+          },
+          select: { clientId: true },
+        }),
+      ]);
+
+      const completedByClient = new Map<string, number>(
+        completedBookings.map((c) => [c.clientId, c._count._all])
+      );
+      const hasAssessment = new Set(assessmentBookings.map((b) => b.clientId));
+
+      const payload = athletes.map((a) => {
+        const completed = completedByClient.get(a.userId) ?? 0;
+        const already = hasAssessment.has(a.userId);
+        let shouldPrompt = false;
+        let reason = '';
+        if (already) {
+          reason = 'Assessment already booked or completed';
+        } else if (completed > 0) {
+          reason = 'Athlete has prior training sessions';
+        } else {
+          shouldPrompt = true;
+          reason = 'New athlete — assessment recommended before training';
+        }
+        return {
+          athleteId: a.id,
+          athleteName: `${a.firstName} ${a.lastName}`.trim(),
+          shouldPrompt,
+          reason,
+        };
+      });
+
+      res.json({ success: true, data: payload });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
  * POST /api/account/athletes
  * Add a new athlete (sibling / additional kid) under the authenticated
  * parent's Family AFTER they've already registered. Used by the "Add
