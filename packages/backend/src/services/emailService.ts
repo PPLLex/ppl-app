@@ -55,20 +55,59 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
     return true;
   }
 
-  try {
-    // Production: use nodemailer with SMTP
-    // This is a lazy import so nodemailer isn't required in dev
-    const nodemailer = await import('nodemailer');
+  const fromHeader =
+    process.env.SMTP_FROM ||
+    '"Pitching Performance Lab" <info@pitchingperformancelab.com>';
+  const replyTo =
+    process.env.SMTP_REPLY_TO || 'info@pitchingperformancelab.com';
 
+  // ───────────────────────────────────────────────────────────
+  // Primary transport: Resend (when RESEND_API_KEY is set).
+  //
+  // Benefits over Gmail SMTP:
+  //   - No 2,000/day Google Workspace cap
+  //   - Dedicated sender reputation + better inbox placement
+  //   - Inbound routing (replies → our /api/webhooks/inbound-email)
+  //   - Webhook events (delivered, bounced, complained, opened, clicked)
+  //
+  // Falls back to nodemailer SMTP when RESEND_API_KEY is unset so the
+  // migration can happen on Chad's schedule without a big-bang cutover.
+  // ───────────────────────────────────────────────────────────
+  const resendKey = process.env.RESEND_API_KEY;
+  if (resendKey) {
+    try {
+      const { Resend } = await import('resend');
+      const resend = new Resend(resendKey);
+      const { error } = await resend.emails.send({
+        from: fromHeader,
+        to,
+        subject,
+        text,
+        html: html || undefined,
+        replyTo,
+        headers: {
+          'X-PPL-App': 'ppl-app',
+          'X-PPL-Env': config.nodeEnv,
+        },
+      });
+      if (error) {
+        console.error('Resend send failed:', error);
+        return false;
+      }
+      console.log(`Email sent via Resend to ${to}: ${subject}`);
+      return true;
+    } catch (err) {
+      console.error('Resend transport error:', err);
+      return false;
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────
+  // Fallback transport: nodemailer + Gmail SMTP (legacy).
+  // ───────────────────────────────────────────────────────────
+  try {
+    const nodemailer = await import('nodemailer');
     const smtpUser = process.env.SMTP_USER;
-    const fromHeader =
-      process.env.SMTP_FROM ||
-      '"Pitching Performance Lab" <info@pitchingperformancelab.com>';
-    // Reply-To: info@ so anything a user hits "reply" on lands in the
-    // inbox Chad actually checks. Separate from FROM because FROM is
-    // constrained by what Gmail will accept as a Send-As alias.
-    const replyTo =
-      process.env.SMTP_REPLY_TO || 'info@pitchingperformancelab.com';
 
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
@@ -87,22 +126,17 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
       text,
       html: html || undefined,
       replyTo,
-      // Return-path (envelope.from) explicitly set to the authenticated
-      // user — SPF evaluates the envelope-from against the domain, so
-      // keeping them aligned is what actually makes SPF "pass."
-      envelope: smtpUser
-        ? { from: smtpUser, to }
-        : undefined,
+      envelope: smtpUser ? { from: smtpUser, to } : undefined,
       headers: {
         'X-PPL-App': 'ppl-app',
         'X-PPL-Env': config.nodeEnv,
       },
     });
 
-    console.log(`Email sent to ${to}: ${subject}`);
+    console.log(`Email sent via SMTP to ${to}: ${subject}`);
     return true;
   } catch (error) {
-    console.error('Failed to send email:', error);
+    console.error('SMTP send failed:', error);
     return false;
   }
 }

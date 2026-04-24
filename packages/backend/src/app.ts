@@ -39,6 +39,7 @@ import outsideCoachRoutes from './routes/outsideCoaches';
 import settingsRoutes from './routes/settings';
 import educationalResourcesRoutes from './routes/educationalResources';
 import waiverRoutes from './routes/waivers';
+import inboundEmailRoutes from './routes/inboundEmail';
 import { membershipGuard } from './middleware/membershipGuard';
 
 const app = express();
@@ -137,6 +138,8 @@ app.use('/api/outside-coaches', outsideCoachRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/educational-resources', educationalResourcesRoutes);
 app.use('/api/waivers', waiverRoutes);
+// Inbound email + SMS — turns client replies into in-app messages
+app.use('/api/webhooks', inboundEmailRoutes);
 
 // ============================================================
 // ERROR HANDLING
