@@ -107,6 +107,7 @@ const adminNav: NavItem[] = [
   { label: 'Billing', href: '/admin/billing', icon: <Icons.CreditCard /> },
   { label: 'Locations', href: '/admin/locations', icon: <Icons.Location /> },
   { label: 'Messages', href: '/admin/messages', icon: <Icons.Chat /> },
+  { label: 'Educational Resources', href: '/admin/educational-resources', icon: <Icons.Pencil /> },
   { label: 'Audit Log', href: '/admin/audit-logs', icon: <Icons.Shield /> },
   { label: 'Settings', href: '/admin/settings', icon: <Icons.Settings /> },
   { label: 'My Profile', href: '/profile', icon: <UserIcon /> },
