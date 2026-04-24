@@ -296,46 +296,91 @@ export function buildWelcomeEmail(name: string, locationName: string): string {
 }
 
 /**
- * Build a simple branded HTML email wrapper.
+ * Build a branded HTML email wrapper with the PPL visual identity.
+ *
+ * Design language matches the app:
+ *   - Black background (#0A0A0A) — same as the app shell
+ *   - PPL green accent gradient (#5B8C2A → #95C83C) on hero + CTAs
+ *   - Bebas Neue display + Manrope body via Google Fonts; falls back to
+ *     system stack in clients that strip @import (most enterprise clients)
+ *   - Real PPL logo from the deployed frontend (CDN-cached, no embed)
+ *   - 600px max width, mobile-friendly via inline styles
+ *
+ * Helpers:
+ *   - greenBtn      — gradient button used for CTAs across templates
+ *   - detailRow     — two-column row (label left, value right) — used in the
+ *                     staff invite email's per-location summary
  */
-export function buildPPLEmail(title: string, body: string): string {
+export function buildPPLEmail(title: string, body: string, opts?: { preheader?: string }): string {
+  const preheader = opts?.preheader ?? '';
+  // Hosted on Vercel; cached aggressively. Falls back to a text "PPL" if
+  // the email client blocks images.
+  const logoUrl = `${config.frontendUrl}/ppl-logo.webp`;
   return `
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="color-scheme" content="dark light">
+  <meta name="supported-color-schemes" content="dark light">
+  <title>${title}</title>
+  <!-- Google Fonts — modern clients pick this up; older clients fall back -->
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Manrope:wght@400;500;600;700&display=swap');
+    @media (max-width: 640px) {
+      .ppl-card { padding: 24px 20px !important; }
+      .ppl-hero { padding: 32px 20px !important; }
+      .ppl-h1 { font-size: 28px !important; }
+    }
+  </style>
 </head>
-<body style="margin:0;padding:0;background-color:#0A0A0A;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0A0A0A;padding:20px 0;">
+<body style="margin:0;padding:0;background:#0A0A0A;font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#F5F5F5;-webkit-font-smoothing:antialiased;">
+  <!-- Preheader (hidden inbox preview text) -->
+  <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">
+    ${preheader}
+  </div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0A;padding:24px 16px;">
     <tr>
       <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
-          <!-- Header -->
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+
+          <!-- Logo header -->
           <tr>
-            <td style="padding:24px 32px;text-align:center;">
-              <span style="font-size:24px;font-weight:800;color:#95C83C;">PPL</span>
-              <br>
-              <span style="font-size:12px;color:#888;letter-spacing:0.05em;">PITCHING PERFORMANCE LAB</span>
+            <td style="padding:8px 0 16px;text-align:center;">
+              <img src="${logoUrl}" alt="Pitching Performance Lab" width="64" height="64" style="display:inline-block;border:0;outline:none;text-decoration:none;border-radius:14px;">
             </td>
           </tr>
-          <!-- Body -->
+
+          <!-- Hero strip with PPL green gradient and Bebas-style title -->
           <tr>
-            <td style="background-color:#141414;border-radius:12px;padding:32px;border:1px solid #2A2A2A;">
-              <h1 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#F5F5F5;">${title}</h1>
-              <div style="color:#CCC;font-size:15px;line-height:1.6;">
-                ${body}
-              </div>
+            <td class="ppl-hero" style="background:linear-gradient(135deg,#5B8C2A 0%,#95C83C 100%);border-radius:16px 16px 0 0;padding:40px 32px;text-align:center;">
+              <p style="margin:0 0 6px;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(255,255,255,0.78);font-weight:600;">Pitching Performance Lab</p>
+              <h1 class="ppl-h1" style="margin:0;font-family:'Bebas Neue','Bank Gothic',Impact,sans-serif;font-size:34px;line-height:1.1;letter-spacing:0.04em;color:#FFFFFF;font-weight:400;text-transform:uppercase;">${title}</h1>
             </td>
           </tr>
+
+          <!-- Body card -->
+          <tr>
+            <td class="ppl-card" style="background:#141414;border:1px solid #2A2A2A;border-top:none;border-radius:0 0 16px 16px;padding:32px;color:#CCC;font-size:15px;line-height:1.65;">
+              ${body}
+            </td>
+          </tr>
+
           <!-- Footer -->
           <tr>
-            <td style="padding:20px 32px;text-align:center;">
-              <p style="font-size:12px;color:#666;margin:0;">
-                Pitching Performance Lab &middot; pitchingperformancelab.com
+            <td style="padding:24px 16px;text-align:center;">
+              <p style="margin:0 0 6px;font-size:12px;color:#888;letter-spacing:0.06em;">PITCHING PERFORMANCE LAB</p>
+              <p style="margin:0;font-size:12px;color:#555;">
+                <a href="https://pitchingperformancelab.com" style="color:#888;text-decoration:none;">pitchingperformancelab.com</a>
+                &middot;
+                <a href="mailto:support@pitchingperformancelab.com" style="color:#888;text-decoration:none;">support@pitchingperformancelab.com</a>
               </p>
             </td>
           </tr>
+
         </table>
       </td>
     </tr>

@@ -45,6 +45,7 @@ import partnerDashboardRoutes from './routes/partnerDashboard';
 import leadRoutes from './routes/leads';
 import screeningRoutes from './routes/screenings';
 import campaignRoutes from './routes/campaigns';
+import emailPreviewRoutes from './routes/emailPreview';
 import { membershipGuard } from './middleware/membershipGuard';
 
 const app = express();
@@ -155,6 +156,8 @@ app.use('/api/leads', leadRoutes);
 app.use('/api/screenings', screeningRoutes);
 // Marketing email campaigns — Content & Marketing role (fan-out worker lands later)
 app.use('/api/campaigns', campaignRoutes);
+// Admin-only email template preview + test-send
+app.use('/api/email-preview', emailPreviewRoutes);
 
 // ============================================================
 // ERROR HANDLING

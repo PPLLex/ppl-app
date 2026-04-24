@@ -420,6 +420,47 @@ class ApiClient {
   }
 
   // ============================================================
+  // EMAIL TEMPLATE PREVIEW (admin-only)
+  // ============================================================
+
+  async listInvitableEmailRoles() {
+    return this.request<Array<{ role: string; label: string }>>('/email-preview/role-list');
+  }
+
+  async previewInviteEmail(
+    role: string,
+    overrides: { fullName?: string; invitedByName?: string; locationName?: string; schoolName?: string } = {}
+  ) {
+    const qs = new URLSearchParams();
+    if (overrides.fullName) qs.set('fullName', overrides.fullName);
+    if (overrides.invitedByName) qs.set('invitedByName', overrides.invitedByName);
+    if (overrides.locationName) qs.set('locationName', overrides.locationName);
+    if (overrides.schoolName) qs.set('schoolName', overrides.schoolName);
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+    return this.request<{
+      role: string;
+      roleLabel: string;
+      subject: string;
+      html: string;
+      text: string;
+    }>(`/email-preview/invite/${encodeURIComponent(role)}${query}`);
+  }
+
+  async sendInviteEmailTest(role: string, to?: string) {
+    return this.request(`/email-preview/invite/${encodeURIComponent(role)}/send-test`, {
+      method: 'POST',
+      body: JSON.stringify({ to }),
+    });
+  }
+
+  async sendRawEmailTest(data: { to?: string; subject: string; html: string; text?: string }) {
+    return this.request('/email-preview/raw-test', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // ============================================================
   // CRM — LEADS & SALES PIPELINE
   // ============================================================
 
