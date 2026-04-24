@@ -118,12 +118,21 @@ function RegisterForm() {
 
   // URL params — let the user return to the right step after a $300 Stripe
   // Checkout redirect, and let OAuth users jump into onboarding mid-flow.
+  //
+  // Also: we persist the CURRENT step in `?step=N` so a browser refresh
+  // from step 1/2 stays put instead of triggering the backend-aware
+  // resume logic and jumping the user forward. URL-tracked step also
+  // makes the browser Back button move between registration steps.
   const oauthProvider = searchParams.get('oauth');
   const stepParam = searchParams.get('step');
   const paymentStatus = searchParams.get('payment');
 
   const getInitialStep = (): number => {
     if (stepParam === 'after-fee' && paymentStatus === 'success') return 4;
+    // Numeric step in URL — always honor it. This is what makes refresh
+    // preserve the user's place instead of auto-jumping forward.
+    const numeric = stepParam ? parseInt(stepParam, 10) : NaN;
+    if (!Number.isNaN(numeric) && numeric >= 1 && numeric <= 6) return numeric;
     if (oauthProvider) return 3; // OAuth user — account already exists, needs rest
     return 1;
   };
@@ -139,6 +148,23 @@ function RegisterForm() {
     },
     []
   );
+
+  // Keep the URL in sync with the current step so refresh preserves
+  // position. Uses router.replace (not push) so the back-stack isn't
+  // polluted with every step-change. Wrapped in useEffect so URL
+  // updates don't fight re-renders.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const current = searchParams.get('step');
+    const desired = String(step);
+    if (current !== desired && step >= 1 && step <= 6) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('step', desired);
+      // `scroll: false` — don't scroll to top on every URL sync.
+      router.replace(`/register?${params.toString()}`, { scroll: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -153,9 +179,20 @@ function RegisterForm() {
   // is already asking for a specific position.
   // ──────────────────────────────────────────────────────────────
   useEffect(() => {
+    // Skip auto-resume when the URL already specifies where we should
+    // be. That covers three cases:
+    //   1. ?step=after-fee&payment=success — Stripe return URL
+    //   2. ?oauth=google — OAuth landing
+    //   3. ?step=<1-6> — refresh/deep-link preserving user's position
+    // Without this guard, a user on step 1 or 2 who hit refresh would
+    // get auto-bumped forward to step 4 because the backend thinks
+    // they're past that point. URL wins.
+    const numeric = stepParam ? parseInt(stepParam, 10) : NaN;
     const explicitUrlStep =
-      (stepParam === 'after-fee' && paymentStatus === 'success') || !!oauthProvider;
-    if (explicitUrlStep) return; // URL already tells us where to go
+      (stepParam === 'after-fee' && paymentStatus === 'success') ||
+      !!oauthProvider ||
+      (!Number.isNaN(numeric) && numeric >= 1 && numeric <= 6);
+    if (explicitUrlStep) return;
     if (typeof window === 'undefined') return;
     const token = localStorage.getItem('ppl_token');
     if (!token) return; // fresh signup — start at step 1
