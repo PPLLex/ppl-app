@@ -335,6 +335,9 @@ model User {
   attendanceViolations AttendanceViolation[] @relation("ViolationClient")
   assessedViolations   AttendanceViolation[] @relation("ViolationAssessor")
 
+  // Liability waiver signatures this user signed (as the signing adult — parent or self)
+  signedWaivers        LiabilityWaiverSignature[]
+
   @@index([homeLocationId])
   @@index([role])
   @@index([email])
@@ -1128,6 +1131,7 @@ model AthleteProfile {
   memberships      ClientMembership[]
 
   outsideCoachLinks OutsideCoachLink[]
+  liabilityWaivers  LiabilityWaiverSignature[]
 
   @@index([familyId])
   @@index([schoolTeamId])
@@ -1414,6 +1418,36 @@ model EducationalResource {
   @@map("educational_resources")
 }
 
+/**
+ * LiabilityWaiverSignature — an immutable record that a specific athlete
+ * signed the liability waiver. Stores the FULL waiver text + version that
+ * was shown at signing time so the contract is preserved even when admins
+ * later update the master waiver copy.
+ *
+ * One signature per (athleteProfileId, waiverVersion). If we bump the
+ * waiver version, existing athletes must re-sign the new version before
+ * their next booking.
+ */
+model LiabilityWaiverSignature {
+  id                String         @id @default(uuid())
+  athleteProfileId  String
+  signedByUserId    String         // User who actually clicked "sign" (parent for Youth/MS-HS; the athlete for solo College/Pro)
+  signedByName      String         // Typed signature name
+  athleteName       String         // Snapshot of athlete's full name
+  waiverVersion     String         // e.g. '2026-04-23'
+  waiverText        String         @db.Text // Full waiver text snapshot
+  ipAddress         String?
+  userAgent         String?
+  signedAt          DateTime       @default(now())
+
+  athleteProfile    AthleteProfile @relation(fields: [athleteProfileId], references: [id], onDelete: Cascade)
+  signedByUser      User           @relation(fields: [signedByUserId], references: [id])
+
+  @@unique([athleteProfileId, waiverVersion])
+  @@index([athleteProfileId])
+  @@map("liability_waiver_signatures")
+}
+
 model OrgSettings {
   id           String  @id @default("ppl") // singleton row
   businessName String  @default("Pitching Performance Lab")
@@ -1421,6 +1455,10 @@ model OrgSettings {
   logoData     String? // base64 data URI for the logo image
   primaryColor String  @default("#166534")
   accentColor  String  @default("#4ade80")
+  // Liability waiver — admin-editable full text + version tag. When admins
+  // update the text, bump the version so existing signatures force re-sign.
+  liabilityWaiverText    String  @default("") @db.Text
+  liabilityWaiverVersion String  @default("2026-04-23")
 
   // Session defaults
   defaultCapacity         Int @default(8)

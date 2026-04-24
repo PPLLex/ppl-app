@@ -669,6 +669,95 @@ class ApiClient {
     });
   }
 
+  // ============================================================
+  // SELF-MANAGED ATHLETE — /my endpoints
+  // ============================================================
+  // These are the ergonomic "what am I up to?" endpoints the athlete
+  // dashboard widgets use. They're all keyed on the authenticated user
+  // so the widgets don't have to know the athlete's own userId.
+
+  async getMyPrograms(status?: string) {
+    const q = status ? `?status=${encodeURIComponent(status)}` : '';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return this.request<any[]>(`/programs/my${q}`);
+  }
+
+  async getMyGoals(params?: { status?: string; type?: string }) {
+    const query = new URLSearchParams();
+    if (params?.status) query.append('status', params.status);
+    if (params?.type) query.append('type', params.type);
+    const q = query.toString() ? `?${query.toString()}` : '';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return this.request<any[]>(`/goals/my${q}`);
+  }
+
+  /**
+   * Self-managed athlete view of notes written ABOUT them (not by them).
+   * Hits the /coach-notes/my endpoint. Named differently from the
+   * staff-focused getMyCoachNotes to avoid a name collision — that one
+   * means "notes I wrote as a coach."
+   */
+  async getMyAthleteNotes(params?: { category?: string; limit?: number; offset?: number }) {
+    const query = new URLSearchParams();
+    if (params?.category) query.append('category', params.category);
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.offset) query.append('offset', String(params.offset));
+    const q = query.toString() ? `?${query.toString()}` : '';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return this.request<any[]>(`/coach-notes/my${q}`);
+  }
+
+  // ============================================================
+  // LIABILITY WAIVER
+  // ============================================================
+
+  /** Current master waiver text + version tag. */
+  async getCurrentWaiver() {
+    return this.request<{ text: string; version: string }>('/waivers/current');
+  }
+
+  /**
+   * Signing status for every athlete the authenticated user is
+   * responsible for. Used by the parent dashboard banner + /client/waiver
+   * page to prompt the right signatures.
+   */
+  async getWaiverStatus() {
+    return this.request<{
+      currentVersion: string | null;
+      athletes: Array<{
+        athleteProfileId: string;
+        athleteName: string;
+        signed: boolean;
+        signedAt: string | null;
+        signedBy: string | null;
+      }>;
+    }>('/waivers/status');
+  }
+
+  /** Record the current user's signature for the given athlete. */
+  async signWaiver(data: { athleteProfileId: string; signedByName: string }) {
+    return this.request<{ id: string; signedAt: string }>('/waivers/sign', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /** Admin: list all liability signatures, newest first. */
+  async listWaiverSignatures(athleteProfileId?: string) {
+    const q = athleteProfileId ? `?athleteProfileId=${encodeURIComponent(athleteProfileId)}` : '';
+    return this.request<
+      Array<{
+        id: string;
+        athleteProfileId: string;
+        athleteName: string;
+        signedByName: string;
+        signedByUserId: string;
+        waiverVersion: string;
+        signedAt: string;
+      }>
+    >(`/waivers/signatures${q}`);
+  }
+
   async changePassword(data: { currentPassword: string; newPassword: string }) {
     return this.request('/account/password', {
       method: 'PUT',

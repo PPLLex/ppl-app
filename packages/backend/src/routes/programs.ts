@@ -61,6 +61,49 @@ router.post('/', authenticate, requireStaffOrAdmin, async (req: Request, res: Re
  * GET /api/programs/athlete/:athleteId
  * Get all programs for an athlete
  */
+/**
+ * GET /api/programs/my
+ * Self-managed athlete view of their own programs. Equivalent to
+ * /athlete/:athleteId with athleteId=me, but ergonomic for the athlete
+ * dashboard widgets. Optional ?status filter.
+ */
+router.get('/my', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = req.user!;
+    const { status } = req.query;
+    const where: Record<string, unknown> = { athleteId: user.userId };
+    if (status) where.status = status as string;
+
+    const programs = await prisma.program.findMany({
+      where,
+      include: {
+        coach: { select: { id: true, fullName: true } },
+        weeks: {
+          orderBy: { weekNum: 'asc' },
+          include: {
+            days: {
+              orderBy: { dayNum: 'asc' },
+              include: {
+                exercises: {
+                  orderBy: { sortOrder: 'asc' },
+                  include: {
+                    exercise: { select: { id: true, name: true, category: true, equipment: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json({ data: programs });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/athlete/:athleteId', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;

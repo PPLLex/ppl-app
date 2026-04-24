@@ -59,6 +59,34 @@ router.post('/', authenticate, async (req: Request, res: Response, next: NextFun
 });
 
 /**
+ * GET /api/goals/my
+ * Self-managed athlete view of their own goals. Uses req.user.userId
+ * as the athleteId so the athlete dashboard widget doesn't need to know
+ * its own ID.
+ */
+router.get('/my', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = req.user!;
+    const { status, type } = req.query;
+    const where: Record<string, unknown> = { athleteId: user.userId };
+    if (status) where.status = status as string;
+    if (type) where.type = type as string;
+
+    const goals = await prisma.goal.findMany({
+      where,
+      include: {
+        coach: { select: { id: true, fullName: true } },
+      },
+      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+    });
+
+    res.json({ data: goals });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * GET /api/goals/athlete/:athleteId
  * Get all goals for an athlete
  */

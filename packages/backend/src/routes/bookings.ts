@@ -79,6 +79,52 @@ router.post('/', authenticate, async (req: Request, res: Response, next: NextFun
       throw ApiError.forbidden('You need an active membership to book sessions. Please set up your membership first.');
     }
 
+    // Check: liability waiver signed for the athlete(s) this user covers.
+    //
+    // The booker (req.user.userId) is either the athlete themselves (self
+    // account, e.g. college/pro) or a parent (Family.parentUserId). In
+    // both cases we require an active signature against the current
+    // waiver version for at least one AthleteProfile associated with
+    // this user. We block booking if no relevant athlete has signed.
+    if (user.role === Role.CLIENT) {
+      const bookerUser = await prisma.user.findUnique({
+        where: { id: user.userId },
+        include: {
+          athleteProfile: { select: { id: true } },
+          family: { include: { athletes: { select: { id: true } } } },
+        },
+      });
+
+      const athleteIds = new Set<string>();
+      if (bookerUser?.athleteProfile?.id) athleteIds.add(bookerUser.athleteProfile.id);
+      if (bookerUser?.family?.athletes) {
+        for (const a of bookerUser.family.athletes) athleteIds.add(a.id);
+      }
+
+      if (athleteIds.size > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const settings: any = await prisma.orgSettings.findUnique({ where: { id: 'ppl' } });
+        const currentVersion = settings?.liabilityWaiverVersion || '2026-04-23';
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const p: any = prisma;
+        const signatures = await p.liabilityWaiverSignature.findMany({
+          where: {
+            athleteProfileId: { in: Array.from(athleteIds) },
+            waiverVersion: currentVersion,
+          },
+          select: { athleteProfileId: true },
+        });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const signedSet = new Set<string>(signatures.map((s: any) => s.athleteProfileId));
+        const anySigned = Array.from(athleteIds).some((id) => signedSet.has(id));
+        if (!anySigned) {
+          throw ApiError.forbidden(
+            'Please sign the liability waiver before booking. You can sign from your dashboard.'
+          );
+        }
+      }
+    }
+
     // Check: credits (for limited plans)
     let creditsUsed = 0;
     if (membership.plan.sessionsPerWeek !== null) {

@@ -94,6 +94,51 @@ router.post('/', authenticate, requireStaffOrAdmin, async (req: Request, res: Re
 });
 
 /**
+ * GET /api/coach-notes/my
+ * Self-managed athlete view of their own notes timeline. No athleteId
+ * in the path — uses req.user.userId.
+ */
+router.get('/my', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = req.user!;
+    const { category, limit, offset } = req.query;
+
+    const where: Record<string, unknown> = {
+      athleteId: user.userId,
+      isVisible: true,
+    };
+    if (category) where.trainingCategory = category as string;
+
+    const notes = await prisma.coachNote.findMany({
+      where,
+      include: {
+        coach: { select: { id: true, fullName: true } },
+        booking: {
+          select: {
+            id: true,
+            session: {
+              select: { id: true, title: true, sessionType: true, startTime: true },
+            },
+          },
+        },
+      },
+      orderBy: { sessionDate: 'desc' },
+      take: limit ? parseInt(limit as string) : 50,
+      skip: offset ? parseInt(offset as string) : 0,
+    });
+
+    const formattedNotes = notes.map((note: { cleanedContent: string | null; rawContent: string; [key: string]: unknown }) => ({
+      ...note,
+      content: note.cleanedContent || note.rawContent,
+    }));
+
+    res.json({ data: formattedNotes });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * GET /api/coach-notes/athlete/:athleteId
  * Get all notes for a specific athlete (timeline view).
  * Staff/Admin: see all notes. Client: see own notes only.

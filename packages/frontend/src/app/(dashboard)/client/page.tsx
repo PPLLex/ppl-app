@@ -22,6 +22,7 @@ import { api, MembershipDetail } from '@/lib/api';
 import { DashboardGrid } from '@/modules/dashboard/DashboardGrid';
 import { parentDashboardConfig } from '@/modules/dashboard/configs/parent';
 import { athleteDashboardConfig } from '@/modules/dashboard/configs/athlete';
+import { WaiverBanner } from '@/components/WaiverBanner';
 
 /**
  * Decide which dashboard a CLIENT user should see.
@@ -148,6 +149,10 @@ export default function ClientDashboard() {
           </Link>
         </div>
       )}
+
+      {/* Liability-waiver banner — appears whenever any athlete in the
+          family lacks a signature against the current waiver version. */}
+      <WaiverBanner />
 
       {/* ──────────────────────────────────────────────────────────────
           DASHBOARD WIDGETS — rendered from the role-scoped config. Drop

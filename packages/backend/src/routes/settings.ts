@@ -78,6 +78,8 @@ router.put('/branding', authenticate, requireAdmin, async (req: Request, res: Re
       financeWeekStartDay,
       financeWeekResetDay,
       financeWeekResetHour,
+      liabilityWaiverText,
+      liabilityWaiverVersion,
     } = req.body;
 
     await getOrCreateSettings(); // ensure row exists
@@ -102,6 +104,15 @@ router.put('/branding', authenticate, requireAdmin, async (req: Request, res: Re
     if (financeWeekStartDay !== undefined) data.financeWeekStartDay = clamp(financeWeekStartDay, 1, 7, 1);
     if (financeWeekResetDay !== undefined) data.financeWeekResetDay = clamp(financeWeekResetDay, 1, 7, 1);
     if (financeWeekResetHour !== undefined) data.financeWeekResetHour = clamp(financeWeekResetHour, 0, 23, 5);
+    if (liabilityWaiverText !== undefined && typeof liabilityWaiverText === 'string') {
+      data.liabilityWaiverText = liabilityWaiverText;
+    }
+    if (liabilityWaiverVersion !== undefined && typeof liabilityWaiverVersion === 'string') {
+      // Enforce a non-empty, trimmed string. Bumping this invalidates
+      // existing signatures and forces everyone to re-sign.
+      const v = liabilityWaiverVersion.trim();
+      if (v.length > 0) data.liabilityWaiverVersion = v;
+    }
 
     const settings = await prisma.orgSettings.update({
       where: { id: 'ppl' },
