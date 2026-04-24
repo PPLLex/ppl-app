@@ -963,11 +963,15 @@ function RegisterForm() {
               });
             })()}
           </div>
-          <div className="mt-2 flex items-center justify-between gap-2 text-[11px] uppercase tracking-[0.12em] text-muted">
-            <span className="whitespace-nowrap flex-shrink-0">
-              Step <span className="text-foreground font-bold tabular-nums">{step}</span> of 6
+          {/* Step counter — standard SaaS multi-step pattern: all-caps
+              tracking with a single font-weight across both numerals so
+              neither gets orphan emphasis, separator dot, then the step
+              name on the right. Matches Stripe/Linear/Vercel onboarding. */}
+          <div className="mt-2 flex items-center justify-between gap-2 text-[11px] uppercase tracking-[0.16em] text-muted font-medium">
+            <span className="whitespace-nowrap flex-shrink-0 tabular-nums">
+              Step {step} <span className="text-muted/50">/</span> 6
             </span>
-            <span className="text-foreground/70 truncate min-w-0 text-right">
+            <span className="text-foreground truncate min-w-0 text-right tracking-[0.12em]">
               {(['Playing Level', 'Your Info', 'History', 'Training', 'Membership', 'Checkout'] as const)[step - 1]}
             </span>
           </div>
@@ -1607,8 +1611,8 @@ function RegisterForm() {
           {/* ============================================ */}
           {step === 3 && (
             <div className="space-y-2.5">
-              <p className="text-sm text-muted mb-2">
-                New athletes are required to pay a one-time
+              <p className="text-muted mb-2 text-[clamp(11px,2.7vw,14px)] whitespace-nowrap">
+                New athletes pay a one-time
                 <strong className="text-foreground"> $300 onboarding fee</strong>.
               </p>
               {(
