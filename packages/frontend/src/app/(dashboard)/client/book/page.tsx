@@ -19,6 +19,8 @@ const SESSION_TYPE_LABELS: Record<string, string> = {
   COLLEGE_PITCHING: 'College Pitching',
   MS_HS_PITCHING: 'MS/HS Pitching',
   YOUTH_PITCHING: 'Youth Pitching',
+  PRIVATE_LESSON: 'Private Lesson',
+  CAGE_RENTAL: 'Cage Rental',
 };
 
 type BookingMode = 'single' | 'plan-week';
