@@ -19,6 +19,29 @@ interface EmailOptions {
 /**
  * Send an email. In development, logs to console.
  * In production, uses configured SMTP/service.
+ *
+ * Deliverability-hardening this does at the code layer:
+ *   - From:        "Pitching Performance Lab" <info@pitchingperformancelab.com>
+ *                  (a real, monitored mailbox — better than noreply@ for
+ *                  Gmail's reputation scoring)
+ *   - Reply-To:    info@pitchingperformancelab.com so replies route to a
+ *                  human instead of bouncing off a noreply inbox
+ *   - envelope.from (return-path) matches the authenticated SMTP user so
+ *                  SPF alignment is satisfied when the user is a Google
+ *                  Workspace account with SPF configured
+ *   - X-PPL-Email  headers identify the email type for debugging without
+ *                  leaking PII
+ *
+ * Sender-side DNS requirements (done outside this code, once, by Chad):
+ *   SPF     v=spf1 include:_spf.google.com ~all
+ *   DKIM    enable in Google Admin → Apps → Google Workspace → Gmail →
+ *           Authenticate email → Generate new record → publish TXT
+ *   DMARC   v=DMARC1; p=none; rua=mailto:postmaster@pitchingperformancelab.com
+ *           (start with p=none to monitor, tighten to quarantine/reject
+ *           after a few weeks of clean DMARC reports)
+ *   Google Workspace Send-As alias: add info@pitchingperformancelab.com as
+ *   a Send-As in the SMTP-authenticating Gmail account so the From header
+ *   is authorized.
  */
 export async function sendEmail(options: EmailOptions): Promise<boolean> {
   const { to, subject, text, html } = options;
@@ -37,22 +60,43 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
     // This is a lazy import so nodemailer isn't required in dev
     const nodemailer = await import('nodemailer');
 
+    const smtpUser = process.env.SMTP_USER;
+    const fromHeader =
+      process.env.SMTP_FROM ||
+      '"Pitching Performance Lab" <info@pitchingperformancelab.com>';
+    // Reply-To: info@ so anything a user hits "reply" on lands in the
+    // inbox Chad actually checks. Separate from FROM because FROM is
+    // constrained by what Gmail will accept as a Send-As alias.
+    const replyTo =
+      process.env.SMTP_REPLY_TO || 'info@pitchingperformancelab.com';
+
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
       port: parseInt(process.env.SMTP_PORT || '587'),
       secure: false,
       auth: {
-        user: process.env.SMTP_USER,
+        user: smtpUser,
         pass: process.env.SMTP_PASS,
       },
     });
 
     await transporter.sendMail({
-      from: process.env.SMTP_FROM || '"Pitching Performance Lab" <noreply@pitchingperformancelab.com>',
+      from: fromHeader,
       to,
       subject,
       text,
       html: html || undefined,
+      replyTo,
+      // Return-path (envelope.from) explicitly set to the authenticated
+      // user — SPF evaluates the envelope-from against the domain, so
+      // keeping them aligned is what actually makes SPF "pass."
+      envelope: smtpUser
+        ? { from: smtpUser, to }
+        : undefined,
+      headers: {
+        'X-PPL-App': 'ppl-app',
+        'X-PPL-Env': config.nodeEnv,
+      },
     });
 
     console.log(`Email sent to ${to}: ${subject}`);
