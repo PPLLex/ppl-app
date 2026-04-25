@@ -1999,3 +1999,37 @@ model ScreeningResult {
   @@index([screeningId])
   @@map("screening_results")
 }
+
+// ----------------------------------------------------------------------------
+// Webhook idempotency log.
+//
+// Stripe (and other providers) retry webhooks if our endpoint times out, is
+// briefly unreachable, or returns a non-2xx. Without a dedup table the same
+// event can hit our handler twice and process credit/membership state changes
+// twice — that's how we end up with double-revoked credits or duplicate
+// Payment rows even though Payment has a unique constraint on stripeInvoiceId.
+//
+// Pattern: handler INSERTs a row keyed by the provider's event ID at the very
+// top. If the insert violates the unique constraint the event has already
+// been processed; we ack and exit. Only the first processing actually does
+// work.
+// ----------------------------------------------------------------------------
+model WebhookEvent {
+  id          String   @id @default(uuid())
+  // Stripe's evt_xxx ID, or any external provider's event identifier.
+  externalId  String   @unique
+  // Provider name so we can mix Stripe + future providers in one table.
+  provider    String   @default("stripe")
+  // Event type ("invoice.payment_failed", etc.) for debugging + analytics.
+  eventType   String
+  // First-seen timestamp.
+  receivedAt  DateTime @default(now())
+  // Filled in when the handler completes successfully.
+  processedAt DateTime?
+  // If a handler failed, we record the error here so on next retry we can
+  // see the prior failure rather than blindly skipping.
+  error       String?
+
+  @@index([provider, eventType])
+  @@map("webhook_events")
+}

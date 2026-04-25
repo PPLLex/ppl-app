@@ -1,12 +1,13 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import Stripe from 'stripe';
-import { stripe } from '../services/stripeService';
+import { stripe, createCardUpdateSession } from '../services/stripeService';
 import { prisma } from '../utils/prisma';
 import { config } from '../config';
 import { notify } from '../services/notificationService';
 import {
   buildPaymentSuccessEmail,
   buildPaymentFailedEmail,
+  buildCardUpdateEmail,
 } from '../services/emailService';
 import { createAuditLog } from '../services/auditService';
 import {
@@ -36,6 +37,31 @@ router.post('/stripe', async (req: Request, res: Response, next: NextFunction) =
     const message = err instanceof Error ? err.message : 'Unknown error';
     console.error('Webhook signature verification failed:', message);
     return res.status(400).send(`Webhook Error: ${message}`);
+  }
+
+  // ============================================================
+  // Idempotency guard.
+  //
+  // Stripe retries webhooks aggressively (up to 3 days) when our endpoint
+  // doesn't ACK fast enough. Without this guard, a slow handler can result
+  // in the same event being processed two or three times — and most of our
+  // handlers are NOT idempotent (booking cancellations, credit revocation,
+  // notification sends, audit logs all run twice).
+  //
+  // Pattern: try to INSERT a WebhookEvent row keyed by event.id. If the
+  // unique constraint fails, this event has already been seen → ack and
+  // exit. Otherwise process, then mark processedAt at the end.
+  // ============================================================
+  let webhookRow;
+  try {
+    webhookRow = await prisma.webhookEvent.create({
+      data: { externalId: event.id, provider: 'stripe', eventType: event.type },
+    });
+  } catch (err) {
+    // Unique-constraint violation → already processed (or in flight).
+    // Either way: ack + return so Stripe stops retrying.
+    console.log(`[webhook] Duplicate event ${event.id} (${event.type}) — skipping`);
+    return res.json({ received: true, duplicate: true });
   }
 
   try {
@@ -71,9 +97,27 @@ router.post('/stripe', async (req: Request, res: Response, next: NextFunction) =
         console.log(`Unhandled Stripe event: ${event.type}`);
     }
 
+    // Mark successfully processed so the next retry will short-circuit at
+    // the unique-constraint check above. (If we get a unique conflict but
+    // processedAt is still null, the previous run crashed mid-flight and
+    // someone should investigate — see the `error` column.)
+    await prisma.webhookEvent.update({
+      where: { id: webhookRow.id },
+      data: { processedAt: new Date() },
+    });
+
     res.json({ received: true });
   } catch (error) {
+    const errMessage = error instanceof Error ? error.message : String(error);
     console.error(`Webhook handler error for ${event.type}:`, error);
+    // Persist the failure so the next retry doesn't blindly skip and so we
+    // have a forensic trail.
+    await prisma.webhookEvent
+      .update({
+        where: { id: webhookRow.id },
+        data: { error: errMessage.slice(0, 2000) },
+      })
+      .catch(() => {});
     // Still return 200 so Stripe doesn't retry
     res.json({ received: true, error: 'Handler error' });
   }
@@ -309,43 +353,47 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
   });
 
   if (futureBookings.length > 0) {
-    // Cancel all future bookings
-    await prisma.booking.updateMany({
-      where: { id: { in: futureBookings.map(b => b.id) } },
-      data: { status: BookingStatus.CANCELLED, cancelledAt: now },
-    });
+    // Atomic: cancel all future bookings + return credits + log credit
+    // transaction. Pre-fix this loop wrote partial state if it crashed
+    // mid-way (some bookings cancelled, some still CONFIRMED but with
+    // PAST_DUE membership). Wrapping in $transaction ensures all-or-
+    // nothing semantics.
+    await prisma.$transaction(async (tx) => {
+      await tx.booking.updateMany({
+        where: { id: { in: futureBookings.map(b => b.id) } },
+        data: { status: BookingStatus.CANCELLED, cancelledAt: now },
+      });
 
-    // Return credits for each cancelled booking (they'll be frozen below)
-    for (const booking of futureBookings) {
-      if (booking.creditsUsed > 0) {
-        // Find the weekly credit record and return the credits
-        const weeklyCredit = await prisma.weeklyCredit.findFirst({
-          where: {
-            clientId: membership.clientId,
-            membershipId: membership.id,
-            weekStartDate: { lte: booking.session.startTime },
-            weekEndDate: { gt: booking.session.startTime },
-          },
-        });
-        if (weeklyCredit) {
-          await prisma.weeklyCredit.update({
-            where: { id: weeklyCredit.id },
-            data: { creditsUsed: { decrement: booking.creditsUsed } },
+      for (const booking of futureBookings) {
+        if (booking.creditsUsed > 0) {
+          const weeklyCredit = await tx.weeklyCredit.findFirst({
+            where: {
+              clientId: membership.clientId,
+              membershipId: membership.id,
+              weekStartDate: { lte: booking.session.startTime },
+              weekEndDate: { gt: booking.session.startTime },
+            },
           });
+          if (weeklyCredit) {
+            await tx.weeklyCredit.update({
+              where: { id: weeklyCredit.id },
+              data: { creditsUsed: { decrement: booking.creditsUsed } },
+            });
+          }
         }
       }
-    }
+
+      await tx.creditTransaction.create({
+        data: {
+          clientId: membership.clientId,
+          transactionType: 'cancel_return',
+          amount: futureBookings.reduce((sum, b) => sum + b.creditsUsed, 0),
+          notes: `Credits returned from ${futureBookings.length} cancelled bookings due to failed payment. Credits are frozen until payment resolves.`,
+        },
+      });
+    });
 
     console.log(`[PaymentFailed] Cancelled ${futureBookings.length} future bookings for ${membership.client.fullName}`);
-
-    await prisma.creditTransaction.create({
-      data: {
-        clientId: membership.clientId,
-        transactionType: 'cancel_return',
-        amount: futureBookings.reduce((sum, b) => sum + b.creditsUsed, 0),
-        notes: `Credits returned from ${futureBookings.length} cancelled bookings due to failed payment. Credits are frozen until payment resolves.`,
-      },
-    });
   }
 
   // Revoke ALL credits — full lockdown
@@ -403,6 +451,48 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
     },
     emailHtml: failedHtml,
   });
+
+  // Follow-up: send a dedicated "update your card" email with a Stripe
+  // billing-portal session URL so the client can fix their card without
+  // hunting around the app. This complements the failed-payment email
+  // above, which informs but doesn't action.
+  try {
+    const portalUrl = await createCardUpdateSession(membership.clientId);
+    // Pull last4 from the failed PaymentMethod where possible — fallback
+    // to "ending soon" so the email reads sensibly even if Stripe doesn't
+    // surface card details.
+    let lastFour = '••••';
+    try {
+      if (invoice.payment_intent) {
+        const pi = await stripe.paymentIntents.retrieve(invoice.payment_intent as string, {
+          expand: ['latest_charge.payment_method_details'],
+        });
+        const charge = pi.latest_charge as Stripe.Charge | null;
+        const cardDetails = charge?.payment_method_details?.card;
+        if (cardDetails?.last4) lastFour = cardDetails.last4;
+      }
+    } catch (err) {
+      console.error('[PaymentFailed] could not resolve last4 for card-update email:', err);
+    }
+
+    const cardUpdateHtml = buildCardUpdateEmail(
+      membership.client.fullName || 'Athlete',
+      lastFour,
+      portalUrl,
+    );
+    await notify({
+      userId: membership.clientId,
+      type: NotificationType.PAYMENT_FAILED,
+      title: 'Update Your Payment Method',
+      body: `Click here to update your card: ${portalUrl}`,
+      channels: [NotificationChannel.EMAIL],
+      metadata: { membershipId: membership.id, action: 'UPDATE_PAYMENT', portalUrl },
+      emailHtml: cardUpdateHtml,
+    });
+  } catch (err) {
+    // Don't let billing-portal failures block the rest of the flow.
+    console.error('[PaymentFailed] failed to send card-update email:', err);
+  }
 
   // Notify coordinators at the athlete's location (not all staff)
   const ageGroup = await prisma.athleteProfile.findFirst({
