@@ -296,33 +296,33 @@ export function buildWelcomeEmail(name: string, locationName: string): string {
 }
 
 /**
- * Build a branded HTML email wrapper matching the PPL visual identity.
+ * Build a branded HTML email wrapper matching the PPL app's visual identity.
  *
- * Design language follows Chad's daily-overview email template:
- *   - Light page bg (#f0f2f5) with a white email card (16px radius, soft shadow)
- *   - Dark navy → deep-blue gradient header strip
- *     (#1a1a2e → #16213e → #0f3460)
- *   - Real PPL logo (PNG, served by the deployed frontend)
- *   - Bank Gothic Bold for the hero title — same display font as the app
- *   - Transducer Black Italic for the "PITCHING PERFORMANCE LAB" eyebrow
- *     above the title, matching the in-app accent treatment
- *   - PPL green (#95c83c) accent on dividers + CTAs
- *   - Helvetica Neue body — what the existing daily emails use, reads
- *     consistently in every email client
+ * Pulls colors + fonts directly from the app's globals.css token system:
+ *   - Background: #0A0A0A (true black, same as app shell)
+ *   - Surface:    #141414 (card surface)
+ *   - Border:     #2A2A2A
+ *   - Foreground: #F5F5F5 (text)
+ *   - Muted:      #888888
+ *   - Primary:    #5E9E50 (PPL green)
+ *   - Accent:     #95C83C (PPL bright green)
+ *
+ * Fonts (loaded via @font-face from the deployed frontend):
+ *   - Bank Gothic Bold      → display headers (--font-display)
+ *   - Transducer Black/Oblique → accent eyebrows (--font-accent)
+ *   - Manrope               → body text (--font-sans)
  *
  * Email-client font caveat:
- *   Bank Gothic Bold + Transducer are loaded via @font-face from
- *   ${frontendUrl}/fonts/*.  Modern webmail (Gmail web, Apple Mail,
- *   Outlook web) pulls the actual fonts. Older Outlook desktop / some
- *   enterprise gateways strip @font-face and fall back to the system
- *   chain — Impact for the Bank Gothic slot, italic Helvetica for
- *   Transducer. Both fallbacks are visually close enough that the
- *   layout still reads as "PPL" without those weights present.
+ *   Modern webmail (Gmail web, Apple Mail, Outlook web) pulls @font-face
+ *   from your domain. Outlook desktop on Windows + some enterprise gateways
+ *   strip @font-face and fall back to: Copperplate Gothic Bold / Impact for
+ *   Bank Gothic; Arial Black italic for Transducer; system Manrope-ish
+ *   sans-serif for body. Layout reads as PPL either way.
  */
 export function buildPPLEmail(title: string, body: string, opts?: { preheader?: string }): string {
   const preheader = opts?.preheader ?? '';
   const baseUrl = config.frontendUrl;
-  const logoUrl = `${baseUrl}/ppl-logo.png`; // PNG renders in every email client; webp doesn't in Outlook
+  const logoUrl = `${baseUrl}/ppl-logo.png`;
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -330,8 +330,8 @@ export function buildPPLEmail(title: string, body: string, opts?: { preheader?: 
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="x-apple-disable-message-reformatting">
-  <meta name="color-scheme" content="light dark">
-  <meta name="supported-color-schemes" content="light dark">
+  <meta name="color-scheme" content="dark only">
+  <meta name="supported-color-schemes" content="dark">
   <title>${title}</title>
   <style>
     @font-face {
@@ -355,6 +355,7 @@ export function buildPPLEmail(title: string, body: string, opts?: { preheader?: 
       font-display: swap;
       src: url('${baseUrl}/fonts/Transducer-Black.otf') format('opentype');
     }
+    @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
     @media (max-width: 640px) {
       .ppl-card { padding: 28px 22px !important; }
       .ppl-hero { padding: 36px 24px !important; }
@@ -363,52 +364,50 @@ export function buildPPLEmail(title: string, body: string, opts?: { preheader?: 
     }
   </style>
 </head>
-<body style="margin:0;padding:0;background:#f0f2f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#374151;-webkit-font-smoothing:antialiased;">
+<body style="margin:0;padding:0;background:#0A0A0A;font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#F5F5F5;-webkit-font-smoothing:antialiased;">
   <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">${preheader}</div>
 
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f0f2f5;padding:32px 16px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0A;padding:32px 16px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 16px rgba(15,52,96,0.08);">
+        <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:#141414;border:1px solid #2A2A2A;border-radius:16px;overflow:hidden;">
 
-          <!-- Header: dark gradient with logo + Bank Gothic title -->
+          <!-- Header: black band with logo + Bank Gothic title + green accent line -->
           <tr>
-            <td class="ppl-hero" style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);padding:40px 36px;text-align:center;">
-              <img src="${logoUrl}" alt="PPL" width="72" height="72" style="display:inline-block;border:0;outline:none;text-decoration:none;margin:0 0 18px;border-radius:14px;">
-              <p class="ppl-eyebrow" style="margin:0 0 10px;font-family:'Transducer','Helvetica Neue',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:12px;letter-spacing:0.22em;text-transform:uppercase;color:#95c83c;">Pitching Performance Lab</p>
-              <h1 class="ppl-h1" style="margin:0;font-family:'Bank Gothic',Impact,'Arial Black',sans-serif;font-size:32px;line-height:1.15;letter-spacing:0.05em;color:#ffffff;font-weight:700;text-transform:uppercase;">${title}</h1>
-              <div style="width:48px;height:3px;background:#95c83c;border-radius:2px;margin:18px auto 0;"></div>
+            <td class="ppl-hero" style="background:#0A0A0A;border-bottom:1px solid #2A2A2A;padding:44px 36px 36px;text-align:center;">
+              <img src="${logoUrl}" alt="PPL" width="72" height="72" style="display:block;margin:0 auto 18px;border:0;outline:none;text-decoration:none;">
+              <p class="ppl-eyebrow" style="margin:0 0 12px;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:12px;letter-spacing:0.24em;text-transform:uppercase;color:#95C83C;">Pitching Performance Lab</p>
+              <h1 class="ppl-h1" style="margin:0;font-family:'Bank Gothic','Copperplate Gothic Bold',Impact,sans-serif;font-size:32px;line-height:1.15;letter-spacing:0.06em;color:#F5F5F5;font-weight:700;text-transform:uppercase;">${title}</h1>
+              <div style="width:56px;height:3px;background:#95C83C;border-radius:2px;margin:20px auto 0;"></div>
             </td>
           </tr>
 
           <!-- Body -->
           <tr>
-            <td class="ppl-card" style="padding:36px 36px;color:#374151;font-size:15px;line-height:1.65;background:#ffffff;">
+            <td class="ppl-card" style="padding:36px 36px;background:#141414;color:#CCCCCC;font-size:15px;line-height:1.65;">
               ${body}
             </td>
           </tr>
 
-          <!-- Footer: dark band with green accent -->
+          <!-- Footer: same dark with subtle green accent -->
           <tr>
-            <td style="background:#1a1a2e;padding:24px 36px;text-align:center;">
-              <p style="margin:0 0 6px;font-family:'Transducer','Helvetica Neue',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:11px;color:#95c83c;letter-spacing:0.22em;text-transform:uppercase;">Pitching Performance Lab</p>
-              <p style="margin:0;font-size:12px;color:#8892a4;line-height:1.6;">
-                <a href="https://pitchingperformancelab.com" style="color:#8892a4;text-decoration:none;">pitchingperformancelab.com</a>
-                <span style="color:#3a4565;">&nbsp;&nbsp;&middot;&nbsp;&nbsp;</span>
-                <a href="mailto:support@pitchingperformancelab.com" style="color:#8892a4;text-decoration:none;">support@pitchingperformancelab.com</a>
+            <td style="background:#0F0F0F;border-top:1px solid #2A2A2A;padding:22px 36px;text-align:center;">
+              <p style="margin:0 0 6px;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:11px;color:#95C83C;letter-spacing:0.24em;text-transform:uppercase;">Pitching Performance Lab</p>
+              <p style="margin:0;font-size:12px;color:#888888;line-height:1.6;">
+                <a href="https://pitchingperformancelab.com" style="color:#888888;text-decoration:none;">pitchingperformancelab.com</a>
+                <span style="color:#3A3A3A;">&nbsp;&middot;&nbsp;</span>
+                <a href="mailto:support@pitchingperformancelab.com" style="color:#888888;text-decoration:none;">support@pitchingperformancelab.com</a>
               </p>
             </td>
           </tr>
 
         </table>
 
-        <!-- Outer footnote (outside the card) -->
+        <!-- Outer footnote -->
         <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;">
           <tr>
-            <td style="padding:14px 24px 4px;text-align:center;">
-              <p style="margin:0;font-size:11px;color:#9ca3af;line-height:1.55;">
-                You&rsquo;re receiving this because you have a Pitching Performance Lab account.
-              </p>
+            <td style="padding:16px 24px 4px;text-align:center;">
+              <p style="margin:0;font-size:11px;color:#666666;line-height:1.55;">You&rsquo;re receiving this because you have a Pitching Performance Lab account.</p>
             </td>
           </tr>
         </table>
@@ -927,63 +926,62 @@ export function buildInviteEmailByRole(data: RoleInviteData): string {
   const responsibilities = roleResponsibilities(data.role);
 
   const invitedLine = data.invitedByName
-    ? `<strong style="color:#1a1a2e;">${data.invitedByName}</strong> at Pitching Performance Lab has added you as a <strong style="color:#1a1a2e;">${roleLabel}</strong>.`
-    : `You've been added to Pitching Performance Lab as a <strong style="color:#1a1a2e;">${roleLabel}</strong>.`;
+    ? `<strong style="color:#F5F5F5;">${data.invitedByName}</strong> at Pitching Performance Lab has added you as a <strong style="color:#95C83C;">${roleLabel}</strong>.`
+    : `You've been added to Pitching Performance Lab as a <strong style="color:#95C83C;">${roleLabel}</strong>.`;
 
   // Scope line — describes WHERE/WHAT this role covers
   let scopeText = '';
   if (data.locationName) {
-    scopeText = `Your access is scoped to <strong style="color:#1a1a2e;">${data.locationName}</strong>.`;
+    scopeText = `Your access is scoped to <strong style="color:#F5F5F5;">${data.locationName}</strong>.`;
   } else if (data.schoolName) {
-    scopeText = `You're coaching for <strong style="color:#1a1a2e;">${data.schoolName}</strong> — you'll see that team's PPL roster and nothing else.`;
+    scopeText = `You're coaching for <strong style="color:#F5F5F5;">${data.schoolName}</strong> — you'll see that team's PPL roster and nothing else.`;
   } else if (data.role === 'ADMIN' || data.role === 'CONTENT_MARKETING_ADMIN' || data.role === 'MEDICAL_ADMIN') {
     scopeText = `Global access — this role applies across every PPL location.`;
   } else {
     scopeText = `Welcome to the PPL community.`;
   }
 
-  // Custom bullet list — green dots instead of default disc, tighter spacing,
-  // body weight matching the daily-overview style.
-  const bulletsHtml = responsibilities
+  // Custom dark-theme bullet list — green pill markers, light body text
+  const darkBulletsHtml = responsibilities
     .map(
       (r) => `
       <tr>
-        <td valign="top" style="padding:6px 12px 6px 0;width:20px;">
-          <div style="width:6px;height:6px;background:#95c83c;border-radius:3px;margin-top:8px;"></div>
+        <td valign="top" style="padding:7px 12px 7px 0;width:20px;">
+          <div style="width:6px;height:6px;background:#95C83C;border-radius:3px;margin-top:8px;"></div>
         </td>
-        <td valign="top" style="padding:6px 0;color:#374151;font-size:15px;line-height:1.55;">${r}</td>
+        <td valign="top" style="padding:7px 0;color:#CCCCCC;font-size:15px;line-height:1.55;">${r}</td>
       </tr>`
     )
     .join('');
 
   const body = `
-    <p style="margin:0 0 18px;color:#374151;font-size:16px;line-height:1.6;">Hey ${firstName},</p>
-    <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.65;">${invitedLine}</p>
+    <p style="margin:0 0 18px;color:#F5F5F5;font-size:16px;line-height:1.6;">Hey ${firstName},</p>
+    <p style="margin:0 0 26px;color:#CCCCCC;font-size:15px;line-height:1.65;">${invitedLine}</p>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
       <tr>
-        <td style="background:#f8f9fb;border-left:4px solid #95c83c;border-radius:0 8px 8px 0;padding:18px 20px;">
-          <p style="margin:0 0 6px;font-family:'Transducer','Helvetica Neue',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#95c83c;">Your role</p>
-          <p style="margin:0 0 4px;font-family:'Bank Gothic',Impact,'Arial Black',sans-serif;font-size:18px;font-weight:700;color:#1a1a2e;letter-spacing:0.04em;text-transform:uppercase;">${roleLabel}</p>
-          <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.55;">${scopeText}</p>
+        <td style="background:#1A1A1A;border:1px solid #2A2A2A;border-left:4px solid #95C83C;border-radius:0 10px 10px 0;padding:18px 22px;">
+          <p style="margin:0 0 6px;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:11px;letter-spacing:0.22em;text-transform:uppercase;color:#95C83C;">Your role</p>
+          <p style="margin:0 0 4px;font-family:'Bank Gothic','Copperplate Gothic Bold',Impact,sans-serif;font-size:20px;font-weight:700;color:#F5F5F5;letter-spacing:0.05em;text-transform:uppercase;">${roleLabel}</p>
+          <p style="margin:0;color:#888888;font-size:13px;line-height:1.55;">${scopeText}</p>
         </td>
       </tr>
     </table>
 
-    <p style="margin:0 0 14px;font-family:'Bank Gothic',Impact,'Arial Black',sans-serif;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#1a1a2e;">What you'll do</p>
+    <p style="margin:0 0 12px;font-family:'Bank Gothic','Copperplate Gothic Bold',Impact,sans-serif;font-size:13px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#F5F5F5;">What you&rsquo;ll do</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
-      ${bulletsHtml}
+      ${darkBulletsHtml}
     </table>
 
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
       <tr>
         <td align="center">
-          <a href="${data.acceptUrl}" style="display:inline-block;padding:15px 36px;background:linear-gradient(135deg,#95c83c 0%,#7ab32d 100%);color:#ffffff;text-decoration:none;border-radius:10px;font-weight:700;font-size:15px;letter-spacing:0.04em;text-transform:uppercase;box-shadow:0 2px 8px rgba(149,200,60,0.35);">Accept &amp; set your password</a>
+          <a href="${data.acceptUrl}" style="display:inline-block;padding:15px 36px;background:linear-gradient(135deg,#5E9E50 0%,#95C83C 100%);color:#0A0A0A;text-decoration:none;border-radius:10px;font-family:'Bank Gothic','Copperplate Gothic Bold',Impact,sans-serif;font-weight:700;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;">Accept &amp; set your password</a>
         </td>
       </tr>
     </table>
 
-    <p style="font-size:13px;color:#6b7280;margin:0;line-height:1.55;text-align:center;">
+    <p style="font-size:13px;color:#888888;margin:0;line-height:1.55;text-align:center;">
       This invite expires in ${data.expiresInDays} days. If it lapses before you get to it,
       just reply to this email and we\u2019ll send a fresh one.
     </p>
