@@ -43,6 +43,7 @@ import inboundEmailRoutes from './routes/inboundEmail';
 import roleRoutes from './routes/roles';
 import partnerDashboardRoutes from './routes/partnerDashboard';
 import leadRoutes from './routes/leads';
+import publicLeadIntakeRoutes from './routes/publicLeadIntake';
 import screeningRoutes from './routes/screenings';
 import campaignRoutes from './routes/campaigns';
 import emailPreviewRoutes from './routes/emailPreview';
@@ -106,6 +107,11 @@ app.get('/api/health', (_req, res) => {
 
 // Public staff invite routes (no auth required) — must be before /api/staff authenticated routes
 app.use('/api/staff', staffPublicRouter);
+
+// Public lead intake — marketing site forms drop into the CRM here.
+// No auth required, hooked into the global apiLimiter for rate-limit, with
+// honeypot + email validation in the route handler.
+app.use('/api/public', publicLeadIntakeRoutes);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/locations', locationRoutes);
