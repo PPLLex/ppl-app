@@ -355,11 +355,11 @@ export function buildPPLEmail(title: string, body: string, opts?: { preheader?: 
       font-display: swap;
       src: url('${baseUrl}/fonts/Transducer-Black.otf') format('opentype');
     }
-    @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Bebas+Neue&display=swap');
     @media (max-width: 640px) {
       .ppl-card { padding: 28px 22px !important; }
-      .ppl-hero { padding: 36px 24px !important; }
-      .ppl-h1 { font-size: 28px !important; }
+      .ppl-hero { padding: 32px 22px !important; }
+      .ppl-h1 { font-size: 20px !important; }
       .ppl-eyebrow { font-size: 11px !important; }
     }
   </style>
@@ -372,13 +372,13 @@ export function buildPPLEmail(title: string, body: string, opts?: { preheader?: 
       <td align="center">
         <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:#141414;border:1px solid #2A2A2A;border-radius:16px;overflow:hidden;">
 
-          <!-- Header: black band with logo + Bank Gothic title + green accent line -->
+          <!-- Header: black band with logo + tighter Bank Gothic title + green accent line -->
           <tr>
-            <td class="ppl-hero" style="background:#0A0A0A;border-bottom:1px solid #2A2A2A;padding:44px 36px 36px;text-align:center;">
-              <img src="${logoUrl}" alt="PPL" width="72" height="72" style="display:block;margin:0 auto 18px;border:0;outline:none;text-decoration:none;">
-              <p class="ppl-eyebrow" style="margin:0 0 12px;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:12px;letter-spacing:0.24em;text-transform:uppercase;color:#95C83C;">Pitching Performance Lab</p>
-              <h1 class="ppl-h1" style="margin:0;font-family:'Bank Gothic','Copperplate Gothic Bold',Impact,sans-serif;font-size:32px;line-height:1.15;letter-spacing:0.06em;color:#F5F5F5;font-weight:700;text-transform:uppercase;">${title}</h1>
-              <div style="width:56px;height:3px;background:#95C83C;border-radius:2px;margin:20px auto 0;"></div>
+            <td class="ppl-hero" style="background:#0A0A0A;border-bottom:1px solid #2A2A2A;padding:36px 36px 32px;text-align:center;">
+              <img src="${logoUrl}" alt="PPL" width="64" height="64" style="display:block;margin:0 auto 16px;border:0;outline:none;text-decoration:none;">
+              <p class="ppl-eyebrow" style="margin:0 0 10px;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:11px;letter-spacing:0.26em;text-transform:uppercase;color:#95C83C;">Pitching Performance Lab</p>
+              <h1 class="ppl-h1" style="margin:0;font-family:'Bank Gothic','Copperplate Gothic Bold',Impact,sans-serif;font-size:22px;line-height:1.2;letter-spacing:0.06em;color:#F5F5F5;font-weight:700;text-transform:uppercase;">${title}</h1>
+              <div style="width:44px;height:2px;background:#95C83C;border-radius:2px;margin:16px auto 0;"></div>
             </td>
           </tr>
 
@@ -958,17 +958,19 @@ export function buildInviteEmailByRole(data: RoleInviteData): string {
     <p style="margin:0 0 18px;color:#F5F5F5;font-size:16px;line-height:1.6;">Hey ${firstName},</p>
     <p style="margin:0 0 26px;color:#CCCCCC;font-size:15px;line-height:1.65;">${invitedLine}</p>
 
+    <!-- Role card: Transducer eyebrow + Bebas Neue role label + Manrope scope (matches the report's stat-row hierarchy) -->
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
       <tr>
         <td style="background:#1A1A1A;border:1px solid #2A2A2A;border-left:4px solid #95C83C;border-radius:0 10px 10px 0;padding:18px 22px;">
-          <p style="margin:0 0 6px;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:11px;letter-spacing:0.22em;text-transform:uppercase;color:#95C83C;">Your role</p>
-          <p style="margin:0 0 4px;font-family:'Bank Gothic','Copperplate Gothic Bold',Impact,sans-serif;font-size:20px;font-weight:700;color:#F5F5F5;letter-spacing:0.05em;text-transform:uppercase;">${roleLabel}</p>
+          <p style="margin:0 0 4px;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:11px;letter-spacing:0.22em;text-transform:uppercase;color:#95C83C;">Your Role</p>
+          <p style="margin:0 0 4px;font-family:'Bebas Neue','Oswald',Impact,sans-serif;font-size:30px;line-height:1.05;font-weight:400;color:#F5F5F5;letter-spacing:0.04em;text-transform:uppercase;">${roleLabel}</p>
           <p style="margin:0;color:#888888;font-size:13px;line-height:1.55;">${scopeText}</p>
         </td>
       </tr>
     </table>
 
-    <p style="margin:0 0 12px;font-family:'Bank Gothic','Copperplate Gothic Bold',Impact,sans-serif;font-size:13px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#F5F5F5;">What you&rsquo;ll do</p>
+    <!-- Section divider: Transducer Black Italic ALL CAPS — same treatment as PITCH ARSENAL · LATEST SESSION in the report -->
+    <p style="margin:0 0 14px;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:11px;letter-spacing:0.24em;text-transform:uppercase;color:#95C83C;">What You&rsquo;ll Do <span style="color:#3A3A3A;margin:0 8px;">&middot;</span> <span style="color:#888888;">${responsibilities.length} things</span></p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
       ${darkBulletsHtml}
     </table>
@@ -976,14 +978,15 @@ export function buildInviteEmailByRole(data: RoleInviteData): string {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
       <tr>
         <td align="center">
-          <a href="${data.acceptUrl}" style="display:inline-block;padding:15px 36px;background:linear-gradient(135deg,#5E9E50 0%,#95C83C 100%);color:#0A0A0A;text-decoration:none;border-radius:10px;font-family:'Bank Gothic','Copperplate Gothic Bold',Impact,sans-serif;font-weight:700;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;">Accept &amp; set your password</a>
+          <a href="${data.acceptUrl}" style="display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#5E9E50 0%,#95C83C 100%);color:#0A0A0A;text-decoration:none;border-radius:10px;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:13px;letter-spacing:0.16em;text-transform:uppercase;">Accept &amp; Set Your Password</a>
         </td>
       </tr>
     </table>
 
     <p style="font-size:13px;color:#888888;margin:0;line-height:1.55;text-align:center;">
-      This invite expires in ${data.expiresInDays} days. If it lapses before you get to it,
-      just reply to this email and we\u2019ll send a fresh one.
+      This invite expires in
+      <span style="font-family:'Bebas Neue','Oswald',Impact,sans-serif;font-size:18px;color:#F5F5F5;letter-spacing:0.04em;vertical-align:middle;">${data.expiresInDays} DAYS</span>.
+      If it lapses, reply and we&rsquo;ll send a fresh one.
     </p>
   `;
 
