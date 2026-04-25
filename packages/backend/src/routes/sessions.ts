@@ -6,6 +6,7 @@ import { createAuditLog } from '../services/auditService';
 import { notifyAdminsOfScheduleChange } from '../services/notificationService';
 import { Role, SessionType } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import { recalculateCurrentEnrolled } from './bookings';
 
 const router = Router();
 
@@ -1346,6 +1347,10 @@ router.post('/:id/checkin', authenticate, requireStaffOrAdmin, async (req: Reque
       where: { id: { in: bookingIds }, sessionId },
       data: { status },
     });
+
+    // Recompute the denormalized currentEnrolled — bulk-marking NO_SHOW
+    // drops capacity-eligible count without touching the column otherwise.
+    await recalculateCurrentEnrolled(sessionId);
 
     // Get session for audit log
     const session = await prisma.session.findUnique({

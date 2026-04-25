@@ -502,6 +502,267 @@ router.delete('/:id', authenticate, async (req: Request, res: Response, next: Ne
 });
 
 /**
+ * PATCH /api/bookings/:id/reschedule
+ *
+ * Move a confirmed booking to a different session in one atomic step.
+ * This is the equivalent of "cancel + rebook" but performed inside a
+ * single Serializable transaction so the user never ends up with neither
+ * slot (a partial-failure window the cancel-then-rebook pattern leaves
+ * open). Body: { newSessionId: string }.
+ *
+ * Rules enforced:
+ *   - Caller must own the booking (or be admin/staff)
+ *   - Original booking must be CONFIRMED
+ *   - We respect the original booking's cancellation cutoff
+ *   - We respect the new session's registration cutoff + capacity
+ *   - Credits move from the OLD session's week to the NEW session's week,
+ *     creating the destination WeeklyCredit row if it doesn't exist yet
+ *   - Audit log + cancellation/confirmation emails fire on success
+ */
+router.patch('/:id/reschedule', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const bookingId = param(req, 'id');
+    const user = req.user!;
+    const { newSessionId } = req.body as { newSessionId?: string };
+    if (!newSessionId) throw ApiError.badRequest('newSessionId is required');
+
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        session: {
+          include: {
+            room: { select: { id: true, name: true } },
+            coach: { select: { id: true, fullName: true } },
+          },
+        },
+      },
+    });
+    if (!booking) throw ApiError.notFound('Booking not found');
+
+    if (user.role === Role.CLIENT && booking.clientId !== user.userId) {
+      throw ApiError.forbidden('You can only reschedule your own bookings');
+    }
+    if (booking.status !== 'CONFIRMED') {
+      throw ApiError.badRequest('Only confirmed bookings can be rescheduled');
+    }
+    if (booking.sessionId === newSessionId) {
+      throw ApiError.badRequest('That is the same session you are already booked for');
+    }
+
+    // Cancellation cutoff for the OLD session — we treat reschedule as a
+    // cancellation of the old slot, so the same window applies. Admins +
+    // staff bypass.
+    const oldCutoff = new Date(booking.session.startTime);
+    oldCutoff.setHours(oldCutoff.getHours() - booking.session.cancellationCutoffHours);
+    if (new Date() > oldCutoff && user.role === Role.CLIENT) {
+      throw ApiError.forbidden(
+        'Cancellation window has closed. Sessions cannot be rescheduled within ' +
+          `${booking.session.cancellationCutoffHours} hours of the start time.`
+      );
+    }
+
+    // Load the new session + its current confirmed-booking count
+    const newSession = await prisma.session.findUnique({
+      where: { id: newSessionId },
+      include: {
+        room: { select: { name: true } },
+        coach: { select: { fullName: true } },
+        _count: {
+          select: { bookings: { where: { status: { in: ['CONFIRMED', 'COMPLETED'] } } } },
+        },
+      },
+    });
+    if (!newSession || !newSession.isActive) {
+      throw ApiError.notFound('Target session not found or no longer available');
+    }
+
+    // Same location (cross-location moves are out of scope — ask user to
+    // cancel + rebook manually if they really need to)
+    if (newSession.locationId !== booking.session.locationId) {
+      throw ApiError.badRequest('Cannot reschedule across locations');
+    }
+
+    // Registration cutoff on the destination session
+    const newCutoff = new Date(newSession.startTime);
+    newCutoff.setHours(newCutoff.getHours() - newSession.registrationCutoffHours);
+    if (new Date() > newCutoff) {
+      throw ApiError.badRequest(
+        `Registration closed ${newSession.registrationCutoffHours} hour(s) before the new session starts`
+      );
+    }
+
+    // Membership still active?
+    const membership = await prisma.clientMembership.findFirst({
+      where: { clientId: booking.clientId, status: 'ACTIVE', locationId: newSession.locationId },
+      include: { plan: true },
+    });
+    if (!membership) {
+      throw ApiError.forbidden('No active membership at this location');
+    }
+
+    // ============================================================
+    // Atomic move.
+    // ============================================================
+    await prisma.$transaction(
+      async (tx) => {
+        // Capacity recheck inside tx
+        const liveCount = await tx.booking.count({
+          where: { sessionId: newSessionId, status: { in: ['CONFIRMED', 'COMPLETED'] } },
+        });
+        if (liveCount >= newSession.maxCapacity) {
+          throw ApiError.badRequest('The target session is full');
+        }
+
+        // 1) Cancel old booking
+        await tx.booking.update({
+          where: { id: bookingId },
+          data: {
+            status: 'CANCELLED',
+            cancelledAt: new Date(),
+            cancellationReason: `Rescheduled to ${newSession.title} on ${newSession.startTime.toISOString()}`,
+          },
+        });
+        await tx.session.update({
+          where: { id: booking.sessionId },
+          data: { currentEnrolled: { decrement: 1 } },
+        });
+
+        // 2) Move credit (limited plans only)
+        if (membership.plan.sessionsPerWeek !== null && booking.creditsUsed > 0) {
+          // Restore to old session's week
+          const oldWeekStart = getWeekStart(booking.session.startTime, membership.billingDay);
+          await tx.weeklyCredit.updateMany({
+            where: {
+              clientId: booking.clientId,
+              membershipId: membership.id,
+              weekStartDate: oldWeekStart,
+            },
+            data: { creditsUsed: { decrement: booking.creditsUsed } },
+          });
+
+          // Deduct from new session's week (create row if needed)
+          const newWeekStart = getWeekStart(newSession.startTime, membership.billingDay);
+          const newWeekEnd = new Date(newWeekStart);
+          newWeekEnd.setDate(newWeekEnd.getDate() + 7);
+
+          let newWeeklyCredit = await tx.weeklyCredit.findFirst({
+            where: {
+              clientId: booking.clientId,
+              membershipId: membership.id,
+              weekStartDate: newWeekStart,
+            },
+          });
+          if (!newWeeklyCredit) {
+            newWeeklyCredit = await tx.weeklyCredit.create({
+              data: {
+                clientId: booking.clientId,
+                membershipId: membership.id,
+                creditsTotal: membership.plan.sessionsPerWeek!,
+                creditsUsed: 0,
+                weekStartDate: newWeekStart,
+                weekEndDate: newWeekEnd,
+              },
+            });
+          }
+          const remaining = newWeeklyCredit.creditsTotal - newWeeklyCredit.creditsUsed;
+          if (remaining <= 0) {
+            const isFuture = newWeekStart > new Date();
+            const weekLabel = isFuture
+              ? `the week of ${newWeekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+              : 'this week';
+            throw ApiError.badRequest(
+              `You've used all ${newWeeklyCredit.creditsTotal} credit(s) for ${weekLabel} — pick a different week or cancel a future booking first.`
+            );
+          }
+          await tx.weeklyCredit.update({
+            where: { id: newWeeklyCredit.id },
+            data: { creditsUsed: { increment: 1 } },
+          });
+
+          await tx.creditTransaction.create({
+            data: {
+              clientId: booking.clientId,
+              transactionType: 'reschedule',
+              amount: 0, // net zero — credit moved, not consumed
+              bookingId,
+              notes: `Rescheduled from ${booking.session.title} (${booking.session.startTime.toLocaleDateString()}) to ${newSession.title} (${newSession.startTime.toLocaleDateString()})`,
+            },
+          });
+        }
+
+        // 3) Create new booking
+        await tx.booking.upsert({
+          where: { clientId_sessionId: { clientId: booking.clientId, sessionId: newSessionId } },
+          create: {
+            clientId: booking.clientId,
+            sessionId: newSessionId,
+            status: 'CONFIRMED',
+            creditsUsed: booking.creditsUsed,
+          },
+          update: {
+            status: 'CONFIRMED',
+            creditsUsed: booking.creditsUsed,
+            cancelledAt: null,
+            cancellationReason: null,
+          },
+        });
+        await tx.session.update({
+          where: { id: newSessionId },
+          data: { currentEnrolled: { increment: 1 } },
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
+
+    // Side effects (notification + audit) outside the tx
+    const newDate = newSession.startTime.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    const newTime = newSession.startTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const userRow = await prisma.user.findUnique({
+      where: { id: booking.clientId },
+      select: { fullName: true, homeLocation: { select: { name: true } } },
+    });
+    const confirmHtml = buildBookingConfirmationEmail({
+      athleteName: userRow?.fullName || 'Athlete',
+      sessionTitle: newSession.title,
+      date: newDate,
+      time: newTime,
+      coach: newSession.coach?.fullName,
+      room: newSession.room?.name,
+      location: userRow?.homeLocation?.name,
+    });
+    await notify({
+      userId: booking.clientId,
+      type: NotificationType.BOOKING_CONFIRMED,
+      title: 'Session Rescheduled',
+      body: `Your booking has been moved to ${newSession.title} on ${newDate} at ${newTime}.`,
+      channels: [NotificationChannel.EMAIL, NotificationChannel.SMS],
+      metadata: { bookingId, fromSessionId: booking.sessionId, toSessionId: newSessionId },
+      emailHtml: confirmHtml,
+    });
+
+    await createAuditLog({
+      userId: user.userId,
+      locationId: newSession.locationId,
+      action: 'booking.rescheduled',
+      resourceType: 'booking',
+      resourceId: bookingId,
+      changes: {
+        from: { sessionId: booking.sessionId, title: booking.session.title, startTime: booking.session.startTime },
+        to: { sessionId: newSessionId, title: newSession.title, startTime: newSession.startTime },
+      },
+    });
+
+    res.json({
+      success: true,
+      message: `Rescheduled to ${newSession.title} on ${newDate} at ${newTime}.`,
+      data: { newSessionId, newStartTime: newSession.startTime },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * GET /api/bookings/my-week
  * Client: get current week's bookings + credit balance + membership info for My Week card.
  */
@@ -858,10 +1119,16 @@ router.put(
         where: { id: bookingId },
         data: { status: status as BookingStatus },
         include: {
-          session: { select: { title: true, locationId: true } },
+          session: { select: { id: true, title: true, locationId: true } },
           client: { select: { fullName: true } },
         },
       });
+
+      // Keep currentEnrolled in sync with the live count. Going CONFIRMED →
+      // NO_SHOW drops the live count by 1 because NO_SHOW isn't included in
+      // the capacity-eligible set; without this recalc the denormalized
+      // counter drifts from reality.
+      await recalculateCurrentEnrolled(booking.session.id);
 
       await createAuditLog({
         userId: req.user!.userId,
@@ -882,6 +1149,33 @@ router.put(
     }
   }
 );
+
+/**
+ * Recompute Session.currentEnrolled from the live booking count.
+ *
+ * The denormalized `currentEnrolled` column gets manually +1/-1'd on book
+ * and cancel — but the capacity-eligible booking statuses are only
+ * CONFIRMED + COMPLETED. When a booking transitions CONFIRMED → NO_SHOW
+ * the live count drops by 1 while currentEnrolled stays put, and the
+ * displayed seat count drifts. Calling this helper anywhere a transition
+ * out of {CONFIRMED, COMPLETED} happens keeps the column in sync.
+ *
+ * Cheap (single COUNT + single UPDATE) and idempotent — safe to call even
+ * if the count was already correct.
+ */
+export async function recalculateCurrentEnrolled(sessionId: string): Promise<number> {
+  const liveCount = await prisma.booking.count({
+    where: {
+      sessionId,
+      status: { in: ['CONFIRMED', 'COMPLETED'] },
+    },
+  });
+  await prisma.session.update({
+    where: { id: sessionId },
+    data: { currentEnrolled: liveCount },
+  });
+  return liveCount;
+}
 
 /**
  * Helper: Calculate the start of the billing week based on billing day.
