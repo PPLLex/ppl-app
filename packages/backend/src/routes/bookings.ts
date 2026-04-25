@@ -8,7 +8,7 @@ import {
   buildBookingConfirmationEmail,
   buildBookingCancellationEmail,
 } from '../services/emailService';
-import { Role, BookingStatus, NotificationType, NotificationChannel } from '@prisma/client';
+import { Role, BookingStatus, NotificationType, NotificationChannel, Prisma } from '@prisma/client';
 
 const router = Router();
 
@@ -64,7 +64,8 @@ router.post('/', authenticate, async (req: Request, res: Response, next: NextFun
       throw ApiError.conflict('You are already booked for this session');
     }
 
-    // Check: capacity
+    // Capacity will be re-checked inside the transaction below to close the
+    // race between two clients seeing the same _count and both inserting.
     if (session._count.bookings >= session.maxCapacity) {
       throw ApiError.badRequest('This session is full');
     }
@@ -129,120 +130,139 @@ router.post('/', authenticate, async (req: Request, res: Response, next: NextFun
       }
     }
 
-    // Check: credits (for limited plans).
-    //
-    // Advance-booking window: clients can book up to 60 days out, which
-    // means a booking may pull from a FUTURE week's credit allotment.
-    // We key the WeeklyCredit row to the session's own week (not today's
-    // week). If that week's row doesn't exist yet (it won't, for a future
-    // week the client has never booked into) we create it with the same
-    // creditsTotal as their plan.
-    //
-    // If their card fails in the meantime, webhooks.ts's paymentFailed
-    // handler cancels every future CONFIRMED booking and returns the
-    // credits to the correct WeeklyCredit row before freezing all credits
-    // — so the pre-booked future slots evaporate cleanly.
-    let creditsUsed = 0;
+    // Pre-flight: enforce 60-day advance-booking cap for limited plans.
+    // (Cheap to check before opening the transaction.)
     if (membership.plan.sessionsPerWeek !== null) {
-      // Enforce 60-day advance-booking cap.
       const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
       if (session.startTime.getTime() - Date.now() > SIXTY_DAYS_MS) {
         throw ApiError.badRequest(
           'You can only book sessions up to 60 days in advance.'
         );
       }
+    }
 
-      // Key the WeeklyCredit row to the session's week — this is what lets
-      // advance-booking work across weeks without double-spending.
-      const weekStart = getWeekStart(session.startTime, membership.billingDay);
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekEnd.getDate() + 7);
-
-      let weeklyCredit = await prisma.weeklyCredit.findFirst({
-        where: {
-          clientId: user.userId,
-          membershipId: membership.id,
-          weekStartDate: weekStart,
-        },
-      });
-
-      // Create weekly credit record if it doesn't exist yet
-      if (!weeklyCredit) {
-        weeklyCredit = await prisma.weeklyCredit.create({
-          data: {
-            clientId: user.userId,
-            membershipId: membership.id,
-            creditsTotal: membership.plan.sessionsPerWeek,
-            creditsUsed: 0,
-            weekStartDate: weekStart,
-            weekEndDate: weekEnd,
+    // ============================================================
+    // ATOMIC TRANSACTION: capacity recheck → credit deduct → booking insert → counter increment
+    // ============================================================
+    // Serializable isolation prevents two simultaneous bookings from
+    // both passing the capacity check on the same last slot. If a
+    // conflict is detected Postgres aborts and Prisma retries (or
+    // surfaces an error which Express's error middleware turns into
+    // a 5xx — clients can retry safely because the booking row has
+    // a unique (clientId, sessionId) constraint).
+    //
+    // Side effects (notifications, audit log, email) stay OUTSIDE the
+    // transaction — they're fire-and-forget and shouldn't roll back
+    // a successful booking just because Resend hiccups.
+    let creditsUsed = 0;
+    const booking = await prisma.$transaction(
+      async (tx) => {
+        // Re-check capacity using a live count inside the tx — this is the
+        // critical anti-race step.
+        const liveCount = await tx.booking.count({
+          where: {
+            sessionId,
+            status: { in: ['CONFIRMED', 'COMPLETED'] },
           },
         });
-      }
+        if (liveCount >= session.maxCapacity) {
+          throw ApiError.badRequest('This session is full');
+        }
 
-      const creditsRemaining = weeklyCredit.creditsTotal - weeklyCredit.creditsUsed;
-      if (creditsRemaining <= 0) {
-        // Surface whether the cap was hit THIS week vs. a future week so
-        // the error message is actually useful.
-        const isFuture = weekStart > new Date();
-        const weekLabel = isFuture
-          ? `the week of ${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-          : 'this week';
-        throw ApiError.badRequest(
-          `You've used all ${weeklyCredit.creditsTotal} credit(s) for ${weekLabel}.`
-        );
-      }
+        // Credit deduction (limited plans only). Unlimited plans skip this
+        // entire block — only the membership-active check above gates them.
+        if (membership.plan.sessionsPerWeek !== null) {
+          // Key the WeeklyCredit row to the session's week — this is what
+          // lets advance-booking work across weeks without double-spending.
+          const weekStart = getWeekStart(session.startTime, membership.billingDay);
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekEnd.getDate() + 7);
 
-      creditsUsed = 1;
+          let weeklyCredit = await tx.weeklyCredit.findFirst({
+            where: {
+              clientId: user.userId,
+              membershipId: membership.id,
+              weekStartDate: weekStart,
+            },
+          });
 
-      // Deduct credit
-      await prisma.weeklyCredit.update({
-        where: { id: weeklyCredit.id },
-        data: { creditsUsed: { increment: 1 } },
-      });
+          if (!weeklyCredit) {
+            weeklyCredit = await tx.weeklyCredit.create({
+              data: {
+                clientId: user.userId,
+                membershipId: membership.id,
+                creditsTotal: membership.plan.sessionsPerWeek!,
+                creditsUsed: 0,
+                weekStartDate: weekStart,
+                weekEndDate: weekEnd,
+              },
+            });
+          }
 
-      // Log the credit transaction
-      await prisma.creditTransaction.create({
-        data: {
-          clientId: user.userId,
-          transactionType: 'usage',
-          amount: -1,
-          notes: `Booked: ${session.title} on ${session.startTime.toLocaleDateString()}`,
-        },
-      });
-    }
-    // Unlimited plans: no credit check needed, just verify active membership (already done)
+          const creditsRemaining = weeklyCredit.creditsTotal - weeklyCredit.creditsUsed;
+          if (creditsRemaining <= 0) {
+            const isFuture = weekStart > new Date();
+            const weekLabel = isFuture
+              ? `the week of ${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+              : 'this week';
+            throw ApiError.badRequest(
+              `You've used all ${weeklyCredit.creditsTotal} credit(s) for ${weekLabel}.`
+            );
+          }
 
-    // Create the booking
-    const booking = await prisma.booking.upsert({
-      where: { clientId_sessionId: { clientId: user.userId, sessionId } },
-      create: {
-        clientId: user.userId,
-        sessionId,
-        status: 'CONFIRMED',
-        creditsUsed,
-      },
-      update: {
-        status: 'CONFIRMED',
-        creditsUsed,
-        cancelledAt: null,
-        cancellationReason: null,
-      },
-      include: {
-        session: {
-          include: {
-            room: { select: { name: true } },
-            coach: { select: { fullName: true } },
+          creditsUsed = 1;
+
+          await tx.weeklyCredit.update({
+            where: { id: weeklyCredit.id },
+            data: { creditsUsed: { increment: 1 } },
+          });
+
+          await tx.creditTransaction.create({
+            data: {
+              clientId: user.userId,
+              transactionType: 'usage',
+              amount: -1,
+              notes: `Booked: ${session.title} on ${session.startTime.toLocaleDateString()}`,
+            },
+          });
+        }
+
+        const created = await tx.booking.upsert({
+          where: { clientId_sessionId: { clientId: user.userId, sessionId } },
+          create: {
+            clientId: user.userId,
+            sessionId,
+            status: 'CONFIRMED',
+            creditsUsed,
           },
-        },
-      },
-    });
+          update: {
+            status: 'CONFIRMED',
+            creditsUsed,
+            cancelledAt: null,
+            cancellationReason: null,
+          },
+          include: {
+            session: {
+              include: {
+                room: { select: { name: true } },
+                coach: { select: { fullName: true } },
+              },
+            },
+          },
+        });
 
-    // Update session enrolled count
-    await prisma.session.update({
-      where: { id: sessionId },
-      data: { currentEnrolled: { increment: 1 } },
-    });
+        await tx.session.update({
+          where: { id: sessionId },
+          data: { currentEnrolled: { increment: 1 } },
+        });
+
+        return created;
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        // Default 5s timeout is fine — every step is a single primary-key write.
+      },
+    );
 
     // Send booking confirmation notification
     const sessionDate = session.startTime.toLocaleDateString('en-US', {
