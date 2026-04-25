@@ -329,10 +329,27 @@ function formatInviteDate(d: Date = new Date()): string {
     .toUpperCase();
 }
 
+/**
+ * Subtle paint-splatter / speckle texture for the email background.
+ * Inline URL-encoded SVG so there's no external image fetch — Apple Mail,
+ * Gmail web, and iOS Mail render it; Outlook desktop falls back to solid
+ * black, which still looks correct.
+ *
+ * Tile is 400x400 with three layers:
+ *   - Dark grey speckles  (#1A1A1A, ~22 dots)
+ *   - Slightly lighter elliptical "drips"  (#222, 4 rotated ovals)
+ *   - Faint green specks at 15% opacity for brand accent  (~4 dots)
+ */
+const PAINT_SPLATTER_DATA_URI =
+  "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cg fill='%231A1A1A'%3E%3Ccircle cx='34' cy='52' r='2.4'/%3E%3Ccircle cx='112' cy='28' r='1.8'/%3E%3Ccircle cx='168' cy='84' r='3.2'/%3E%3Ccircle cx='244' cy='48' r='2.1'/%3E%3Ccircle cx='320' cy='72' r='1.6'/%3E%3Ccircle cx='376' cy='36' r='2.8'/%3E%3Ccircle cx='52' cy='148' r='1.4'/%3E%3Ccircle cx='128' cy='176' r='2.6'/%3E%3Ccircle cx='196' cy='132' r='1.8'/%3E%3Ccircle cx='284' cy='168' r='3.4'/%3E%3Ccircle cx='348' cy='124' r='2'/%3E%3Ccircle cx='28' cy='244' r='2.2'/%3E%3Ccircle cx='84' cy='216' r='1.6'/%3E%3Ccircle cx='152' cy='268' r='2.8'/%3E%3Ccircle cx='224' cy='232' r='1.9'/%3E%3Ccircle cx='304' cy='256' r='2.4'/%3E%3Ccircle cx='364' cy='212' r='1.8'/%3E%3Ccircle cx='44' cy='332' r='2.6'/%3E%3Ccircle cx='116' cy='304' r='1.5'/%3E%3Ccircle cx='180' cy='348' r='3'/%3E%3Ccircle cx='256' cy='308' r='2.1'/%3E%3Ccircle cx='332' cy='356' r='1.7'/%3E%3C/g%3E%3Cg fill='%23222'%3E%3Cellipse cx='80' cy='100' rx='6' ry='2' transform='rotate(35 80 100)'/%3E%3Cellipse cx='260' cy='200' rx='8' ry='3' transform='rotate(-25 260 200)'/%3E%3Cellipse cx='380' cy='290' rx='5' ry='2' transform='rotate(60 380 290)'/%3E%3Cellipse cx='148' cy='40' rx='4' ry='1.5' transform='rotate(15 148 40)'/%3E%3C/g%3E%3Cg fill='%2395C83C' opacity='0.15'%3E%3Ccircle cx='208' cy='12' r='0.9'/%3E%3Ccircle cx='376' cy='148' r='1.1'/%3E%3Ccircle cx='80' cy='284' r='0.8'/%3E%3Ccircle cx='304' cy='328' r='1'/%3E%3C/g%3E%3C/svg%3E";
+
 export function buildPPLEmail(title: string, body: string, opts?: { preheader?: string }): string {
   const preheader = opts?.preheader ?? '';
   const baseUrl = config.frontendUrl;
   const logoUrl = `${baseUrl}/ppl-logo.png`;
+  const splatter = PAINT_SPLATTER_DATA_URI;
+  // unused vars suppressed for now
+  void formatInviteDate;
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -367,82 +384,71 @@ export function buildPPLEmail(title: string, body: string, opts?: { preheader?: 
     }
     @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Bebas+Neue&display=swap');
     @media (max-width: 640px) {
-      .ppl-card { padding: 28px 22px !important; }
-      .ppl-hero { padding: 28px 18px !important; }
-      .ppl-h1 { font-size: 18px !important; letter-spacing: 0.08em !important; }
-      .ppl-lockup { font-size: 22px !important; letter-spacing: 0.16em !important; }
-      .ppl-logo { width: 88px !important; height: 88px !important; }
+      .ppl-stack { padding: 56px 24px 40px !important; }
+      .ppl-h1 { font-size: 16px !important; letter-spacing: 0.1em !important; }
+      .ppl-lockup { font-size: 20px !important; letter-spacing: 0.14em !important; }
+      .ppl-logo { width: 80px !important; height: 80px !important; }
+      .ppl-body { font-size: 14.5px !important; }
     }
   </style>
 </head>
-<body style="margin:0;padding:0;background:#0A0A0A;font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#F5F5F5;-webkit-font-smoothing:antialiased;">
+<body style="margin:0;padding:0;background-color:#0A0A0A;background-image:url('${splatter}');background-repeat:repeat;font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#F5F5F5;-webkit-font-smoothing:antialiased;">
   <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">${preheader}</div>
 
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0A;padding:36px 16px 28px;">
+  <!-- Outer wrapper: textured black canvas, edge-to-edge. No card, no border, no shadow. -->
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0A0A0A;background-image:url('${splatter}');background-repeat:repeat;">
     <tr>
-      <td align="center">
-        <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:#141414;border:1px solid #2A2A2A;border-radius:18px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,0.45);">
+      <td align="center" class="ppl-stack" style="padding:80px 24px 56px;">
 
-          <!-- Top brand stripe: thin green accent line that anchors the whole card -->
-          <tr>
-            <td style="height:3px;line-height:3px;font-size:0;background:#95C83C;background-image:linear-gradient(90deg,#5E9E50 0%,#95C83C 50%,#5E9E50 100%);">&nbsp;</td>
-          </tr>
+        <!-- Single 560px column. Content sits directly on the textured background. -->
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
 
-          <!-- Utility bar: tiny status line above the logo for editorial feel -->
+          <!-- Logo -->
           <tr>
-            <td style="background:#0A0A0A;padding:18px 36px 0;text-align:center;">
-              <p style="margin:0;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:10px;letter-spacing:0.34em;text-transform:uppercase;color:#5A5A5A;">Invitation <span style="color:#3A3A3A;margin:0 6px;">&middot;</span> ${formatInviteDate()}</p>
+            <td align="center" style="padding:0 0 36px;">
+              <img class="ppl-logo" src="${logoUrl}" alt="PPL" width="104" height="104" style="display:inline-block;border:0;outline:none;text-decoration:none;">
             </td>
           </tr>
 
-          <!-- Header: bigger logo, Bank Gothic lockup, glowing green divider, Transducer italic title -->
+          <!-- Lockup: Bank Gothic, fluid single line -->
           <tr>
-            <td class="ppl-hero" style="background:#0A0A0A;padding:28px 32px 44px;text-align:center;background-image:radial-gradient(circle at 50% 0%, rgba(149,200,60,0.06) 0%, rgba(10,10,10,0) 60%);">
-              <img class="ppl-logo" src="${logoUrl}" alt="PPL" width="128" height="128" style="display:block;margin:0 auto 24px;border:0;outline:none;text-decoration:none;">
-              <p class="ppl-lockup" style="margin:0 0 20px;font-family:'Bank Gothic','Copperplate Gothic Bold',Impact,sans-serif;font-weight:700;font-size:34px;line-height:1;letter-spacing:0.12em;text-transform:uppercase;color:#F5F5F5;white-space:nowrap;">Pitching Performance Lab</p>
-              <div style="width:72px;height:2px;background:#95C83C;border-radius:2px;margin:0 auto 22px;box-shadow:0 0 18px rgba(149,200,60,0.6);"></div>
-              <p class="ppl-h1" style="margin:0;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:20px;line-height:1.3;letter-spacing:0.1em;text-transform:uppercase;color:#95C83C;">${title}</p>
+            <td align="center" style="padding:0 0 28px;">
+              <p class="ppl-lockup" style="margin:0;font-family:'Bank Gothic','Copperplate Gothic Bold',Impact,sans-serif;font-weight:700;font-size:30px;line-height:1;letter-spacing:0.14em;text-transform:uppercase;color:#F5F5F5;white-space:nowrap;">Pitching Performance Lab</p>
             </td>
           </tr>
 
-          <!-- Hairline divider: gradient fade so the seam between hero and body feels intentional -->
+          <!-- The only line in the entire email — a single glowing green hair -->
           <tr>
-            <td style="height:1px;line-height:1px;font-size:0;background:#1F1F1F;background-image:linear-gradient(90deg, rgba(42,42,42,0) 0%, #2A2A2A 50%, rgba(42,42,42,0) 100%);">&nbsp;</td>
+            <td align="center" style="padding:0 0 28px;">
+              <div style="width:48px;height:1px;background:#95C83C;margin:0 auto;box-shadow:0 0 16px rgba(149,200,60,0.6);"></div>
+            </td>
           </tr>
 
-          <!-- Body -->
+          <!-- Title: Transducer italic, the focal statement -->
           <tr>
-            <td class="ppl-card" style="padding:42px 40px 36px;background:#141414;color:#CCCCCC;font-size:15px;line-height:1.7;">
+            <td align="center" style="padding:0 0 64px;">
+              <p class="ppl-h1" style="margin:0;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:18px;line-height:1.4;letter-spacing:0.12em;text-transform:uppercase;color:#95C83C;">${title}</p>
+            </td>
+          </tr>
+
+          <!-- Body content - no card container, just sits on the textured canvas -->
+          <tr>
+            <td class="ppl-body" style="padding:0 8px 72px;color:#D5D5D5;font-size:15px;line-height:1.75;">
               ${body}
             </td>
           </tr>
 
-          <!-- Footer accent: 1px green hairline above the footer -->
+          <!-- Minimal footer: single line, single color -->
           <tr>
-            <td style="height:1px;line-height:1px;font-size:0;background:#0F0F0F;background-image:linear-gradient(90deg, rgba(149,200,60,0) 0%, rgba(149,200,60,0.5) 50%, rgba(149,200,60,0) 100%);">&nbsp;</td>
-          </tr>
-
-          <!-- Footer: same dark with subtle green accent -->
-          <tr>
-            <td style="background:#0F0F0F;padding:26px 36px 28px;text-align:center;">
-              <p style="margin:0 0 8px;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:11px;color:#95C83C;letter-spacing:0.26em;text-transform:uppercase;">Pitching Performance Lab</p>
-              <p style="margin:0;font-size:12px;color:#888888;line-height:1.6;">
+            <td align="center" style="padding:32px 0 0;border-top:1px solid #1F1F1F;">
+              <p style="margin:0;font-size:12px;color:#666666;line-height:1.6;letter-spacing:0.02em;">
                 <a href="https://pitchingperformancelab.com" style="color:#888888;text-decoration:none;">pitchingperformancelab.com</a>
-                <span style="color:#3A3A3A;">&nbsp;&middot;&nbsp;</span>
+                &nbsp;&middot;&nbsp;
                 <a href="mailto:support@pitchingperformancelab.com" style="color:#888888;text-decoration:none;">support@pitchingperformancelab.com</a>
               </p>
             </td>
           </tr>
 
-        </table>
-
-        <!-- Outer footnote -->
-        <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;">
-          <tr>
-            <td style="padding:20px 24px 4px;text-align:center;">
-              <p style="margin:0;font-size:11px;color:#666666;line-height:1.6;letter-spacing:0.02em;">You&rsquo;re receiving this because you have a Pitching Performance Lab account.</p>
-            </td>
-          </tr>
         </table>
       </td>
     </tr>
