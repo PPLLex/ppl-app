@@ -343,12 +343,25 @@ function formatInviteDate(d: Date = new Date()): string {
 const PAINT_SPLATTER_DATA_URI =
   "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cg fill='%231A1A1A'%3E%3Ccircle cx='34' cy='52' r='2.4'/%3E%3Ccircle cx='112' cy='28' r='1.8'/%3E%3Ccircle cx='168' cy='84' r='3.2'/%3E%3Ccircle cx='244' cy='48' r='2.1'/%3E%3Ccircle cx='320' cy='72' r='1.6'/%3E%3Ccircle cx='376' cy='36' r='2.8'/%3E%3Ccircle cx='52' cy='148' r='1.4'/%3E%3Ccircle cx='128' cy='176' r='2.6'/%3E%3Ccircle cx='196' cy='132' r='1.8'/%3E%3Ccircle cx='284' cy='168' r='3.4'/%3E%3Ccircle cx='348' cy='124' r='2'/%3E%3Ccircle cx='28' cy='244' r='2.2'/%3E%3Ccircle cx='84' cy='216' r='1.6'/%3E%3Ccircle cx='152' cy='268' r='2.8'/%3E%3Ccircle cx='224' cy='232' r='1.9'/%3E%3Ccircle cx='304' cy='256' r='2.4'/%3E%3Ccircle cx='364' cy='212' r='1.8'/%3E%3Ccircle cx='44' cy='332' r='2.6'/%3E%3Ccircle cx='116' cy='304' r='1.5'/%3E%3Ccircle cx='180' cy='348' r='3'/%3E%3Ccircle cx='256' cy='308' r='2.1'/%3E%3Ccircle cx='332' cy='356' r='1.7'/%3E%3C/g%3E%3Cg fill='%23222'%3E%3Cellipse cx='80' cy='100' rx='6' ry='2' transform='rotate(35 80 100)'/%3E%3Cellipse cx='260' cy='200' rx='8' ry='3' transform='rotate(-25 260 200)'/%3E%3Cellipse cx='380' cy='290' rx='5' ry='2' transform='rotate(60 380 290)'/%3E%3Cellipse cx='148' cy='40' rx='4' ry='1.5' transform='rotate(15 148 40)'/%3E%3C/g%3E%3Cg fill='%2395C83C' opacity='0.15'%3E%3Ccircle cx='208' cy='12' r='0.9'/%3E%3Ccircle cx='376' cy='148' r='1.1'/%3E%3Ccircle cx='80' cy='284' r='0.8'/%3E%3Ccircle cx='304' cy='328' r='1'/%3E%3C/g%3E%3C/svg%3E";
 
-export function buildPPLEmail(title: string, body: string, opts?: { preheader?: string }): string {
+export function buildPPLEmail(
+  title: string,
+  body: string,
+  opts?: { preheader?: string; subLabel?: string; tagline?: string },
+): string {
   const preheader = opts?.preheader ?? '';
+  // subLabel mirrors the report's "BULLPEN REPORT · 04.16.2026" line under the lockup.
+  // Default to the current date in the same format if the caller doesn't supply one.
+  const subLabel =
+    opts?.subLabel ??
+    `Notification \u00B7 ${new Date()
+      .toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+      .replace(/\//g, '.')}`;
+  // tagline mirrors the report's "#MUSTBESOMETHINGINTHEWATER" line under the athlete name.
+  const tagline = opts?.tagline ?? '';
   const baseUrl = config.frontendUrl;
   const logoUrl = `${baseUrl}/ppl-logo.png`;
-  const splatter = PAINT_SPLATTER_DATA_URI;
-  // unused vars suppressed for now
+  // splatter texture removed — pure black to match the report.
+  void PAINT_SPLATTER_DATA_URI;
   void formatInviteDate;
   return `
 <!DOCTYPE html>
@@ -384,68 +397,95 @@ export function buildPPLEmail(title: string, body: string, opts?: { preheader?: 
     }
     @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Bebas+Neue&display=swap');
     @media (max-width: 640px) {
-      .ppl-stack { padding: 56px 24px 40px !important; }
-      .ppl-h1 { font-size: 16px !important; letter-spacing: 0.1em !important; }
-      .ppl-lockup { font-size: 20px !important; letter-spacing: 0.14em !important; }
-      .ppl-logo { width: 80px !important; height: 80px !important; }
+      .ppl-stack { padding: 32px 22px 36px !important; }
+      .ppl-hero { font-size: 38px !important; letter-spacing: 0.02em !important; }
+      .ppl-lockup { font-size: 14px !important; letter-spacing: 0.18em !important; }
+      .ppl-sublabel { font-size: 9px !important; letter-spacing: 0.28em !important; }
+      .ppl-logo { width: 48px !important; height: 48px !important; }
+      .ppl-tagline { font-size: 10px !important; letter-spacing: 0.22em !important; }
       .ppl-body { font-size: 14.5px !important; }
     }
   </style>
 </head>
-<body style="margin:0;padding:0;background-color:#0A0A0A;background-image:url('${splatter}');background-repeat:repeat;font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#F5F5F5;-webkit-font-smoothing:antialiased;">
+<body style="margin:0;padding:0;background:#0A0A0A;font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#F5F5F5;-webkit-font-smoothing:antialiased;">
   <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">${preheader}</div>
 
-  <!-- Outer wrapper: textured black canvas, edge-to-edge. No card, no border, no shadow. -->
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0A0A0A;background-image:url('${splatter}');background-repeat:repeat;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0A;">
     <tr>
-      <td align="center" class="ppl-stack" style="padding:80px 24px 56px;">
+      <td align="center" class="ppl-stack" style="padding:48px 32px 44px;">
+        <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;">
 
-        <!-- Single 560px column. Content sits directly on the textured background. -->
-        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
-
-          <!-- Logo -->
+          <!-- ============================================================
+               HEADER: logo + Bank Gothic lockup + sub-label
+               Mirrors the Bullpen Report's top bar.
+               ============================================================ -->
           <tr>
-            <td align="center" style="padding:0 0 36px;">
-              <img class="ppl-logo" src="${logoUrl}" alt="PPL" width="104" height="104" style="display:inline-block;border:0;outline:none;text-decoration:none;">
+            <td style="padding:0 0 32px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td valign="middle" style="padding:0 18px 0 0;width:64px;">
+                    <img class="ppl-logo" src="${logoUrl}" alt="PPL" width="56" height="56" style="display:block;border:0;outline:none;text-decoration:none;">
+                  </td>
+                  <td valign="middle" style="border-left:1px solid #2A2A2A;padding:4px 0 4px 18px;">
+                    <p class="ppl-lockup" style="margin:0 0 6px;font-family:'Bank Gothic','Copperplate Gothic Bold',Impact,sans-serif;font-weight:700;font-size:18px;line-height:1;letter-spacing:0.18em;text-transform:uppercase;color:#F5F5F5;">Pitching Performance Lab</p>
+                    <p class="ppl-sublabel" style="margin:0;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:10px;line-height:1;letter-spacing:0.34em;text-transform:uppercase;color:#888888;">${subLabel}</p>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
 
-          <!-- Lockup: Bank Gothic, fluid single line -->
+          <!-- ============================================================
+               HERO: huge green title (= report's "COLIN MURPHY")
+               + optional Transducer italic tagline (= report's hashtag line)
+               ============================================================ -->
           <tr>
-            <td align="center" style="padding:0 0 28px;">
-              <p class="ppl-lockup" style="margin:0;font-family:'Bank Gothic','Copperplate Gothic Bold',Impact,sans-serif;font-weight:700;font-size:30px;line-height:1;letter-spacing:0.14em;text-transform:uppercase;color:#F5F5F5;white-space:nowrap;">Pitching Performance Lab</p>
+            <td style="padding:8px 0 ${tagline ? '6px' : '36px'};">
+              <p class="ppl-hero" style="margin:0;font-family:'Bebas Neue','Oswald',Impact,sans-serif;font-size:54px;line-height:1;font-weight:400;letter-spacing:0.03em;text-transform:uppercase;color:#95C83C;">${title}</p>
+            </td>
+          </tr>
+          ${
+            tagline
+              ? `
+          <tr>
+            <td style="padding:0 0 36px;">
+              <p class="ppl-tagline" style="margin:0;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:11px;line-height:1.3;letter-spacing:0.22em;text-transform:uppercase;color:#888888;">${tagline}</p>
+            </td>
+          </tr>`
+              : ''
+          }
+
+          <!-- Top divider bar — single hairline that mirrors the report's section rules -->
+          <tr>
+            <td style="padding:0 0 28px;">
+              <div style="height:1px;background:#2A2A2A;line-height:1px;font-size:0;">&nbsp;</div>
             </td>
           </tr>
 
-          <!-- The only line in the entire email — a single glowing green hair -->
+          <!-- ============================================================
+               BODY
+               ============================================================ -->
           <tr>
-            <td align="center" style="padding:0 0 28px;">
-              <div style="width:48px;height:1px;background:#95C83C;margin:0 auto;box-shadow:0 0 16px rgba(149,200,60,0.6);"></div>
-            </td>
-          </tr>
-
-          <!-- Title: Transducer italic, the focal statement -->
-          <tr>
-            <td align="center" style="padding:0 0 64px;">
-              <p class="ppl-h1" style="margin:0;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:18px;line-height:1.4;letter-spacing:0.12em;text-transform:uppercase;color:#95C83C;">${title}</p>
-            </td>
-          </tr>
-
-          <!-- Body content - no card container, just sits on the textured canvas -->
-          <tr>
-            <td class="ppl-body" style="padding:0 8px 72px;color:#D5D5D5;font-size:15px;line-height:1.75;">
+            <td class="ppl-body" style="padding:0 0 36px;color:#CCCCCC;font-size:15px;line-height:1.7;">
               ${body}
             </td>
           </tr>
 
-          <!-- Minimal footer: single line, single color -->
+          <!-- ============================================================
+               FOOTER — matches the report's bottom bar
+               ============================================================ -->
           <tr>
-            <td align="center" style="padding:32px 0 0;border-top:1px solid #1F1F1F;">
-              <p style="margin:0;font-size:12px;color:#666666;line-height:1.6;letter-spacing:0.02em;">
-                <a href="https://pitchingperformancelab.com" style="color:#888888;text-decoration:none;">pitchingperformancelab.com</a>
-                &nbsp;&middot;&nbsp;
-                <a href="mailto:support@pitchingperformancelab.com" style="color:#888888;text-decoration:none;">support@pitchingperformancelab.com</a>
-              </p>
+            <td style="padding:24px 0 0;border-top:1px solid #1F1F1F;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td valign="middle" style="font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:10px;letter-spacing:0.28em;text-transform:uppercase;color:#888888;">Pitching Performance Lab</td>
+                  <td valign="middle" align="right" style="font-size:11px;color:#666666;">
+                    <a href="https://pitchingperformancelab.com" style="color:#888888;text-decoration:none;">pitchingperformancelab.com</a>
+                    &nbsp;&middot;&nbsp;
+                    <a href="mailto:support@pitchingperformancelab.com" style="color:#888888;text-decoration:none;">support@pitchingperformancelab.com</a>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
 
@@ -455,6 +495,30 @@ export function buildPPLEmail(title: string, body: string, opts?: { preheader?: 
   </table>
 </body>
 </html>`.trim();
+}
+
+/**
+ * Section header that matches the report's "▼ NOTES FROM COACH STAFF" /
+ * "● PITCH ARSENAL · LATEST SESSION" rules — green pill marker on the left,
+ * Transducer Black Italic ALL-CAPS title, optional right-aligned meta.
+ *
+ * Available to any email that wants to keep section structure on-brand with
+ * the bullpen report.
+ */
+export function pplSectionHeader(label: string, meta?: string): string {
+  const metaCell = meta
+    ? `<td valign="middle" align="right" style="font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:#666666;white-space:nowrap;padding-left:12px;">${meta}</td>`
+    : '';
+  return `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 14px;">
+      <tr>
+        <td valign="middle" style="width:14px;padding:0 10px 0 0;">
+          <div style="width:8px;height:8px;background:#95C83C;border-radius:2px;"></div>
+        </td>
+        <td valign="middle" style="font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:11px;letter-spacing:0.26em;text-transform:uppercase;color:#F5F5F5;">${label}</td>
+        ${metaCell}
+      </tr>
+    </table>`;
 }
 
 
@@ -964,62 +1028,73 @@ export function buildInviteEmailByRole(data: RoleInviteData): string {
   const roleLabel = roleDisplayName(data.role);
   const responsibilities = roleResponsibilities(data.role);
 
-  // a/an article based on the role label's first letter
-  const article = /^[aeiou]/i.test(roleLabel) ? 'an' : 'a';
+  // Scope label that gets baked into the report-style tagline beneath the recipient's name.
+  const scopeLabel = data.locationName
+    ? data.locationName.toUpperCase()
+    : data.schoolName
+    ? data.schoolName.toUpperCase()
+    : data.role === 'ADMIN' || data.role === 'CONTENT_MARKETING_ADMIN' || data.role === 'MEDICAL_ADMIN'
+    ? 'GLOBAL ACCESS'
+    : 'ALL LOCATIONS';
 
-  // The role label, rendered inline in the sentence with strong visual weight:
-  // Transducer Black Italic, all caps, green, slightly larger than body, with
-  // editorial letter-spacing.
-  const roleEmphasis = `<span style="font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:17px;letter-spacing:0.08em;text-transform:uppercase;color:#95C83C;">${roleLabel}</span>`;
+  // The hashtag-style tagline that mirrors "#MUSTBESOMETHINGINTHEWATER".
+  const tagline = `${roleLabel.toUpperCase()} \u00B7 ${scopeLabel}`;
 
-  // Inline scope fragment — woven into the same sentence so the role card
-  // can go away entirely.
-  let scopeFragment = '';
-  if (data.locationName) {
-    scopeFragment = ` at <strong style="color:#F5F5F5;">${data.locationName}</strong>`;
-  } else if (data.schoolName) {
-    scopeFragment = ` for <strong style="color:#F5F5F5;">${data.schoolName}</strong>`;
-  } else if (
-    data.role === 'ADMIN' ||
-    data.role === 'CONTENT_MARKETING_ADMIN' ||
-    data.role === 'MEDICAL_ADMIN'
-  ) {
-    scopeFragment = ` <span style="color:#888888;">&mdash; global access across every PPL location</span>`;
-  }
+  // Section header for the from-line / what-you'll-do / how-to-accept blocks.
+  const sectionHeader = (label: string, meta?: string) => pplSectionHeader(label, meta);
 
-  const invitedLine = data.invitedByName
-    ? `<strong style="color:#F5F5F5;">${data.invitedByName}</strong> at Pitching Performance Lab has added you as ${article} ${roleEmphasis}${scopeFragment}.`
-    : `You've been added to Pitching Performance Lab as ${article} ${roleEmphasis}${scopeFragment}.`;
-
-  // Custom dark-theme bullet list — green pill markers, light body text
-  const darkBulletsHtml = responsibilities
+  // Bullets for the responsibilities list — small green dots, like the
+  // colored pitch dots in the report's pitch-arsenal table.
+  const responsibilitiesHtml = responsibilities
     .map(
       (r) => `
       <tr>
-        <td valign="top" style="padding:7px 12px 7px 0;width:20px;">
-          <div style="width:6px;height:6px;background:#95C83C;border-radius:3px;margin-top:8px;"></div>
+        <td valign="top" style="padding:7px 14px 7px 0;width:18px;">
+          <div style="width:6px;height:6px;background:#95C83C;border-radius:50%;margin-top:8px;"></div>
         </td>
-        <td valign="top" style="padding:7px 0;color:#CCCCCC;font-size:15px;line-height:1.55;">${r}</td>
-      </tr>`
+        <td valign="top" style="padding:7px 0;color:#CCCCCC;font-size:14.5px;line-height:1.6;">${r}</td>
+      </tr>`,
     )
     .join('');
 
+  const showResponsibilities =
+    data.role !== 'PERFORMANCE_COACH' && data.role !== 'COORDINATOR';
+
+  const inviterIntro = data.invitedByName
+    ? `<strong style="color:#F5F5F5;">${data.invitedByName}</strong> added you to the team. Welcome aboard.`
+    : `You\u2019ve been added to the team. Welcome aboard.`;
+
+  const fromLabel = data.invitedByName
+    ? `From ${data.invitedByName}`
+    : 'Welcome';
+
+  // Date for the section meta, formatted MM/DD/YYYY like the report.
+  const todayMeta = new Date()
+    .toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+    .replace(/\//g, '/');
+
   const body = `
-    <p style="margin:0 0 18px;color:#F5F5F5;font-size:16px;line-height:1.6;">Hey ${firstName},</p>
-    <p style="margin:0 0 32px;color:#CCCCCC;font-size:15px;line-height:1.75;">${invitedLine}</p>
+    <!-- ▼ FROM SECTION — matches the report's "▼ NOTES FROM COACH STAFF" rule -->
+    ${sectionHeader(fromLabel, todayMeta)}
+    <p style="margin:0 0 14px;color:#F5F5F5;font-size:16px;line-height:1.6;">Hey ${firstName},</p>
+    <p style="margin:0 0 32px;color:#CCCCCC;font-size:15px;line-height:1.7;">${inviterIntro}</p>
 
     ${
-      data.role === 'PERFORMANCE_COACH' || data.role === 'COORDINATOR'
-        ? ''
-        : `
-    <!-- Section divider: Transducer Black Italic ALL CAPS — same treatment as PITCH ARSENAL · LATEST SESSION in the report. Skipped for PERFORMANCE_COACH and COORDINATOR per Chad — those roles get a tighter email. -->
-    <p style="margin:0 0 14px;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:11px;letter-spacing:0.24em;text-transform:uppercase;color:#95C83C;">What You&rsquo;ll Do <span style="color:#3A3A3A;margin:0 8px;">&middot;</span> <span style="color:#888888;">${responsibilities.length} things</span></p>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
-      ${darkBulletsHtml}
+      showResponsibilities
+        ? `
+    <!-- ▼ WHAT YOU'LL DO — matches the report's "● PITCH ARSENAL · LATEST SESSION" pattern -->
+    ${sectionHeader("What You'll Do", `${responsibilities.length} things`)}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 32px;">
+      ${responsibilitiesHtml}
     </table>`
+        : ''
     }
 
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
+    <!-- ▼ HOW TO ACCEPT — final actionable section -->
+    ${sectionHeader('How to Accept')}
+    <p style="margin:0 0 22px;color:#CCCCCC;font-size:15px;line-height:1.7;">Click the button below to set your password and finish setup. The link is single-use and tied to your email address.</p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
       <tr>
         <td align="center">
           <a href="${data.acceptUrl}" style="display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#5E9E50 0%,#95C83C 100%);color:#0A0A0A;text-decoration:none;border-radius:10px;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:13px;letter-spacing:0.16em;text-transform:uppercase;">Accept &amp; Set Your Password</a>
@@ -1032,8 +1107,10 @@ export function buildInviteEmailByRole(data: RoleInviteData): string {
     </p>
   `;
 
-  return buildPPLEmail(`You\u2019re invited to PPL as a ${roleLabel}`, body, {
+  return buildPPLEmail(data.fullName.toUpperCase(), body, {
     preheader: `${data.invitedByName ?? 'PPL'} invited you to join Pitching Performance Lab as a ${roleLabel}.`,
+    subLabel: `Staff Invitation \u00B7 ${todayMeta.replace(/\//g, '.')}`,
+    tagline,
   });
 }
 
