@@ -378,6 +378,7 @@ export function buildPPLEmail(
   void formatInviteDate;
   const baseUrl = config.frontendUrl;
   const logoUrl = `${baseUrl}/ppl-logo.png`;
+  void subLabel; // date removed from header per Chad
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -386,6 +387,18 @@ export function buildPPLEmail(
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="x-apple-disable-message-reformatting">
   <title>${title}</title>
+  <!-- @font-face for clients that honour it (Apple Mail, iOS, Yahoo, AOL).
+       Gmail / Outlook ignore <style> in <head> and fall back to Arial Black,
+       which still renders heavy + italic and reads on-brand. -->
+  <style>
+    @font-face {
+      font-family: 'Transducer';
+      font-style: italic;
+      font-weight: 900;
+      font-display: swap;
+      src: url('${baseUrl}/fonts/Transducer-BlackOblique.otf') format('opentype');
+    }
+  </style>
 </head>
 <body style="margin:0;padding:0;background:#f4f4f4;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#1a1a1a;">
   <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">${preheader}</div>
@@ -395,14 +408,13 @@ export function buildPPLEmail(
       <td align="center" style="padding:24px 12px;">
         <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
 
-          <!-- ============== HEADER ============== -->
+          <!-- ============== HEADER (ombre dark gradient) ============== -->
           <tr>
-            <td style="background:#1a1a1a;padding:32px 40px;text-align:center;">
-              <img src="${logoUrl}" alt="Pitching Performance Lab" width="64" height="64" style="display:block;margin:0 auto 12px;border:0;outline:none;text-decoration:none;">
-              <div style="font-size:11px;font-weight:700;color:#95c83c;letter-spacing:3px;text-transform:uppercase;margin-bottom:4px;">Pitching Performance Lab</div>
-              <div style="width:40px;height:2px;background:#95c83c;margin:10px auto 14px;"></div>
-              <div style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:1px;text-transform:uppercase;line-height:1.2;">${title}</div>
-              <div style="font-size:13px;color:#95c83c;margin-top:8px;font-weight:500;">${subLabel}</div>
+            <td style="background:#1a1a1a;background-image:linear-gradient(135deg,#0a0a0a 0%,#1a1a1a 50%,#2a2a2a 100%);padding:36px 40px;text-align:center;">
+              <img src="${logoUrl}" alt="Pitching Performance Lab" width="64" height="64" style="display:block;margin:0 auto 14px;border:0;outline:none;text-decoration:none;">
+              <div style="font-size:11px;font-weight:700;color:#95c83c;letter-spacing:3px;text-transform:uppercase;margin-bottom:6px;">Pitching Performance Lab</div>
+              <div style="width:40px;height:2px;background:#95c83c;margin:10px auto 16px;"></div>
+              <div style="font-family:'Transducer','Arial Black',Impact,Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:24px;letter-spacing:0.06em;text-transform:uppercase;color:#ffffff;line-height:1.1;white-space:nowrap;">${title}</div>
             </td>
           </tr>
 
@@ -996,23 +1008,19 @@ export function buildInviteEmailByRole(data: RoleInviteData): string {
     <p style="margin:0 0 14px;font-size:15px;color:#1a1a1a;line-height:1.6;">Hey ${firstName},</p>
     <p style="margin:0 0 28px;font-size:14.5px;color:#374151;line-height:1.65;">${inviterLine} Welcome aboard.</p>
 
-    <!-- Section: Your Role + Location stat row -->
+    <!-- Section: Your Role + Location combined into one card -->
     <div style="font-size:13px;font-weight:700;color:#1a1a1a;text-transform:uppercase;letter-spacing:1.2px;">Your Access</div>
     <div style="width:48px;height:3px;background:#95c83c;margin:8px 0 14px;border-radius:2px;"></div>
 
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 30px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 30px;background:#f8f8f8;border:1px solid #e8e8e8;border-radius:8px;">
       <tr>
-        <td width="50%" valign="top" style="padding:0 6px 0 0;">
-          <div style="background:#f8f8f8;border:1px solid #e8e8e8;border-radius:8px;padding:16px;text-align:center;">
-            <div style="font-size:18px;font-weight:800;color:#1a1a1a;line-height:1.2;">${roleLabel}</div>
-            <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:0.8px;margin-top:6px;">Role</div>
-          </div>
+        <td width="50%" valign="middle" style="padding:18px 16px;text-align:center;">
+          <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Role</div>
+          <div style="font-size:18px;font-weight:800;color:#1a1a1a;line-height:1.2;">${roleLabel}</div>
         </td>
-        <td width="50%" valign="top" style="padding:0 0 0 6px;">
-          <div style="background:#f8f8f8;border:1px solid #e8e8e8;border-radius:8px;padding:16px;text-align:center;">
-            <div style="font-size:18px;font-weight:800;color:#95c83c;line-height:1.2;">${scopeLabel}</div>
-            <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:0.8px;margin-top:6px;">Location</div>
-          </div>
+        <td width="50%" valign="middle" style="padding:18px 16px;text-align:center;border-left:1px solid #e8e8e8;">
+          <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Location</div>
+          <div style="font-size:18px;font-weight:800;color:#95c83c;line-height:1.2;">${scopeLabel}</div>
         </td>
       </tr>
     </table>
@@ -1036,7 +1044,7 @@ export function buildInviteEmailByRole(data: RoleInviteData): string {
     </p>
   `;
 
-  return buildPPLEmail(`You're invited to PPL`, body, {
+  return buildPPLEmail(`You're Invited to PPL`, body, {
     preheader: `${data.invitedByName ?? 'PPL'} invited you to join Pitching Performance Lab as a ${roleLabel}.`,
     subLabel: todayLong,
   });
