@@ -964,21 +964,32 @@ export function buildInviteEmailByRole(data: RoleInviteData): string {
   const roleLabel = roleDisplayName(data.role);
   const responsibilities = roleResponsibilities(data.role);
 
-  const invitedLine = data.invitedByName
-    ? `<strong style="color:#F5F5F5;">${data.invitedByName}</strong> at Pitching Performance Lab has added you as a <strong style="color:#95C83C;">${roleLabel}</strong>.`
-    : `You've been added to Pitching Performance Lab as a <strong style="color:#95C83C;">${roleLabel}</strong>.`;
+  // a/an article based on the role label's first letter
+  const article = /^[aeiou]/i.test(roleLabel) ? 'an' : 'a';
 
-  // Scope line — describes WHERE/WHAT this role covers
-  let scopeText = '';
+  // The role label, rendered inline in the sentence with strong visual weight:
+  // Transducer Black Italic, all caps, green, slightly larger than body, with
+  // editorial letter-spacing.
+  const roleEmphasis = `<span style="font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:17px;letter-spacing:0.08em;text-transform:uppercase;color:#95C83C;">${roleLabel}</span>`;
+
+  // Inline scope fragment — woven into the same sentence so the role card
+  // can go away entirely.
+  let scopeFragment = '';
   if (data.locationName) {
-    scopeText = `Your access is scoped to <strong style="color:#F5F5F5;">${data.locationName}</strong>.`;
+    scopeFragment = ` at <strong style="color:#F5F5F5;">${data.locationName}</strong>`;
   } else if (data.schoolName) {
-    scopeText = `You're coaching for <strong style="color:#F5F5F5;">${data.schoolName}</strong> — you'll see that team's PPL roster and nothing else.`;
-  } else if (data.role === 'ADMIN' || data.role === 'CONTENT_MARKETING_ADMIN' || data.role === 'MEDICAL_ADMIN') {
-    scopeText = `Global access — this role applies across every PPL location.`;
-  } else {
-    scopeText = `Welcome to the PPL community.`;
+    scopeFragment = ` for <strong style="color:#F5F5F5;">${data.schoolName}</strong>`;
+  } else if (
+    data.role === 'ADMIN' ||
+    data.role === 'CONTENT_MARKETING_ADMIN' ||
+    data.role === 'MEDICAL_ADMIN'
+  ) {
+    scopeFragment = ` <span style="color:#888888;">&mdash; global access across every PPL location</span>`;
   }
+
+  const invitedLine = data.invitedByName
+    ? `<strong style="color:#F5F5F5;">${data.invitedByName}</strong> at Pitching Performance Lab has added you as ${article} ${roleEmphasis}${scopeFragment}.`
+    : `You've been added to Pitching Performance Lab as ${article} ${roleEmphasis}${scopeFragment}.`;
 
   // Custom dark-theme bullet list — green pill markers, light body text
   const darkBulletsHtml = responsibilities
@@ -995,18 +1006,7 @@ export function buildInviteEmailByRole(data: RoleInviteData): string {
 
   const body = `
     <p style="margin:0 0 18px;color:#F5F5F5;font-size:16px;line-height:1.6;">Hey ${firstName},</p>
-    <p style="margin:0 0 26px;color:#CCCCCC;font-size:15px;line-height:1.65;">${invitedLine}</p>
-
-    <!-- Role card: Transducer eyebrow + Bebas Neue role label + Manrope scope (matches the report's stat-row hierarchy) -->
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
-      <tr>
-        <td style="background:#1A1A1A;border:1px solid #2A2A2A;border-left:4px solid #95C83C;border-radius:0 10px 10px 0;padding:18px 22px;">
-          <p style="margin:0 0 4px;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:11px;letter-spacing:0.22em;text-transform:uppercase;color:#95C83C;">Your Role</p>
-          <p style="margin:0 0 4px;font-family:'Bebas Neue','Oswald',Impact,sans-serif;font-size:30px;line-height:1.05;font-weight:400;color:#F5F5F5;letter-spacing:0.04em;text-transform:uppercase;">${roleLabel}</p>
-          <p style="margin:0;color:#888888;font-size:13px;line-height:1.55;">${scopeText}</p>
-        </td>
-      </tr>
-    </table>
+    <p style="margin:0 0 32px;color:#CCCCCC;font-size:15px;line-height:1.75;">${invitedLine}</p>
 
     ${
       data.role === 'PERFORMANCE_COACH' || data.role === 'COORDINATOR'
@@ -1027,10 +1027,8 @@ export function buildInviteEmailByRole(data: RoleInviteData): string {
       </tr>
     </table>
 
-    <p style="font-size:13px;color:#888888;margin:0;line-height:1.55;text-align:center;">
-      This invite expires in
-      <span style="font-family:'Bebas Neue','Oswald',Impact,sans-serif;font-size:18px;color:#F5F5F5;letter-spacing:0.04em;vertical-align:middle;">${data.expiresInDays} DAYS</span>.
-      If it lapses, reply and we&rsquo;ll send a fresh one.
+    <p style="font-size:13px;color:#888888;margin:0;line-height:1.6;text-align:center;">
+      This invite expires in <strong style="color:#F5F5F5;text-decoration:underline;">${data.expiresInDays} days</strong>. If it lapses, reply and we&rsquo;ll send a fresh one.
     </p>
   `;
 
