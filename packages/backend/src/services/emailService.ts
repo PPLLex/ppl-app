@@ -343,26 +343,41 @@ function formatInviteDate(d: Date = new Date()): string {
 const PAINT_SPLATTER_DATA_URI =
   "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cg fill='%231A1A1A'%3E%3Ccircle cx='34' cy='52' r='2.4'/%3E%3Ccircle cx='112' cy='28' r='1.8'/%3E%3Ccircle cx='168' cy='84' r='3.2'/%3E%3Ccircle cx='244' cy='48' r='2.1'/%3E%3Ccircle cx='320' cy='72' r='1.6'/%3E%3Ccircle cx='376' cy='36' r='2.8'/%3E%3Ccircle cx='52' cy='148' r='1.4'/%3E%3Ccircle cx='128' cy='176' r='2.6'/%3E%3Ccircle cx='196' cy='132' r='1.8'/%3E%3Ccircle cx='284' cy='168' r='3.4'/%3E%3Ccircle cx='348' cy='124' r='2'/%3E%3Ccircle cx='28' cy='244' r='2.2'/%3E%3Ccircle cx='84' cy='216' r='1.6'/%3E%3Ccircle cx='152' cy='268' r='2.8'/%3E%3Ccircle cx='224' cy='232' r='1.9'/%3E%3Ccircle cx='304' cy='256' r='2.4'/%3E%3Ccircle cx='364' cy='212' r='1.8'/%3E%3Ccircle cx='44' cy='332' r='2.6'/%3E%3Ccircle cx='116' cy='304' r='1.5'/%3E%3Ccircle cx='180' cy='348' r='3'/%3E%3Ccircle cx='256' cy='308' r='2.1'/%3E%3Ccircle cx='332' cy='356' r='1.7'/%3E%3C/g%3E%3Cg fill='%23222'%3E%3Cellipse cx='80' cy='100' rx='6' ry='2' transform='rotate(35 80 100)'/%3E%3Cellipse cx='260' cy='200' rx='8' ry='3' transform='rotate(-25 260 200)'/%3E%3Cellipse cx='380' cy='290' rx='5' ry='2' transform='rotate(60 380 290)'/%3E%3Cellipse cx='148' cy='40' rx='4' ry='1.5' transform='rotate(15 148 40)'/%3E%3C/g%3E%3Cg fill='%2395C83C' opacity='0.15'%3E%3Ccircle cx='208' cy='12' r='0.9'/%3E%3Ccircle cx='376' cy='148' r='1.1'/%3E%3Ccircle cx='80' cy='284' r='0.8'/%3E%3Ccircle cx='304' cy='328' r='1'/%3E%3C/g%3E%3C/svg%3E";
 
+/**
+ * Modern, simple PPL email wrapper modelled on Chad's PPL daily/scheduled
+ * report templates (membership trends, etc.):
+ *
+ *   - Light grey page background (#f4f4f4)
+ *   - White rounded card (max 640px), light shadow
+ *   - Dark header (#1a1a1a) with logo, green PPL wordmark, white title, green date
+ *   - 4px gradient green accent bar
+ *   - Light body sections — section title in dark caps + small green underline
+ *   - Dark footer with PPL wordmark + auto-generated note
+ *
+ * Logo: served from {frontendUrl}/ppl-logo.png (publicly reachable). Inline
+ * styles only — every property lives on the element so Gmail/Outlook don't
+ * strip it.
+ */
 export function buildPPLEmail(
   title: string,
   body: string,
   opts?: { preheader?: string; subLabel?: string; tagline?: string },
 ): string {
   const preheader = opts?.preheader ?? '';
-  // subLabel mirrors the report's "BULLPEN REPORT · 04.16.2026" line under the lockup.
-  // Default to the current date in the same format if the caller doesn't supply one.
+  // subLabel renders next to the date pill in the dark header. Defaults to today.
   const subLabel =
     opts?.subLabel ??
-    `Notification \u00B7 ${new Date()
-      .toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
-      .replace(/\//g, '.')}`;
-  // tagline mirrors the report's "#MUSTBESOMETHINGINTHEWATER" line under the athlete name.
-  const tagline = opts?.tagline ?? '';
-  const baseUrl = config.frontendUrl;
-  const logoUrl = `${baseUrl}/ppl-logo.png`;
-  // splatter texture removed — pure black to match the report.
+    new Date().toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  // tagline kept on the wrapper for backward compat (unused in the simple layout).
+  void opts?.tagline;
   void PAINT_SPLATTER_DATA_URI;
   void formatInviteDate;
+  const baseUrl = config.frontendUrl;
+  const logoUrl = `${baseUrl}/ppl-logo.png`;
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -370,122 +385,48 @@ export function buildPPLEmail(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="x-apple-disable-message-reformatting">
-  <meta name="color-scheme" content="dark only">
-  <meta name="supported-color-schemes" content="dark">
   <title>${title}</title>
-  <style>
-    @font-face {
-      font-family: 'Bank Gothic';
-      font-style: normal;
-      font-weight: 700;
-      font-display: swap;
-      src: url('${baseUrl}/fonts/BankGothic-Bold.ttf') format('truetype');
-    }
-    @font-face {
-      font-family: 'Transducer';
-      font-style: italic;
-      font-weight: 900;
-      font-display: swap;
-      src: url('${baseUrl}/fonts/Transducer-BlackOblique.otf') format('opentype');
-    }
-    @font-face {
-      font-family: 'Transducer';
-      font-style: normal;
-      font-weight: 900;
-      font-display: swap;
-      src: url('${baseUrl}/fonts/Transducer-Black.otf') format('opentype');
-    }
-    @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Bebas+Neue&display=swap');
-    @media (max-width: 640px) {
-      .ppl-stack { padding: 32px 22px 36px !important; }
-      .ppl-hero { font-size: 38px !important; letter-spacing: 0.02em !important; }
-      .ppl-lockup { font-size: 14px !important; letter-spacing: 0.18em !important; }
-      .ppl-sublabel { font-size: 9px !important; letter-spacing: 0.28em !important; }
-      .ppl-logo { width: 48px !important; height: 48px !important; }
-      .ppl-tagline { font-size: 10px !important; letter-spacing: 0.22em !important; }
-      .ppl-body { font-size: 14.5px !important; }
-    }
-  </style>
 </head>
-<body style="margin:0;padding:0;background:#0A0A0A;font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#F5F5F5;-webkit-font-smoothing:antialiased;">
+<body style="margin:0;padding:0;background:#f4f4f4;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#1a1a1a;">
   <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">${preheader}</div>
 
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0A;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;">
     <tr>
-      <td align="center" class="ppl-stack" style="padding:48px 32px 44px;">
-        <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;">
+      <td align="center" style="padding:24px 12px;">
+        <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
 
-          <!-- ============================================================
-               HEADER: logo + Bank Gothic lockup + sub-label
-               Mirrors the Bullpen Report's top bar.
-               ============================================================ -->
+          <!-- ============== HEADER ============== -->
           <tr>
-            <td style="padding:0 0 32px;">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td valign="middle" style="padding:0 18px 0 0;width:64px;">
-                    <img class="ppl-logo" src="${logoUrl}" alt="PPL" width="56" height="56" style="display:block;border:0;outline:none;text-decoration:none;">
-                  </td>
-                  <td valign="middle" style="border-left:1px solid #2A2A2A;padding:4px 0 4px 18px;">
-                    <p class="ppl-lockup" style="margin:0 0 6px;font-family:'Bank Gothic','Copperplate Gothic Bold',Impact,sans-serif;font-weight:700;font-size:18px;line-height:1;letter-spacing:0.18em;text-transform:uppercase;color:#F5F5F5;">Pitching Performance Lab</p>
-                    <p class="ppl-sublabel" style="margin:0;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:10px;line-height:1;letter-spacing:0.34em;text-transform:uppercase;color:#888888;">${subLabel}</p>
-                  </td>
-                </tr>
-              </table>
+            <td style="background:#1a1a1a;padding:32px 40px;text-align:center;">
+              <img src="${logoUrl}" alt="Pitching Performance Lab" width="64" height="64" style="display:block;margin:0 auto 12px;border:0;outline:none;text-decoration:none;">
+              <div style="font-size:11px;font-weight:700;color:#95c83c;letter-spacing:3px;text-transform:uppercase;margin-bottom:4px;">Pitching Performance Lab</div>
+              <div style="width:40px;height:2px;background:#95c83c;margin:10px auto 14px;"></div>
+              <div style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:1px;text-transform:uppercase;line-height:1.2;">${title}</div>
+              <div style="font-size:13px;color:#95c83c;margin-top:8px;font-weight:500;">${subLabel}</div>
             </td>
           </tr>
 
-          <!-- ============================================================
-               HERO: huge green title (= report's "COLIN MURPHY")
-               + optional Transducer italic tagline (= report's hashtag line)
-               ============================================================ -->
+          <!-- ============== GREEN ACCENT BAR ============== -->
           <tr>
-            <td style="padding:8px 0 ${tagline ? '6px' : '36px'};">
-              <p class="ppl-hero" style="margin:0;font-family:'Bebas Neue','Oswald',Impact,sans-serif;font-size:54px;line-height:1;font-weight:400;letter-spacing:0.03em;text-transform:uppercase;color:#95C83C;">${title}</p>
-            </td>
-          </tr>
-          ${
-            tagline
-              ? `
-          <tr>
-            <td style="padding:0 0 36px;">
-              <p class="ppl-tagline" style="margin:0;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:11px;line-height:1.3;letter-spacing:0.22em;text-transform:uppercase;color:#888888;">${tagline}</p>
-            </td>
-          </tr>`
-              : ''
-          }
-
-          <!-- Top divider bar — single hairline that mirrors the report's section rules -->
-          <tr>
-            <td style="padding:0 0 28px;">
-              <div style="height:1px;background:#2A2A2A;line-height:1px;font-size:0;">&nbsp;</div>
-            </td>
+            <td style="background:linear-gradient(90deg,#95c83c,#7fa829);height:4px;line-height:4px;font-size:0;">&nbsp;</td>
           </tr>
 
-          <!-- ============================================================
-               BODY
-               ============================================================ -->
+          <!-- ============== BODY ============== -->
           <tr>
-            <td class="ppl-body" style="padding:0 0 36px;color:#CCCCCC;font-size:15px;line-height:1.7;">
+            <td style="padding:32px 40px;color:#374151;font-size:14.5px;line-height:1.65;">
               ${body}
             </td>
           </tr>
 
-          <!-- ============================================================
-               FOOTER — matches the report's bottom bar
-               ============================================================ -->
+          <!-- ============== FOOTER ============== -->
           <tr>
-            <td style="padding:24px 0 0;border-top:1px solid #1F1F1F;">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td valign="middle" style="font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:10px;letter-spacing:0.28em;text-transform:uppercase;color:#888888;">Pitching Performance Lab</td>
-                  <td valign="middle" align="right" style="font-size:11px;color:#666666;">
-                    <a href="https://pitchingperformancelab.com" style="color:#888888;text-decoration:none;">pitchingperformancelab.com</a>
-                    &nbsp;&middot;&nbsp;
-                    <a href="mailto:support@pitchingperformancelab.com" style="color:#888888;text-decoration:none;">support@pitchingperformancelab.com</a>
-                  </td>
-                </tr>
-              </table>
+            <td style="background:#1a1a1a;padding:22px 40px;text-align:center;">
+              <div style="font-size:11px;font-weight:600;color:#95c83c;letter-spacing:1.5px;text-transform:uppercase;">Pitching Performance Lab</div>
+              <div style="font-size:11px;color:#999;margin-top:6px;">
+                <a href="https://pitchingperformancelab.com" style="color:#999;text-decoration:none;">pitchingperformancelab.com</a>
+                &nbsp;&middot;&nbsp;
+                <a href="mailto:support@pitchingperformancelab.com" style="color:#999;text-decoration:none;">support@pitchingperformancelab.com</a>
+              </div>
             </td>
           </tr>
 
@@ -1028,89 +969,76 @@ export function buildInviteEmailByRole(data: RoleInviteData): string {
   const roleLabel = roleDisplayName(data.role);
   const responsibilities = roleResponsibilities(data.role);
 
-  // Scope label that gets baked into the report-style tagline beneath the recipient's name.
+  void responsibilities;
+  void pplSectionHeader;
+
+  // Scope description that goes in the role/location stat row.
   const scopeLabel = data.locationName
-    ? data.locationName.toUpperCase()
+    ? data.locationName
     : data.schoolName
-    ? data.schoolName.toUpperCase()
+    ? data.schoolName
     : data.role === 'ADMIN' || data.role === 'CONTENT_MARKETING_ADMIN' || data.role === 'MEDICAL_ADMIN'
-    ? 'GLOBAL ACCESS'
-    : 'ALL LOCATIONS';
+    ? 'Global access'
+    : 'All locations';
 
-  // The hashtag-style tagline that mirrors "#MUSTBESOMETHINGINTHEWATER".
-  const tagline = `${roleLabel.toUpperCase()} \u00B7 ${scopeLabel}`;
+  const inviterLine = data.invitedByName
+    ? `<strong style="color:#1a1a1a;">${data.invitedByName}</strong> added you to the Pitching Performance Lab team.`
+    : `You\u2019ve been added to the Pitching Performance Lab team.`;
 
-  // Section header for the from-line / what-you'll-do / how-to-accept blocks.
-  const sectionHeader = (label: string, meta?: string) => pplSectionHeader(label, meta);
-
-  // Bullets for the responsibilities list — small green dots, like the
-  // colored pitch dots in the report's pitch-arsenal table.
-  const responsibilitiesHtml = responsibilities
-    .map(
-      (r) => `
-      <tr>
-        <td valign="top" style="padding:7px 14px 7px 0;width:18px;">
-          <div style="width:6px;height:6px;background:#95C83C;border-radius:50%;margin-top:8px;"></div>
-        </td>
-        <td valign="top" style="padding:7px 0;color:#CCCCCC;font-size:14.5px;line-height:1.6;">${r}</td>
-      </tr>`,
-    )
-    .join('');
-
-  const showResponsibilities =
-    data.role !== 'PERFORMANCE_COACH' && data.role !== 'COORDINATOR';
-
-  const inviterIntro = data.invitedByName
-    ? `<strong style="color:#F5F5F5;">${data.invitedByName}</strong> added you to the team. Welcome aboard.`
-    : `You\u2019ve been added to the team. Welcome aboard.`;
-
-  const fromLabel = data.invitedByName
-    ? `From ${data.invitedByName}`
-    : 'Welcome';
-
-  // Date for the section meta, formatted MM/DD/YYYY like the report.
-  const todayMeta = new Date()
-    .toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
-    .replace(/\//g, '/');
+  const todayLong = new Date().toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
 
   const body = `
-    <!-- ▼ FROM SECTION — matches the report's "▼ NOTES FROM COACH STAFF" rule -->
-    ${sectionHeader(fromLabel, todayMeta)}
-    <p style="margin:0 0 14px;color:#F5F5F5;font-size:16px;line-height:1.6;">Hey ${firstName},</p>
-    <p style="margin:0 0 32px;color:#CCCCCC;font-size:15px;line-height:1.7;">${inviterIntro}</p>
+    <!-- Greeting -->
+    <p style="margin:0 0 14px;font-size:15px;color:#1a1a1a;line-height:1.6;">Hey ${firstName},</p>
+    <p style="margin:0 0 28px;font-size:14.5px;color:#374151;line-height:1.65;">${inviterLine} Welcome aboard.</p>
 
-    ${
-      showResponsibilities
-        ? `
-    <!-- ▼ WHAT YOU'LL DO — matches the report's "● PITCH ARSENAL · LATEST SESSION" pattern -->
-    ${sectionHeader("What You'll Do", `${responsibilities.length} things`)}
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 32px;">
-      ${responsibilitiesHtml}
-    </table>`
-        : ''
-    }
+    <!-- Section: Your Role + Location stat row -->
+    <div style="font-size:13px;font-weight:700;color:#1a1a1a;text-transform:uppercase;letter-spacing:1.2px;">Your Access</div>
+    <div style="width:48px;height:3px;background:#95c83c;margin:8px 0 14px;border-radius:2px;"></div>
 
-    <!-- ▼ HOW TO ACCEPT — final actionable section -->
-    ${sectionHeader('How to Accept')}
-    <p style="margin:0 0 22px;color:#CCCCCC;font-size:15px;line-height:1.7;">Click the button below to set your password and finish setup. The link is single-use and tied to your email address.</p>
-
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 30px;">
       <tr>
-        <td align="center">
-          <a href="${data.acceptUrl}" style="display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#5E9E50 0%,#95C83C 100%);color:#0A0A0A;text-decoration:none;border-radius:10px;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:13px;letter-spacing:0.16em;text-transform:uppercase;">Accept &amp; Set Your Password</a>
+        <td width="50%" valign="top" style="padding:0 6px 0 0;">
+          <div style="background:#f8f8f8;border:1px solid #e8e8e8;border-radius:8px;padding:16px;text-align:center;">
+            <div style="font-size:18px;font-weight:800;color:#1a1a1a;line-height:1.2;">${roleLabel}</div>
+            <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:0.8px;margin-top:6px;">Role</div>
+          </div>
+        </td>
+        <td width="50%" valign="top" style="padding:0 0 0 6px;">
+          <div style="background:#f8f8f8;border:1px solid #e8e8e8;border-radius:8px;padding:16px;text-align:center;">
+            <div style="font-size:18px;font-weight:800;color:#95c83c;line-height:1.2;">${scopeLabel}</div>
+            <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:0.8px;margin-top:6px;">Location</div>
+          </div>
         </td>
       </tr>
     </table>
 
-    <p style="font-size:13px;color:#888888;margin:0;line-height:1.6;text-align:center;">
-      This invite expires in <strong style="color:#F5F5F5;text-decoration:underline;">${data.expiresInDays} days</strong>. If it lapses, reply and we&rsquo;ll send a fresh one.
+    <!-- Section: Get Started -->
+    <div style="font-size:13px;font-weight:700;color:#1a1a1a;text-transform:uppercase;letter-spacing:1.2px;">Get Started</div>
+    <div style="width:48px;height:3px;background:#95c83c;margin:8px 0 14px;border-radius:2px;"></div>
+
+    <p style="margin:0 0 22px;font-size:14.5px;color:#374151;line-height:1.65;">Click the button below to set your password and log in. The link is single-use and tied to your email address.</p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
+      <tr>
+        <td align="center">
+          <a href="${data.acceptUrl}" style="display:inline-block;padding:14px 36px;background:#95c83c;color:#1a1a1a;text-decoration:none;border-radius:8px;font-size:14px;font-weight:700;letter-spacing:0.5px;">Accept &amp; Set Your Password</a>
+        </td>
+      </tr>
+    </table>
+
+    <p style="margin:0;font-size:12px;color:#666;line-height:1.6;text-align:center;">
+      This invite expires in <strong style="color:#1a1a1a;text-decoration:underline;">${data.expiresInDays} days</strong>. If it lapses, reply and we&rsquo;ll send a fresh one.
     </p>
   `;
 
-  return buildPPLEmail(data.fullName.toUpperCase(), body, {
+  return buildPPLEmail(`You're invited to PPL`, body, {
     preheader: `${data.invitedByName ?? 'PPL'} invited you to join Pitching Performance Lab as a ${roleLabel}.`,
-    subLabel: `Staff Invitation \u00B7 ${todayMeta.replace(/\//g, '.')}`,
-    tagline,
+    subLabel: todayLong,
   });
 }
 
