@@ -358,9 +358,10 @@ export function buildPPLEmail(title: string, body: string, opts?: { preheader?: 
     @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Bebas+Neue&display=swap');
     @media (max-width: 640px) {
       .ppl-card { padding: 28px 22px !important; }
-      .ppl-hero { padding: 32px 22px !important; }
-      .ppl-h1 { font-size: 20px !important; }
-      .ppl-eyebrow { font-size: 11px !important; }
+      .ppl-hero { padding: 28px 18px !important; }
+      .ppl-h1 { font-size: 18px !important; letter-spacing: 0.08em !important; }
+      .ppl-lockup { font-size: 22px !important; letter-spacing: 0.16em !important; }
+      .ppl-logo { width: 88px !important; height: 88px !important; }
     }
   </style>
 </head>
@@ -372,13 +373,13 @@ export function buildPPLEmail(title: string, body: string, opts?: { preheader?: 
       <td align="center">
         <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:#141414;border:1px solid #2A2A2A;border-radius:16px;overflow:hidden;">
 
-          <!-- Header: black band with logo + tighter Bank Gothic title + green accent line -->
+          <!-- Header: bigger logo, Bank Gothic lockup that fills the row, Transducer italic title beneath -->
           <tr>
-            <td class="ppl-hero" style="background:#0A0A0A;border-bottom:1px solid #2A2A2A;padding:36px 36px 32px;text-align:center;">
-              <img src="${logoUrl}" alt="PPL" width="64" height="64" style="display:block;margin:0 auto 16px;border:0;outline:none;text-decoration:none;">
-              <p class="ppl-eyebrow" style="margin:0 0 10px;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:11px;letter-spacing:0.26em;text-transform:uppercase;color:#95C83C;">Pitching Performance Lab</p>
-              <h1 class="ppl-h1" style="margin:0;font-family:'Bank Gothic','Copperplate Gothic Bold',Impact,sans-serif;font-size:22px;line-height:1.2;letter-spacing:0.06em;color:#F5F5F5;font-weight:700;text-transform:uppercase;">${title}</h1>
-              <div style="width:44px;height:2px;background:#95C83C;border-radius:2px;margin:16px auto 0;"></div>
+            <td class="ppl-hero" style="background:#0A0A0A;border-bottom:1px solid #2A2A2A;padding:36px 32px 32px;text-align:center;">
+              <img class="ppl-logo" src="${logoUrl}" alt="PPL" width="120" height="120" style="display:block;margin:0 auto 18px;border:0;outline:none;text-decoration:none;">
+              <p class="ppl-lockup" style="margin:0 0 14px;font-family:'Bank Gothic','Copperplate Gothic Bold',Impact,sans-serif;font-weight:700;font-size:34px;line-height:1;letter-spacing:0.12em;text-transform:uppercase;color:#F5F5F5;white-space:nowrap;">Pitching Performance Lab</p>
+              <div style="width:56px;height:2px;background:#95C83C;border-radius:2px;margin:0 auto 14px;"></div>
+              <p class="ppl-h1" style="margin:0;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:20px;line-height:1.25;letter-spacing:0.1em;text-transform:uppercase;color:#95C83C;">${title}</p>
             </td>
           </tr>
 
@@ -969,11 +970,16 @@ export function buildInviteEmailByRole(data: RoleInviteData): string {
       </tr>
     </table>
 
-    <!-- Section divider: Transducer Black Italic ALL CAPS — same treatment as PITCH ARSENAL · LATEST SESSION in the report -->
+    ${
+      data.role === 'PERFORMANCE_COACH' || data.role === 'COORDINATOR'
+        ? ''
+        : `
+    <!-- Section divider: Transducer Black Italic ALL CAPS — same treatment as PITCH ARSENAL · LATEST SESSION in the report. Skipped for PERFORMANCE_COACH and COORDINATOR per Chad — those roles get a tighter email. -->
     <p style="margin:0 0 14px;font-family:'Transducer','Arial Black',Helvetica,Arial,sans-serif;font-style:italic;font-weight:900;font-size:11px;letter-spacing:0.24em;text-transform:uppercase;color:#95C83C;">What You&rsquo;ll Do <span style="color:#3A3A3A;margin:0 8px;">&middot;</span> <span style="color:#888888;">${responsibilities.length} things</span></p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
       ${darkBulletsHtml}
-    </table>
+    </table>`
+    }
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
       <tr>
