@@ -28,6 +28,7 @@ import { prisma } from '../utils/prisma';
 import { ApiError } from '../utils/apiError';
 import { authenticate } from '../middleware/auth';
 import { requireAnyRole } from '../services/roleService';
+import { createAuditLog } from '../services/auditService';
 import { Role, TagKind } from '@prisma/client';
 
 const router = Router();
@@ -94,6 +95,13 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
         createdById: req.user?.userId ?? null,
       },
     });
+    void createAuditLog({
+      userId: req.user?.userId,
+      action: 'tag.created',
+      resourceType: 'tag',
+      resourceId: tag.id,
+      changes: { name: tag.name, color: tag.color, kind: tag.kind },
+    });
     res.status(201).json({ success: true, data: tag });
   } catch (err: unknown) {
     if (err instanceof Error && err.message.includes('Unique constraint')) {
@@ -127,6 +135,13 @@ router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => 
     }
 
     const tag = await prisma.tag.update({ where: { id }, data: data as any });
+    void createAuditLog({
+      userId: req.user?.userId,
+      action: 'tag.updated',
+      resourceType: 'tag',
+      resourceId: tag.id,
+      changes: data,
+    });
     res.json({ success: true, data: tag });
   } catch (err) {
     next(err);
@@ -143,6 +158,13 @@ router.delete('/:id', async (req: Request, res: Response, next: NextFunction) =>
     if (!existing) throw ApiError.notFound('Tag not found');
     if (existing.system) throw ApiError.badRequest('System tags cannot be deleted');
     await prisma.tag.delete({ where: { id } });
+    void createAuditLog({
+      userId: req.user?.userId,
+      action: 'tag.deleted',
+      resourceType: 'tag',
+      resourceId: id,
+      changes: { name: existing.name },
+    });
     res.json({ success: true });
   } catch (err) {
     next(err);

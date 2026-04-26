@@ -18,6 +18,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../utils/prisma';
 import { ApiError } from '../utils/apiError';
 import { authenticate, requireAdmin } from '../middleware/auth';
+import { createAuditLog } from '../services/auditService';
 import { WorkflowTrigger } from '@prisma/client';
 
 const router = Router();
@@ -77,6 +78,13 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
         createdById: req.user?.userId ?? null,
       },
     });
+    void createAuditLog({
+      userId: req.user?.userId,
+      action: 'webhook.created',
+      resourceType: 'webhook',
+      resourceId: webhook.id,
+      changes: { name: webhook.name, url: webhook.url, events: validEvents },
+    });
     res.status(201).json({ success: true, data: webhook });
   } catch (err) {
     next(err);
@@ -129,6 +137,13 @@ router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => 
       where: { id: param(req, 'id') },
       data: data as any,
     });
+    void createAuditLog({
+      userId: req.user?.userId,
+      action: 'webhook.updated',
+      resourceType: 'webhook',
+      resourceId: webhook.id,
+      changes: data,
+    });
     res.json({ success: true, data: webhook });
   } catch (err) {
     next(err);
@@ -137,7 +152,16 @@ router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => 
 
 router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    await prisma.webhook.delete({ where: { id: param(req, 'id') } });
+    const id = param(req, 'id');
+    const existing = await prisma.webhook.findUnique({ where: { id } });
+    await prisma.webhook.delete({ where: { id } });
+    void createAuditLog({
+      userId: req.user?.userId,
+      action: 'webhook.deleted',
+      resourceType: 'webhook',
+      resourceId: id,
+      changes: existing ? { name: existing.name, url: existing.url } : undefined,
+    });
     res.json({ success: true });
   } catch (err) {
     next(err);
@@ -149,6 +173,12 @@ router.post('/:id/rotate', async (req: Request, res: Response, next: NextFunctio
     const webhook = await prisma.webhook.update({
       where: { id: param(req, 'id') },
       data: { secret: generateSecret() },
+    });
+    void createAuditLog({
+      userId: req.user?.userId,
+      action: 'webhook.secret_rotated',
+      resourceType: 'webhook',
+      resourceId: webhook.id,
     });
     res.json({ success: true, data: { secret: webhook.secret } });
   } catch (err) {

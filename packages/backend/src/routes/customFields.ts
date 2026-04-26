@@ -20,6 +20,7 @@ import { prisma } from '../utils/prisma';
 import { ApiError } from '../utils/apiError';
 import { authenticate } from '../middleware/auth';
 import { requireAnyRole } from '../services/roleService';
+import { createAuditLog } from '../services/auditService';
 import { CustomFieldEntity, CustomFieldType, Role } from '@prisma/client';
 
 const router = Router();
@@ -110,6 +111,18 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
         order: typeof order === 'number' ? order : 0,
       },
     });
+    void createAuditLog({
+      userId: req.user?.userId,
+      action: 'custom_field.created',
+      resourceType: 'custom_field',
+      resourceId: definition.id,
+      changes: {
+        name: definition.name,
+        slug: definition.slug,
+        entityType: definition.entityType,
+        fieldType: definition.fieldType,
+      },
+    });
     res.status(201).json({ success: true, data: definition });
   } catch (err: unknown) {
     if (err instanceof Error && err.message.includes('Unique constraint')) {
@@ -135,6 +148,13 @@ router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => 
     if (typeof order === 'number') data.order = order;
     if (typeof active === 'boolean') data.active = active;
     const def = await prisma.customFieldDefinition.update({ where: { id }, data: data as any });
+    void createAuditLog({
+      userId: req.user?.userId,
+      action: 'custom_field.updated',
+      resourceType: 'custom_field',
+      resourceId: def.id,
+      changes: data,
+    });
     res.json({ success: true, data: def });
   } catch (err) {
     next(err);
@@ -147,7 +167,17 @@ router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => 
 router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = param(req, 'id');
+    const existing = await prisma.customFieldDefinition.findUnique({ where: { id } });
     await prisma.customFieldDefinition.delete({ where: { id } });
+    void createAuditLog({
+      userId: req.user?.userId,
+      action: 'custom_field.deleted',
+      resourceType: 'custom_field',
+      resourceId: id,
+      changes: existing
+        ? { name: existing.name, slug: existing.slug, entityType: existing.entityType }
+        : undefined,
+    });
     res.json({ success: true });
   } catch (err) {
     next(err);

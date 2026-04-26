@@ -21,6 +21,7 @@ import { prisma } from '../utils/prisma';
 import { ApiError } from '../utils/apiError';
 import { authenticate } from '../middleware/auth';
 import { requireAnyRole } from '../services/roleService';
+import { createAuditLog } from '../services/auditService';
 import {
   Role,
   WorkflowTrigger,
@@ -80,6 +81,13 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
         createdById: req.user?.userId ?? null,
       },
     });
+    void createAuditLog({
+      userId: req.user?.userId,
+      action: 'workflow.created',
+      resourceType: 'workflow',
+      resourceId: wf.id,
+      changes: { name: wf.name, trigger: wf.trigger },
+    });
     res.status(201).json({ success: true, data: wf });
   } catch (err) {
     next(err);
@@ -116,6 +124,13 @@ router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => 
     }
     if (triggerConfig !== undefined) data.triggerConfig = triggerConfig as any;
     const wf = await prisma.workflow.update({ where: { id }, data: data as any });
+    void createAuditLog({
+      userId: req.user?.userId,
+      action: 'workflow.updated',
+      resourceType: 'workflow',
+      resourceId: wf.id,
+      changes: data,
+    });
     res.json({ success: true, data: wf });
   } catch (err) {
     next(err);
@@ -124,7 +139,14 @@ router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => 
 
 router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    await prisma.workflow.delete({ where: { id: param(req, 'id') } });
+    const id = param(req, 'id');
+    await prisma.workflow.delete({ where: { id } });
+    void createAuditLog({
+      userId: req.user?.userId,
+      action: 'workflow.deleted',
+      resourceType: 'workflow',
+      resourceId: id,
+    });
     res.json({ success: true });
   } catch (err) {
     next(err);
