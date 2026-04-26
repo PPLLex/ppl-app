@@ -109,7 +109,15 @@ router.post('/', authenticate, async (req: Request, res: Response, next: NextFun
       if (athleteIds.size > 0) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const settings: any = await prisma.orgSettings.findUnique({ where: { id: 'ppl' } });
-        const currentVersion = settings?.liabilityWaiverVersion || '2026-04-23';
+        // OrgSettings is bootstrapped at server start; if it's missing here
+        // something is broken — fail loud rather than fall back to a
+        // hardcoded date that can quietly drift out of sync.
+        if (!settings?.liabilityWaiverVersion) {
+          throw ApiError.internal(
+            'OrgSettings.liabilityWaiverVersion is unset — bootstrap your org settings before accepting bookings.'
+          );
+        }
+        const currentVersion = settings.liabilityWaiverVersion;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const p: any = prisma;
         const signatures = await p.liabilityWaiverSignature.findMany({
@@ -130,9 +138,12 @@ router.post('/', authenticate, async (req: Request, res: Response, next: NextFun
       }
     }
 
-    // Pre-flight: enforce 60-day advance-booking cap for limited plans.
-    // (Cheap to check before opening the transaction.)
-    if (membership.plan.sessionsPerWeek !== null) {
+    // Pre-flight: enforce 60-day advance-booking cap for ALL plans
+    // (limited AND unlimited). Pre-fix this only applied to limited plans,
+    // letting unlimited members book months out which made future capacity
+    // planning unpredictable and gave them a backdoor to lock in slots
+    // months ahead of competition.
+    {
       const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
       if (session.startTime.getTime() - Date.now() > SIXTY_DAYS_MS) {
         throw ApiError.badRequest(
@@ -1070,6 +1081,27 @@ router.post('/batch', authenticate, async (req: Request, res: Response, next: Ne
 
       return booked;
     });
+
+    // Audit log per booking — pre-fix /batch was the only booking path
+    // that produced no audit trail at all, which made post-hoc
+    // investigations of "who booked what when" rely entirely on the
+    // creditTransaction notes column. Mirror what POST / does.
+    for (const b of results) {
+      const session = sessions.find((s) => s.id === b.sessionId);
+      if (!session) continue;
+      await createAuditLog({
+        userId: user.userId,
+        locationId: session.locationId,
+        action: 'booking.created',
+        resourceType: 'booking',
+        resourceId: b.id,
+        changes: {
+          sessionTitle: session.title,
+          creditsUsed: b.creditsUsed,
+          batch: true,
+        },
+      });
+    }
 
     // Send batch confirmation notification
     const sessionTitles = newSessionIds.map((id: string) => {
