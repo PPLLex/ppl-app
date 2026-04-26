@@ -137,6 +137,7 @@ function RegisterForm() {
   const stepParam = searchParams.get('step');
   const paymentStatus = searchParams.get('payment');
   const refParam = searchParams.get('ref');
+  const promoParam = searchParams.get('promo');
 
   // Capture ?ref=CODE referral code into localStorage so it survives
   // OAuth round trips, Stripe checkout redirects, and back/forward nav.
@@ -145,6 +146,15 @@ function RegisterForm() {
       window.localStorage.setItem('ppl_ref', refParam.toUpperCase());
     }
   }, [refParam]);
+
+  // Promo codes (#138) — same pattern as referrals. ?promo=CODE survives
+  // the multi-step register flow and ultimately gets passed to
+  // api.subscribe() at the membership step.
+  useEffect(() => {
+    if (promoParam && typeof window !== 'undefined') {
+      window.localStorage.setItem('ppl_promo', promoParam.toUpperCase());
+    }
+  }, [promoParam]);
 
   const getInitialStep = (): number => {
     if (stepParam === 'after-fee' && paymentStatus === 'success') return 4;
@@ -860,8 +870,21 @@ function RegisterForm() {
     setError('');
     setIsLoading(true);
     try {
-      const res = await api.subscribe(planId);
+      // Promo code (#138) — pulled from localStorage where the
+      // ?promo=CODE URL param was stashed at landing time. Server
+      // re-validates + records the redemption.
+      const promoCode =
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem('ppl_promo') || undefined
+          : undefined;
+      const res = await api.subscribe(planId, undefined, promoCode);
       if (res.data) {
+        // Clear the promo so a back-button retry doesn't try to redeem
+        // a code that was just consumed (the server would 400, but we'd
+        // rather avoid the confusing UX entirely).
+        if (typeof window !== 'undefined') {
+          window.localStorage.removeItem('ppl_promo');
+        }
         setCheckoutData(res.data);
         setStep(6);
       }

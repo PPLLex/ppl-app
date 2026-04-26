@@ -206,13 +206,19 @@ export async function createSubscription(params: {
    * multi-athlete families so credits + bookings route to the right kid.
    * Optional for single-athlete accounts (legacy flow still works). */
   athleteProfileId?: string;
+  /** Promo code (#138). When supplied, the matching Stripe Coupon is
+   * attached to the subscription via the `coupon` param so Stripe applies
+   * the discount on this subscription's invoices. Caller is responsible
+   * for validating the code first via lookupRedeemablePromoCode. */
+  promoCodeId?: string;
+  stripeCouponId?: string;
 }): Promise<{
   subscriptionId: string;
   clientSecret: string;
   billingDay: BillingDay;
   billingAnchorDate: Date;
 }> {
-  const { userId, planId, locationId, athleteProfileId } = params;
+  const { userId, planId, locationId, athleteProfileId, promoCodeId, stripeCouponId } = params;
 
   // Load the plan once — we need its billingCycle to decide whether to
   // anchor to Mon/Thu (weekly plans) or leave on the signup-date cycle
@@ -259,7 +265,12 @@ export async function createSubscription(params: {
       // Stamp the athlete on the Stripe side too so webhooks can
       // resolve the right kid even without a DB roundtrip.
       ...(athleteProfileId ? { ppl_athlete_profile_id: athleteProfileId } : {}),
+      ...(promoCodeId ? { ppl_promo_code_id: promoCodeId } : {}),
     },
+    // Promo code (#138) — attaching `coupon` makes Stripe apply the
+    // discount automatically on the first invoice and on every
+    // subsequent invoice (subject to the coupon's `duration` setting).
+    ...(stripeCouponId ? { coupon: stripeCouponId } : {}),
   };
 
   if (isWeekly) {

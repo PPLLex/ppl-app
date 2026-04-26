@@ -15,6 +15,10 @@ import {
   resumeMembership,
   stripe,
 } from '../services/stripeService';
+import {
+  lookupRedeemablePromoCode,
+  recordPromoRedemption,
+} from '../services/promoCodeService';
 import { config } from '../config';
 import {
   Role,
@@ -490,9 +494,13 @@ router.get('/my', authenticate, async (req: Request, res: Response, next: NextFu
 router.post('/subscribe', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
-    const { planId, athleteProfileId: rawAthleteProfileId } = req.body as {
+    const { planId, athleteProfileId: rawAthleteProfileId, promoCode: rawPromoCode } = req.body as {
       planId?: string;
       athleteProfileId?: string;
+      // Promo code (#138). Optional — the frontend passes through whatever
+      // the user typed at registration; we re-validate server-side because
+      // we never trust the client.
+      promoCode?: string;
     };
 
     if (!planId) throw ApiError.badRequest('Plan ID is required');
@@ -604,6 +612,29 @@ router.post('/subscribe', authenticate, async (req: Request, res: Response, next
       );
     }
 
+    // Promo code (#138). Look up + validate before we touch Stripe so a
+    // bad code returns a clean 4xx without an orphan subscription on
+    // Stripe's side. The lookup also enforces "not already redeemed by
+    // this user" so a failed payment doesn't double-redeem on retry.
+    let resolvedPromo: { id: string; stripeCouponId: string | null } | null = null;
+    if (rawPromoCode && typeof rawPromoCode === 'string' && rawPromoCode.trim()) {
+      const promoResult = await lookupRedeemablePromoCode(rawPromoCode, 'ppl', user.userId);
+      if (!promoResult.ok) {
+        const message =
+          promoResult.reason === 'not_found' ? "That promo code isn't valid." :
+          promoResult.reason === 'inactive' ? 'That promo code is no longer active.' :
+          promoResult.reason === 'expired' ? 'That promo code has expired.' :
+          promoResult.reason === 'maxed' ? 'That promo code has reached its redemption limit.' :
+          promoResult.reason === 'already_redeemed' ? "You've already used that code." :
+          'That promo code is not redeemable.';
+        throw ApiError.badRequest(message);
+      }
+      resolvedPromo = {
+        id: promoResult.promo.id,
+        stripeCouponId: promoResult.promo.stripeCouponId,
+      };
+    }
+
     // Create the Stripe subscription. athleteProfileId tags the resulting
     // ClientMembership so bookings + credits can scope to the right kid.
     const result = await createSubscription({
@@ -611,7 +642,26 @@ router.post('/subscribe', authenticate, async (req: Request, res: Response, next
       planId,
       locationId: homeLocationId,
       athleteProfileId: athleteProfileId ?? undefined,
+      ...(resolvedPromo
+        ? {
+            promoCodeId: resolvedPromo.id,
+            stripeCouponId: resolvedPromo.stripeCouponId ?? undefined,
+          }
+        : {}),
     });
+
+    // Record the redemption now (before payment confirms). If the payment
+    // ultimately fails the membership row stays around in PAST_DUE/SUSPENDED
+    // — the redemption is still legitimate accounting because Stripe will
+    // re-apply the coupon on the retry attempts.
+    if (resolvedPromo) {
+      await recordPromoRedemption({
+        promoCodeId: resolvedPromo.id,
+        userId: user.userId,
+        stripeSubscriptionId: result.subscriptionId,
+        stripeCouponId: resolvedPromo.stripeCouponId ?? null,
+      });
+    }
 
     await createAuditLog({
       userId: user.userId,

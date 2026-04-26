@@ -25,6 +25,7 @@ import webhookRoutes from './routes/webhooks';
 import oauthRoutes from './routes/oauth';
 import twoFactorRoutes from './routes/twoFactor';
 import emailVerificationRoutes from './routes/emailVerification';
+import promoCodeRoutes from './routes/promoCodes';
 import coachNoteRoutes from './routes/coachNotes';
 import goalRoutes from './routes/goals';
 import formRoutes from './routes/forms';
@@ -156,6 +157,9 @@ app.use('/api/auth', oauthRoutes);
 app.use('/api/auth', twoFactorRoutes);
 // Email verification (#142 / PREMIUM_AUDIT S4) — /api/auth/email/*.
 app.use('/api/auth', emailVerificationRoutes);
+// Promo codes (#138). Public lookup (/lookup) + admin CRUD all under one
+// router; the route file applies requireAdmin per-handler.
+app.use('/api/promo-codes', promoCodeRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/onboarding', onboardingRoutes);

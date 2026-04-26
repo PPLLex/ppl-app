@@ -584,6 +584,11 @@ model User {
   referralsMade     Referral[] @relation("ReferralsMade")
   referralReceived  Referral?  @relation("ReferralReceived")
 
+  // Promo codes (#138) — one row per redemption (supports the "this user
+  // redeemed promo X on date Y" lookup the admin reports want).
+  promoRedemptions PromoCodeRedemption[] @relation("PromoRedeemer")
+  authoredPromoCodes PromoCode[]         @relation("PromoCodeAuthor")
+
   @@index([homeLocationId])
   @@index([role])
   @@index([email])
@@ -936,6 +941,10 @@ model ClientMembership {
   athlete       AthleteProfile? @relation(fields: [athleteId], references: [id])
   weeklyCredits WeeklyCredit[]
   payments      Payment[]
+  // Promo codes redeemed against this membership (#138). Most memberships
+  // have zero or one — a multi-coupon stack would require Stripe-side
+  // coupon stacking which we don't support yet.
+  promoRedemptions PromoCodeRedemption[]
 
   @@index([clientId, status])
   @@index([status])
@@ -2733,4 +2742,112 @@ model WorkflowRun {
   @@index([status, resumeAt])
   @@index([contextType, contextId])
   @@map("workflow_runs")
+}
+
+// ============================================================
+// PROMO CODES (#138 / PREMIUM_AUDIT)
+// ============================================================
+//
+// Admin-managed promo codes that mirror to Stripe as Coupon objects so
+// the discount actually applies inside Stripe-hosted billing surfaces too.
+// Two discount shapes:
+//   - PERCENT_OFF: percent 1-100 (matches Stripe "percent_off")
+//   - AMOUNT_OFF: amountOffCents in USD cents (matches Stripe "amount_off")
+//
+// Duration mirrors Stripe's coupon-duration enum:
+//   - ONCE: applies to first invoice only
+//   - REPEATING: applies for `durationInMonths` months
+//   - FOREVER: applies for the lifetime of the subscription
+//
+// Lifecycle: code is created → mirrored to Stripe (stripeCouponId stored)
+// → optionally archived (isActive=false) without deletion so historical
+// redemptions stay attributable. Stripe coupons CANNOT be deleted once
+// referenced by a subscription, so we never hard-delete promos either.
+
+enum PromoCodeDiscountType {
+  PERCENT_OFF
+  AMOUNT_OFF
+}
+
+enum PromoCodeDuration {
+  ONCE
+  REPEATING
+  FOREVER
+}
+
+model PromoCode {
+  id             String   @id @default(uuid())
+  organizationId String   @default("ppl")
+
+  // Human-typed code, uppercase. Unique per organization so two orgs can
+  // both use SUMMER2026 independently. Validated server-side to A-Z0-9-_.
+  code String
+
+  // Internal label for admin reports — "Summer 2026 youth promo".
+  label String
+
+  discountType    PromoCodeDiscountType
+  // For PERCENT_OFF: 1-100. For AMOUNT_OFF: null.
+  percentOff      Int?
+  // For AMOUNT_OFF: positive cents. For PERCENT_OFF: null.
+  amountOffCents  Int?
+
+  duration          PromoCodeDuration
+  // Required only when duration=REPEATING. 1-24.
+  durationInMonths  Int?
+
+  // Optional cap on global redemptions. Null = unlimited.
+  maxRedemptions Int?
+  redemptionCount Int @default(0)
+
+  // Optional active window. expiresAt is hard — past expiry, code rejects.
+  expiresAt DateTime?
+
+  // Soft toggle — flipping isActive=false hides the code from /apply
+  // without deleting historical redemptions.
+  isActive Boolean @default(true)
+
+  // Stripe mirror. Created when the row is first written; null only in
+  // the (vanishingly rare) case where the Stripe API call failed and we
+  // surfaced an error to the admin instead of persisting.
+  stripeCouponId String? @unique
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy   User?                 @relation("PromoCodeAuthor", fields: [createdById], references: [id])
+  redemptions PromoCodeRedemption[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, isActive])
+  @@index([code])
+  @@map("promo_codes")
+}
+
+model PromoCodeRedemption {
+  id          String   @id @default(uuid())
+  promoCodeId String
+  userId      String
+
+  // Membership / subscription this redemption was attached to. Null is
+  // legal for redemptions captured at registration time before the
+  // subscription row exists yet.
+  membershipId String?
+
+  // Stripe IDs let us trace a discount back through the Stripe dashboard
+  // without joining payments. Both nullable for the same reason as above.
+  stripeSubscriptionId String?
+  stripeCouponId       String?
+
+  redeemedAt DateTime @default(now())
+
+  promoCode PromoCode         @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  user      User              @relation("PromoRedeemer", fields: [userId], references: [id], onDelete: Cascade)
+  membership ClientMembership? @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+
+  @@index([promoCodeId])
+  @@index([userId])
+  @@index([membershipId])
+  @@map("promo_code_redemptions")
 }

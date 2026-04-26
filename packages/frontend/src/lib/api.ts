@@ -160,6 +160,100 @@ class ApiClient {
     }>('/auth/email/verification-status');
   }
 
+  // ============================================================
+  // Promo codes (#138)
+  // ============================================================
+
+  /** Public lookup. `valid:false` returns 200 with a structured reason
+   * so the public form can distinguish "bad code" from "network error". */
+  async lookupPromoCode(params: { code: string; planId?: string }) {
+    const q = new URLSearchParams();
+    q.set('code', params.code);
+    if (params.planId) q.set('planId', params.planId);
+    return this.request<
+      | {
+          valid: true;
+          code: string;
+          label: string;
+          discountType: 'PERCENT_OFF' | 'AMOUNT_OFF';
+          percentOff: number | null;
+          amountOffCents: number | null;
+          duration: 'ONCE' | 'REPEATING' | 'FOREVER';
+          durationInMonths: number | null;
+          expiresAt: string | null;
+          discount: {
+            basePriceCents: number;
+            discountCents: number;
+            finalCents: number;
+          } | null;
+        }
+      | { valid: false; reason: string; message: string }
+    >(`/promo-codes/lookup?${q.toString()}`);
+  }
+
+  async listPromoCodes() {
+    return this.request<
+      Array<{
+        id: string;
+        code: string;
+        label: string;
+        discountType: 'PERCENT_OFF' | 'AMOUNT_OFF';
+        percentOff: number | null;
+        amountOffCents: number | null;
+        duration: 'ONCE' | 'REPEATING' | 'FOREVER';
+        durationInMonths: number | null;
+        maxRedemptions: number | null;
+        redemptionCount: number;
+        expiresAt: string | null;
+        isActive: boolean;
+        stripeCouponId: string | null;
+        createdById: string | null;
+        createdAt: string;
+        createdBy: { id: string; fullName: string; email: string } | null;
+        _count: { redemptions: number };
+      }>
+    >('/promo-codes');
+  }
+
+  async createPromoCode(input: {
+    code: string;
+    label: string;
+    discountType: 'PERCENT_OFF' | 'AMOUNT_OFF';
+    percentOff?: number | null;
+    amountOffCents?: number | null;
+    duration: 'ONCE' | 'REPEATING' | 'FOREVER';
+    durationInMonths?: number | null;
+    maxRedemptions?: number | null;
+    expiresAt?: string | null;
+  }) {
+    return this.request('/promo-codes', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  async updatePromoCode(id: string, input: { label?: string; isActive?: boolean }) {
+    return this.request(`/promo-codes/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    });
+  }
+
+  async getPromoRedemptions(id: string) {
+    return this.request<
+      Array<{
+        id: string;
+        promoCodeId: string;
+        userId: string;
+        membershipId: string | null;
+        stripeSubscriptionId: string | null;
+        redeemedAt: string;
+        user: { id: string; fullName: string; email: string };
+        membership: { id: string; planId: string; status: string } | null;
+      }>
+    >(`/promo-codes/${id}/redemptions`);
+  }
+
   async register(data: RegisterData) {
     return this.request<{ token: string; user: User }>('/auth/register', {
       method: 'POST',
@@ -412,10 +506,14 @@ class ApiClient {
     return this.request<MembershipDetail | null>(`/memberships/my${q}`);
   }
 
-  async subscribe(planId: string, athleteProfileId?: string) {
+  async subscribe(planId: string, athleteProfileId?: string, promoCode?: string) {
     return this.request<SubscribeResult>('/memberships/subscribe', {
       method: 'POST',
-      body: JSON.stringify({ planId, ...(athleteProfileId ? { athleteProfileId } : {}) }),
+      body: JSON.stringify({
+        planId,
+        ...(athleteProfileId ? { athleteProfileId } : {}),
+        ...(promoCode ? { promoCode } : {}),
+      }),
     });
   }
 
