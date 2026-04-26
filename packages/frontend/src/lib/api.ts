@@ -630,6 +630,48 @@ class ApiClient {
   }
 
   /**
+   * Lead-source ROI: per-source funnel breakdown — total leads in
+   * period, conversions, lost, in-progress, conversion rate, avg days
+   * to convert.
+   */
+  async getLeadSourceRoi(params: { period?: '7d' | '30d' | '90d' | '1y' } = {}) {
+    const qs = new URLSearchParams();
+    if (params.period) qs.set('period', params.period);
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+    return this.request<{
+      period: string;
+      sources: Array<{
+        source: string;
+        total: number;
+        converted: number;
+        lost: number;
+        inProgress: number;
+        conversionRate: number;
+        avgDaysToConvert: number | null;
+      }>;
+      totals: { leads: number; converted: number; lost: number; inProgress: number };
+    }>(`/reports/lead-source-roi${query}`);
+  }
+
+  /**
+   * Funnel conversion: count of leads at each PipelineStage + the
+   * conversion-from-previous-stage rate. Powers the "where are we
+   * leaking?" diagnostic.
+   */
+  async getFunnelConversion(params: { period?: '7d' | '30d' | '90d' | '1y' } = {}) {
+    const qs = new URLSearchParams();
+    if (params.period) qs.set('period', params.period);
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+    return this.request<{
+      period: string;
+      stages: Array<{ stage: string; count: number; conversionFromPrev: number }>;
+      closedLost: number;
+      totalLeads: number;
+      overallConversion: number;
+    }>(`/reports/funnel-conversion${query}`);
+  }
+
+  /**
    * Coach/staff performance dashboard data. Returns one row per coach
    * with sessions led, athletes coached, completion + no-show rates over
    * the period.

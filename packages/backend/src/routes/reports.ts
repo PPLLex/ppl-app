@@ -581,6 +581,182 @@ router.get('/dashboard', async (req: Request, res: Response, next: NextFunction)
 });
 
 // ============================================================
+// CRM — LEAD-SOURCE ROI
+// ============================================================
+//
+// One row per LeadSource: total leads in period, how many converted to
+// CLOSED_WON, conversion rate, average days from creation → conversion,
+// and (when revenue data is wired) lifetime value of converted leads.
+// Powers the "which channel actually pays off" question.
+//
+router.get('/lead-source-roi', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const period = (req.query.period as string) || '30d';
+    const periodDays = period === '7d' ? 7 : period === '90d' ? 90 : period === '1y' ? 365 : 30;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - periodDays);
+
+    const leads = await prisma.lead.findMany({
+      where: { organizationId: 'ppl', createdAt: { gte: startDate } },
+      select: {
+        id: true,
+        source: true,
+        stage: true,
+        createdAt: true,
+        convertedAt: true,
+        convertedToUserId: true,
+      },
+    });
+
+    type Agg = {
+      source: string;
+      total: number;
+      converted: number;
+      lost: number;
+      inProgress: number;
+      sumConvertDays: number;
+      countConvertDays: number;
+    };
+    const map = new Map<string, Agg>();
+    for (const l of leads) {
+      let a = map.get(l.source);
+      if (!a) {
+        a = {
+          source: l.source,
+          total: 0,
+          converted: 0,
+          lost: 0,
+          inProgress: 0,
+          sumConvertDays: 0,
+          countConvertDays: 0,
+        };
+        map.set(l.source, a);
+      }
+      a.total++;
+      if (l.stage === 'CLOSED_WON') {
+        a.converted++;
+        if (l.convertedAt) {
+          const days = (l.convertedAt.getTime() - l.createdAt.getTime()) / (24 * 60 * 60 * 1000);
+          a.sumConvertDays += days;
+          a.countConvertDays++;
+        }
+      } else if (l.stage === 'CLOSED_LOST') {
+        a.lost++;
+      } else {
+        a.inProgress++;
+      }
+    }
+
+    const rows = Array.from(map.values())
+      .map((a) => ({
+        source: a.source,
+        total: a.total,
+        converted: a.converted,
+        lost: a.lost,
+        inProgress: a.inProgress,
+        conversionRate: a.total > 0 ? a.converted / a.total : 0,
+        avgDaysToConvert:
+          a.countConvertDays > 0 ? a.sumConvertDays / a.countConvertDays : null,
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    res.json({
+      success: true,
+      data: {
+        period,
+        periodDays,
+        startDate: startDate.toISOString(),
+        sources: rows,
+        totals: {
+          leads: leads.length,
+          converted: rows.reduce((s, r) => s + r.converted, 0),
+          lost: rows.reduce((s, r) => s + r.lost, 0),
+          inProgress: rows.reduce((s, r) => s + r.inProgress, 0),
+        },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ============================================================
+// CRM — FUNNEL CONVERSION
+// ============================================================
+//
+// Returns the count of leads currently at each PipelineStage and the
+// "conversion rate from prior stage" — assumes a canonical forward-only
+// progression NEW → CONTACTED → QUALIFIED → TRIAL_SCHEDULED →
+// TRIAL_COMPLETED → PROPOSAL → CLOSED_WON. Closed-lost is reported
+// separately as the "where leakage happens" tally.
+//
+const FORWARD_STAGES: string[] = [
+  'NEW',
+  'CONTACTED',
+  'QUALIFIED',
+  'TRIAL_SCHEDULED',
+  'TRIAL_COMPLETED',
+  'PROPOSAL',
+  'CLOSED_WON',
+];
+
+router.get('/funnel-conversion', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const period = (req.query.period as string) || '90d';
+    const periodDays = period === '7d' ? 7 : period === '30d' ? 30 : period === '1y' ? 365 : 90;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - periodDays);
+
+    const leads = await prisma.lead.findMany({
+      where: { organizationId: 'ppl', createdAt: { gte: startDate } },
+      select: { stage: true },
+    });
+
+    // For each forward stage, count leads that have REACHED that stage or
+    // beyond. Index in FORWARD_STAGES = depth.
+    const counts: Record<string, number> = {};
+    for (const s of FORWARD_STAGES) counts[s] = 0;
+    counts['CLOSED_LOST'] = 0;
+
+    for (const l of leads) {
+      if (l.stage === 'CLOSED_LOST') {
+        counts['CLOSED_LOST']++;
+        continue;
+      }
+      const idx = FORWARD_STAGES.indexOf(l.stage);
+      if (idx === -1) continue;
+      // Bump every stage from index 0 → idx — a lead that's at TRIAL_COMPLETED
+      // counts as having passed NEW, CONTACTED, QUALIFIED, TRIAL_SCHEDULED too.
+      for (let i = 0; i <= idx; i++) counts[FORWARD_STAGES[i]]++;
+    }
+
+    const stages = FORWARD_STAGES.map((stage, i) => {
+      const count = counts[stage];
+      const prev = i > 0 ? counts[FORWARD_STAGES[i - 1]] : counts[FORWARD_STAGES[0]];
+      const conversionFromPrev = i === 0 ? 1 : prev > 0 ? count / prev : 0;
+      return { stage, count, conversionFromPrev };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        period,
+        periodDays,
+        startDate: startDate.toISOString(),
+        stages,
+        closedLost: counts['CLOSED_LOST'],
+        totalLeads: leads.length,
+        // Top-of-funnel → closed-won overall.
+        overallConversion:
+          counts['NEW'] > 0 ? counts['CLOSED_WON'] / counts['NEW'] : 0,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ============================================================
 // COACH / STAFF PERFORMANCE REPORT
 // ============================================================
 //

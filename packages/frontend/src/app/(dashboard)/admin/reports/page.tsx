@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, RevenueStats, BookingStats, MemberStats } from '@/lib/api';
 
-type ReportTab = 'revenue' | 'bookings' | 'members' | 'staff';
+type ReportTab = 'revenue' | 'bookings' | 'members' | 'staff' | 'leadSource' | 'funnel';
 type Period = '7d' | '30d' | '90d' | '1y';
 
 export default function AdminReportsPage() {
@@ -15,6 +15,8 @@ export default function AdminReportsPage() {
     { key: 'bookings', label: 'Bookings' },
     { key: 'members', label: 'Members' },
     { key: 'staff', label: 'Staff Performance' },
+    { key: 'leadSource', label: 'Lead Source ROI' },
+    { key: 'funnel', label: 'Funnel' },
   ];
 
   const periods: { key: Period; label: string }[] = [
@@ -70,6 +72,152 @@ export default function AdminReportsPage() {
       {activeTab === 'bookings' && <BookingsReport period={period} />}
       {activeTab === 'members' && <MembersReport />}
       {activeTab === 'staff' && <StaffPerformanceReport period={period} />}
+      {activeTab === 'leadSource' && <LeadSourceReport period={period} />}
+      {activeTab === 'funnel' && <FunnelReport period={period} />}
+    </div>
+  );
+}
+
+/* ─── Lead Source ROI Report ─── */
+function LeadSourceReport({ period }: { period: Period }) {
+  const [data, setData] = useState<Awaited<ReturnType<typeof api.getLeadSourceRoi>>['data'] | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await api.getLeadSourceRoi({ period });
+      setData(res.data ?? null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [period]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (isLoading) return <div className="ppl-card animate-pulse h-48" />;
+  if (!data || data.sources.length === 0) {
+    return <div className="ppl-card text-center py-12"><p className="text-muted">No lead activity in this period.</p></div>;
+  }
+  const fmtPct = (v: number) => `${(v * 100).toFixed(1)}%`;
+  const fmtDays = (v: number | null) => (v == null ? '—' : `${v.toFixed(1)} days`);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <StatCard label="Total Leads" value={String(data.totals.leads)} />
+        <StatCard label="Converted" value={String(data.totals.converted)} accent />
+        <StatCard label="Lost" value={String(data.totals.lost)} />
+        <StatCard label="In Progress" value={String(data.totals.inProgress)} />
+      </div>
+
+      <div className="ppl-card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left border-b border-border">
+                <th className="px-3 py-2 font-semibold text-foreground">Source</th>
+                <th className="px-3 py-2 font-semibold text-foreground text-right">Leads</th>
+                <th className="px-3 py-2 font-semibold text-foreground text-right">Won</th>
+                <th className="px-3 py-2 font-semibold text-foreground text-right">Lost</th>
+                <th className="px-3 py-2 font-semibold text-foreground text-right">In Progress</th>
+                <th className="px-3 py-2 font-semibold text-foreground text-right">Conversion</th>
+                <th className="px-3 py-2 font-semibold text-foreground text-right">Avg Days</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.sources.map((s) => (
+                <tr key={s.source} className="border-b border-border last:border-0">
+                  <td className="px-3 py-2.5 text-foreground">{s.source}</td>
+                  <td className="px-3 py-2.5 text-right text-foreground">{s.total}</td>
+                  <td className="px-3 py-2.5 text-right text-accent-text">{s.converted}</td>
+                  <td className="px-3 py-2.5 text-right text-muted">{s.lost}</td>
+                  <td className="px-3 py-2.5 text-right text-muted">{s.inProgress}</td>
+                  <td className="px-3 py-2.5 text-right">
+                    <span className={s.conversionRate >= 0.2 ? 'text-accent-text' : 'text-foreground'}>
+                      {fmtPct(s.conversionRate)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-right text-muted">{fmtDays(s.avgDaysToConvert)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Funnel Conversion Report ─── */
+function FunnelReport({ period }: { period: Period }) {
+  const [data, setData] = useState<Awaited<ReturnType<typeof api.getFunnelConversion>>['data'] | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await api.getFunnelConversion({ period });
+      setData(res.data ?? null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [period]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (isLoading) return <div className="ppl-card animate-pulse h-64" />;
+  if (!data || data.stages.length === 0) {
+    return <div className="ppl-card text-center py-12"><p className="text-muted">No leads in this period.</p></div>;
+  }
+
+  const top = data.stages[0]?.count ?? 1;
+  const fmtPct = (v: number) => `${(v * 100).toFixed(1)}%`;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <StatCard label="Total Leads" value={String(data.totalLeads)} />
+        <StatCard label="Closed Won" value={String(data.stages.find(s => s.stage === 'CLOSED_WON')?.count ?? 0)} accent />
+        <StatCard label="Overall Conversion" value={fmtPct(data.overallConversion)} />
+      </div>
+
+      <div className="ppl-card">
+        <p className="text-xs font-semibold text-foreground uppercase tracking-wider mb-3">Funnel</p>
+        <div className="space-y-2">
+          {data.stages.map((s, i) => {
+            const widthPct = top > 0 ? (s.count / top) * 100 : 0;
+            return (
+              <div key={s.stage} className="flex items-center gap-3">
+                <div className="w-44 text-xs text-foreground font-medium truncate">{s.stage.replace(/_/g, ' ')}</div>
+                <div className="flex-1 h-7 bg-background rounded-md overflow-hidden relative">
+                  <div className="h-full bg-highlight/60 transition-all" style={{ width: `${Math.max(widthPct, 1)}%` }} />
+                  <span className="absolute inset-0 flex items-center px-3 text-xs text-foreground font-semibold">
+                    {s.count}
+                  </span>
+                </div>
+                {i > 0 && (
+                  <div className={`w-20 text-right text-xs ${s.conversionFromPrev >= 0.5 ? 'text-accent-text' : s.conversionFromPrev >= 0.2 ? 'text-muted' : 'text-red-400'}`}>
+                    {fmtPct(s.conversionFromPrev)}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <p className="text-[11px] text-muted mt-3">
+          Bar width = lead count at that stage (or beyond). Right column = % that progressed from the prior stage.
+          Look for the biggest drop — that's where to focus.
+        </p>
+      </div>
+
+      {data.closedLost > 0 && (
+        <div className="ppl-card">
+          <p className="text-xs text-muted">
+            <span className="text-red-400 font-semibold">{data.closedLost}</span> lead{data.closedLost === 1 ? '' : 's'} marked Closed-Lost in this period — review their lostReason field on individual leads to find the common theme.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
