@@ -121,6 +121,7 @@ const adminNav: NavItem[] = [
   { label: 'Workflows', href: '/admin/workflows', icon: <Icons.Settings /> },
   { label: 'Tags', href: '/admin/tags', icon: <Icons.Target /> },
   { label: 'Custom Fields', href: '/admin/custom-fields', icon: <Icons.Pencil /> },
+  { label: 'Forms', href: '/admin/forms', icon: <Icons.Pencil /> },
   { label: 'Outbound Webhooks', href: '/admin/webhooks', icon: <Icons.Settings /> },
   { label: 'Swift Import', href: '/admin/import', icon: <Icons.Users /> },
   { label: 'Educational Resources', href: '/admin/educational-resources', icon: <Icons.Pencil /> },

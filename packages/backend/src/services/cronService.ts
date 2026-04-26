@@ -6,6 +6,7 @@ import { recomputeAllLeadScores, recomputeAllChurnRisks } from './scoringService
 import { pollGoogleReviews } from './reviewMonitor';
 import { resumeDueWorkflowRuns } from './workflowEngine';
 import { sendDailyAdminDigest } from './dailyDigest';
+import { dispatchScheduledForms } from './scheduledFormSender';
 
 interface CronJob {
   name: string;
@@ -94,6 +95,14 @@ const jobs: CronJob[] = [
     name: 'Workflow Worker (resume WAITING runs)',
     intervalMs: 60 * 1000, // every minute — WAIT step granularity
     handler: resumeDueWorkflowRuns,
+    enabled: true,
+  },
+  {
+    // Scheduled form sender — fires hourly, picks up bookings/leads/
+    // memberships whose trigger window has just elapsed (#133)
+    name: 'Scheduled Marketing Form Sender',
+    intervalMs: 60 * 60 * 1000,
+    handler: dispatchScheduledForms,
     enabled: true,
   },
   {

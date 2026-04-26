@@ -539,6 +539,10 @@ model User {
   createdWebhooks  Webhook[]  @relation("WebhookCreatedBy")
   hostedConsultations ConsultationSlot[] @relation("ConsultationHost")
 
+  // Marketing forms (#133)
+  createdMarketingForms     MarketingForm[]           @relation("MarketingFormsCreated")
+  marketingFormSubmissions  MarketingFormSubmission[] @relation("MarketingFormSubmissionUser")
+
   @@index([homeLocationId])
   @@index([role])
   @@index([email])
@@ -1221,6 +1225,87 @@ model FormResponse {
 }
 
 // ============================================================
+// MARKETING FORMS — public-facing forms (lead intake, surveys,
+// post-session feedback). Distinct from FormTemplate, which is
+// internal-only athlete questionnaires.
+//
+// Each form has a public slug (formspublic.pitchingperformancelab.com/f/<slug>),
+// can collect anonymous OR identified responses, and optionally
+// scheduled delivery — e.g. a feedback form auto-emailed 24h after
+// any completed booking. Schedule semantics handled by workflow engine.
+// ============================================================
+
+enum MarketingFormTrigger {
+  MANUAL                 // sent by admin via "send form" button
+  POST_BOOKING_COMPLETE  // after a booking ends successfully (delayHours)
+  POST_FIRST_SESSION     // after the athlete's first-ever session
+  POST_MEMBERSHIP_START  // X hours after subscription activated
+  POST_LEAD_CREATED      // X hours after lead row created
+}
+
+model MarketingForm {
+  id              String   @id @default(uuid())
+  organizationId  String   @default("ppl")
+  slug            String // unique within org — used for public URL
+  name            String
+  description     String?
+  fields          Json // [{key, label, type, required, options?, placeholder?, helpText?}]
+  submitMessage   String?
+  redirectUrl     String?
+  isActive        Boolean  @default(true)
+  isPublic        Boolean  @default(true) // false → only authenticated users can submit
+  collectEmail    Boolean  @default(true)
+  collectName     Boolean  @default(true)
+  // Optional scheduled delivery config — when set, this form is
+  // automatically emailed to the right audience on the trigger.
+  trigger         MarketingFormTrigger @default(MANUAL)
+  triggerDelayHours Int    @default(24)
+  // If set, automatically converts submission into a Lead row
+  autoCreateLead  Boolean  @default(false)
+  // If set, automatically tags the submitter with these tag IDs
+  autoTagIds      String[]
+  createdById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  createdBy    User?                       @relation("MarketingFormsCreated", fields: [createdById], references: [id])
+  submissions  MarketingFormSubmission[]
+
+  @@unique([organizationId, slug])
+  @@index([trigger, isActive])
+  @@map("marketing_forms")
+}
+
+model MarketingFormSubmission {
+  id              String   @id @default(uuid())
+  formId          String
+  // What did they submit? Full key→value map of answers.
+  payload         Json
+  // Identity (any of these may be null for fully-anonymous submissions)
+  submitterEmail  String?
+  submitterName   String?
+  submitterPhone  String?
+  // Linked entities — set when we can match the email to an existing
+  // Lead/User, OR when autoCreateLead spawns a new lead row.
+  leadId          String?
+  userId          String?
+  ipAddress       String?
+  userAgent       String?
+  source          String? // "public", "scheduled-email", "admin-send", etc.
+  submittedAt     DateTime @default(now())
+
+  form MarketingForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+  lead Lead?         @relation("MarketingFormSubmissionLead", fields: [leadId], references: [id])
+  user User?         @relation("MarketingFormSubmissionUser", fields: [userId], references: [id])
+
+  @@index([formId, submittedAt])
+  @@index([submitterEmail])
+  @@index([leadId])
+  @@index([userId])
+  @@map("marketing_form_submissions")
+}
+
+// ============================================================
 // PROGRAMMING / WORKOUT BUILDER
 // ============================================================
 
@@ -1833,6 +1918,9 @@ model Lead {
 
   // Consultation calls this lead has booked
   consultationBookings ConsultationBooking[]
+
+  // Marketing form submissions linked back to this lead (#133)
+  marketingFormSubmissions MarketingFormSubmission[] @relation("MarketingFormSubmissionLead")
 
   @@unique([organizationId, email])
   @@index([stage, ownerUserId])

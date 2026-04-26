@@ -1085,6 +1085,99 @@ class ApiClient {
     );
   }
 
+  // ============================================================
+  // MARKETING FORMS (#133)
+  // ============================================================
+  async listMarketingForms() {
+    return this.request<Array<{
+      id: string;
+      slug: string;
+      name: string;
+      description: string | null;
+      isActive: boolean;
+      isPublic: boolean;
+      trigger: string;
+      triggerDelayHours: number;
+      autoCreateLead: boolean;
+      createdAt: string;
+      updatedAt: string;
+      _count?: { submissions: number };
+    }>>(`/marketing-forms`);
+  }
+
+  async getMarketingForm(id: string) {
+    return this.request<{
+      id: string;
+      slug: string;
+      name: string;
+      description: string | null;
+      fields: Array<{ key: string; label: string; type: string; required?: boolean; options?: string[]; placeholder?: string; helpText?: string }>;
+      submitMessage: string | null;
+      redirectUrl: string | null;
+      isActive: boolean;
+      isPublic: boolean;
+      collectEmail: boolean;
+      collectName: boolean;
+      trigger: string;
+      triggerDelayHours: number;
+      autoCreateLead: boolean;
+      autoTagIds: string[];
+      _count?: { submissions: number };
+    }>(`/marketing-forms/${encodeURIComponent(id)}`);
+  }
+
+  async createMarketingForm(data: {
+    name: string;
+    slug?: string;
+    description?: string;
+    fields: Array<{ key: string; label: string; type: string; required?: boolean; options?: string[]; placeholder?: string; helpText?: string }>;
+    submitMessage?: string;
+    redirectUrl?: string;
+    collectEmail?: boolean;
+    collectName?: boolean;
+    isPublic?: boolean;
+    trigger?: string;
+    triggerDelayHours?: number;
+    autoCreateLead?: boolean;
+    autoTagIds?: string[];
+  }) {
+    return this.request<{ id: string; slug: string }>(`/marketing-forms`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateMarketingForm(id: string, patch: Record<string, unknown>) {
+    return this.request(`/marketing-forms/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  }
+
+  async deleteMarketingForm(id: string) {
+    return this.request(`/marketing-forms/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  async listMarketingFormSubmissions(id: string) {
+    return this.request<Array<{
+      id: string;
+      payload: Record<string, unknown>;
+      submitterEmail: string | null;
+      submitterName: string | null;
+      submitterPhone: string | null;
+      submittedAt: string;
+      lead: { id: string; firstName: string; lastName: string; email: string } | null;
+      user: { id: string; fullName: string; email: string } | null;
+    }>>(`/marketing-forms/${encodeURIComponent(id)}/submissions`);
+  }
+
+  async sendMarketingForm(id: string, recipients: Array<{ email: string; name?: string }>) {
+    return this.request<{ sent: string[]; failed: string[]; formUrl: string }>(
+      `/marketing-forms/${encodeURIComponent(id)}/send`,
+      { method: 'POST', body: JSON.stringify({ recipients }) }
+    );
+  }
+
   /**
    * Lead-source ROI: per-source funnel breakdown — total leads in
    * period, conversions, lost, in-progress, conversion rate, avg days

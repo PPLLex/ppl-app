@@ -48,6 +48,7 @@ import tagRoutes from './routes/tags';
 import customFieldRoutes from './routes/customFields';
 import workflowRoutes from './routes/workflows';
 import outboundWebhookRoutes from './routes/webhooks.outbound';
+import marketingFormRoutes from './routes/marketingForms';
 import consultationRoutes from './routes/consultations';
 import twilioRoutes from './routes/twilio';
 import reviewRoutes from './routes/reviews';
@@ -179,6 +180,8 @@ app.use('/api/custom-fields', customFieldRoutes);
 app.use('/api/workflows', workflowRoutes);
 // Outbound webhooks — admin-configured fire-on-event subscribers (Zapier-style)
 app.use('/api/outbound-webhooks', outboundWebhookRoutes);
+// Marketing forms — public form builder + submissions (#133)
+app.use('/api/marketing-forms', marketingFormRoutes);
 // Consultation calendar — public booking + admin slot management
 app.use('/api/consultations', consultationRoutes);
 // Twilio webhooks — inbound voice + SMS + missed-call text-back (#8, #9, #42)
