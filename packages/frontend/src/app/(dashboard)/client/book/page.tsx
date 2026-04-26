@@ -516,8 +516,10 @@ export default function ClientBookPage() {
         </div>
       )}
 
-      {/* ── DATE PICKER ── */}
-      <div className="grid grid-cols-7 gap-2 mb-6">
+      {/* ── DATE PICKER ──
+          gap-1 on mobile to keep all 7 day buttons fitting on a 360px
+          viewport without horizontal scroll; widens to gap-2 from sm: up. */}
+      <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-6">
         {weekDays.map((day, i) => {
           const isToday = day.toDateString() === new Date().toDateString();
           const isSelected = selectedDate?.toDateString() === day.toDateString();
@@ -532,7 +534,7 @@ export default function ClientBookPage() {
                 setMessage(null);
               }}
               disabled={isPast}
-              className={`p-3 rounded-xl text-center transition-all ${
+              className={`p-2 sm:p-3 rounded-xl text-center transition-all ${
                 isSelected
                   ? 'ppl-gradient text-white shadow-lg scale-105'
                   : isPast

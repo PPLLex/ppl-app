@@ -286,9 +286,12 @@ export default function AdminSchedulePage() {
         )}
       </div>
 
-      {/* Weekly Calendar Grid */}
+      {/* Weekly Calendar Grid — wrapped in horizontal scroll for mobile.
+          Below 700px the 7-day grid would compress unusably; instead we
+          let it overflow with a min-width so phones can pan horizontally. */}
       <div className="ppl-card p-0 overflow-hidden">
-        <div className="grid grid-cols-7 border-b border-border">
+        <div className="overflow-x-auto">
+        <div className="grid grid-cols-7 border-b border-border min-w-[700px]">
           {weekDays.map((day, i) => {
             const { dayName, dayNum, isToday } = formatDayHeader(day);
             return (
@@ -311,7 +314,7 @@ export default function AdminSchedulePage() {
           })}
         </div>
 
-        <div className="grid grid-cols-7 min-h-[400px]">
+        <div className="grid grid-cols-7 min-h-[400px] min-w-[700px]">
           {sessionsByDay.map((daySessions, i) => (
             <div
               key={i}
@@ -376,6 +379,7 @@ export default function AdminSchedulePage() {
               )}
             </div>
           ))}
+        </div>
         </div>
       </div>
 
@@ -591,9 +595,11 @@ function ScheduleTemplatesView({
         </div>
       )}
 
-      {/* Weekly Template Grid */}
+      {/* Weekly Template Grid — same horizontal-scroll wrapping as the
+          Sessions grid above so it stays usable on mobile. */}
       <div className="ppl-card p-0 overflow-hidden">
-        <div className="grid grid-cols-7 border-b border-border">
+        <div className="overflow-x-auto">
+        <div className="grid grid-cols-7 border-b border-border min-w-[700px]">
           {DAY_NAMES_SHORT.map((name, i) => (
             <div key={i} className="p-3 text-center border-r border-border last:border-r-0">
               <p className="text-xs text-muted uppercase">{name}</p>
@@ -604,7 +610,7 @@ function ScheduleTemplatesView({
           ))}
         </div>
 
-        <div className="grid grid-cols-7 min-h-[350px]">
+        <div className="grid grid-cols-7 min-h-[350px] min-w-[700px]">
           {templatesByDay.map((dayTemplates, i) => (
             <div key={i} className="border-r border-border last:border-r-0 p-2 space-y-2">
               {isLoading ? (
@@ -640,6 +646,7 @@ function ScheduleTemplatesView({
               )}
             </div>
           ))}
+        </div>
         </div>
       </div>
 
