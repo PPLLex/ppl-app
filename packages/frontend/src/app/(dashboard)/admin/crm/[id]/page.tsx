@@ -20,6 +20,7 @@ import { api } from '@/lib/api';
 import { TagPicker } from '@/components/TagPicker';
 import { CustomFieldsPanel } from '@/components/CustomFieldsPanel';
 import { EntityWorkflowRuns } from '@/components/EntityWorkflowRuns';
+import { useAutoSaveDraft, AutoSaveIndicator } from '@/hooks/useAutoSaveDraft';
 
 type Lead = NonNullable<Awaited<ReturnType<typeof api.getLead>>['data']>;
 type Activity = Lead['activities'][number];
@@ -65,6 +66,33 @@ export default function LeadDetailPage() {
   const [notesDraft, setNotesDraft] = useState('');
   const [followUpDraft, setFollowUpDraft] = useState('');
 
+  // Auto-save (#U7) — both the long lead-notes textarea and the
+  // add-activity composer get debounced localStorage persistence so
+  // an accidental tab close doesn't lose work. Keys are scoped per-lead.
+  const notesAutoSave = useAutoSaveDraft<string>(
+    id ? `lead-notes-draft-${id}` : 'lead-notes-draft-_',
+    notesDraft,
+    /* enabled */ editingNotes
+  );
+  const activityAutoSave = useAutoSaveDraft<{ type: string; body: string }>(
+    id ? `lead-activity-draft-${id}` : 'lead-activity-draft-_',
+    { type: newActivityType, body: newActivityBody },
+    /* enabled */ newActivityBody.length > 0
+  );
+
+  // Hydrate any saved drafts on mount.
+  useEffect(() => {
+    if (!id) return;
+    const a = activityAutoSave.hydrateDraft();
+    if (a && a.body && newActivityBody.length === 0) {
+      setNewActivityType(a.type || 'NOTE');
+      setNewActivityBody(a.body);
+    }
+    // Notes draft hydration happens after `load()` populates the canonical
+    // saved value into setNotesDraft — see the load() useCallback below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
   const load = useCallback(async () => {
     if (!id) return;
     try {
@@ -109,6 +137,9 @@ export default function LeadDetailPage() {
         content: newActivityBody.trim(),
       });
       setNewActivityBody('');
+      // Discard the auto-save draft on successful submit so we don't
+      // re-prompt the user with what they just sent.
+      activityAutoSave.discardDraft();
       toast.success('Activity logged');
       await load();
     } catch (err) {
@@ -122,6 +153,7 @@ export default function LeadDetailPage() {
     if (!lead) return;
     try {
       await api.updateLead(lead.id, { notes: notesDraft });
+      notesAutoSave.discardDraft();
       toast.success('Notes saved');
       setEditingNotes(false);
       await load();
@@ -295,17 +327,24 @@ export default function LeadDetailPage() {
               className="ppl-input w-full text-sm"
               placeholder="Free-form notes about this lead…"
             />
-            <div className="flex gap-2 mt-2">
+            <div className="flex gap-2 mt-2 items-center">
               <button onClick={onSaveNotes} className="ppl-btn ppl-btn-primary text-xs">Save</button>
               <button
                 onClick={() => {
                   setEditingNotes(false);
                   setNotesDraft(lead.notes ?? '');
+                  notesAutoSave.discardDraft();
                 }}
                 className="ppl-btn ppl-btn-secondary text-xs"
               >
                 Cancel
               </button>
+              <div className="ml-auto">
+                <AutoSaveIndicator
+                  status={notesAutoSave.status}
+                  savedAt={notesAutoSave.savedAt}
+                />
+              </div>
             </div>
           </div>
         ) : (
@@ -352,6 +391,12 @@ export default function LeadDetailPage() {
           >
             {postingActivity ? 'Saving…' : 'Log'}
           </button>
+        </div>
+        <div className="-mt-2 mb-3 flex justify-end">
+          <AutoSaveIndicator
+            status={activityAutoSave.status}
+            savedAt={activityAutoSave.savedAt}
+          />
         </div>
 
         {/* Timeline */}

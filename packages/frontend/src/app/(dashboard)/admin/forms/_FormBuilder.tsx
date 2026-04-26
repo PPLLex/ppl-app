@@ -11,8 +11,9 @@
  * receive the payload and route appropriately.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { useAutoSaveDraft, AutoSaveIndicator } from '@/hooks/useAutoSaveDraft';
 
 export interface FieldDef {
   key: string;
@@ -70,11 +71,15 @@ export function FormBuilder({
   onSave,
   saving,
   publicUrlBase,
+  // Identifier used to scope the localStorage auto-save key. Pass the
+  // form id when editing an existing form, or 'new' on the create page.
+  draftKey = 'new',
 }: {
   initial?: Partial<FormPayload> & { slug?: string };
   onSave: (payload: FormPayload) => void | Promise<void>;
   saving?: boolean;
   publicUrlBase?: string;
+  draftKey?: string;
 }) {
   const [name, setName] = useState(initial?.name ?? '');
   const [slug, setSlug] = useState(initial?.slug ?? '');
@@ -88,6 +93,52 @@ export function FormBuilder({
   const [trigger, setTrigger] = useState(initial?.trigger ?? 'MANUAL');
   const [triggerDelayHours, setTriggerDelayHours] = useState(initial?.triggerDelayHours ?? 24);
   const [autoCreateLead, setAutoCreateLead] = useState(initial?.autoCreateLead ?? false);
+
+  // Auto-save (#U7). Persist the entire builder state under a per-form
+  // key so a tab close doesn't lose 30+ minutes of building. Hydrates
+  // ONCE on mount if there's no `initial` (new-form path); when editing
+  // an existing form we trust the server-loaded data and skip hydration.
+  const draftPayload = {
+    name,
+    slug,
+    description,
+    fields,
+    submitMessage,
+    redirectUrl,
+    collectEmail,
+    collectName,
+    isPublic,
+    trigger,
+    triggerDelayHours,
+    autoCreateLead,
+  };
+  const draft = useAutoSaveDraft<typeof draftPayload>(
+    `form-builder-draft-${draftKey}`,
+    draftPayload,
+    /* enabled */ true
+  );
+
+  useEffect(() => {
+    // Only auto-restore on the NEW path (initial === undefined). On the
+    // edit path the server-side payload wins.
+    if (initial) return;
+    const restored = draft.hydrateDraft();
+    if (!restored) return;
+    if (typeof restored.name === 'string') setName(restored.name);
+    if (typeof restored.slug === 'string') setSlug(restored.slug);
+    if (typeof restored.description === 'string') setDescription(restored.description);
+    if (Array.isArray(restored.fields)) setFields(restored.fields);
+    if (typeof restored.submitMessage === 'string') setSubmitMessage(restored.submitMessage);
+    if (typeof restored.redirectUrl === 'string') setRedirectUrl(restored.redirectUrl);
+    if (typeof restored.collectEmail === 'boolean') setCollectEmail(restored.collectEmail);
+    if (typeof restored.collectName === 'boolean') setCollectName(restored.collectName);
+    if (typeof restored.isPublic === 'boolean') setIsPublic(restored.isPublic);
+    if (typeof restored.trigger === 'string') setTrigger(restored.trigger);
+    if (typeof restored.triggerDelayHours === 'number') setTriggerDelayHours(restored.triggerDelayHours);
+    if (typeof restored.autoCreateLead === 'boolean') setAutoCreateLead(restored.autoCreateLead);
+    toast.info('Restored your in-progress draft');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const addField = () => {
     setFields((f) => [
@@ -151,6 +202,9 @@ export function FormBuilder({
       autoCreateLead,
       autoTagIds: [],
     };
+    // Discard the auto-save draft on a clean submit so the next visit
+    // doesn't restore yesterday's already-saved state.
+    draft.discardDraft();
     void onSave(payload);
   };
 
@@ -301,7 +355,8 @@ export function FormBuilder({
         />
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex justify-end items-center gap-3">
+        <AutoSaveIndicator status={draft.status} savedAt={draft.savedAt} />
         <button type="submit" disabled={saving} className="ppl-btn ppl-btn-primary">
           {saving ? 'Saving…' : 'Save Form'}
         </button>

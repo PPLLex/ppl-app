@@ -35,7 +35,7 @@ export default function NewFormPage() {
         </Link>
         <h1 className="text-2xl font-bold text-foreground mt-2">New Form</h1>
       </div>
-      <FormBuilder onSave={handleSave} saving={saving} publicUrlBase={baseUrl} />
+      <FormBuilder onSave={handleSave} saving={saving} publicUrlBase={baseUrl} draftKey="new" />
     </div>
   );
 }

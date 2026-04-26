@@ -142,6 +142,7 @@ export default function FormDetailPage() {
           onSave={handleSave}
           saving={saving}
           publicUrlBase={baseUrl}
+          draftKey={form.id}
         />
       )}
 
