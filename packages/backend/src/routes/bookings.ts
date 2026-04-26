@@ -889,47 +889,6 @@ router.post('/batch', authenticate, async (req: Request, res: Response, next: Ne
       throw ApiError.forbidden('You need an active membership to book sessions.');
     }
 
-    // Check credits up front for limited plans
-    let creditsAvailable = Infinity;
-    let weeklyCredit: { id: string; creditsTotal: number; creditsUsed: number } | null = null;
-
-    if (membership.plan.sessionsPerWeek !== null) {
-      const weekStart = getWeekStart(new Date(), membership.billingDay);
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekEnd.getDate() + 7);
-
-      const existing = await prisma.weeklyCredit.findFirst({
-        where: {
-          clientId: user.userId,
-          membershipId: membership.id,
-          weekStartDate: weekStart,
-        },
-      });
-
-      if (!existing) {
-        weeklyCredit = await prisma.weeklyCredit.create({
-          data: {
-            clientId: user.userId,
-            membershipId: membership.id,
-            creditsTotal: membership.plan.sessionsPerWeek,
-            creditsUsed: 0,
-            weekStartDate: weekStart,
-            weekEndDate: weekEnd,
-          },
-        });
-      } else {
-        weeklyCredit = existing;
-      }
-
-      creditsAvailable = weeklyCredit.creditsTotal - weeklyCredit.creditsUsed;
-
-      if (sessionIds.length > creditsAvailable) {
-        throw ApiError.badRequest(
-          `You only have ${creditsAvailable} credit(s) remaining this week, but tried to book ${sessionIds.length} session(s).`
-        );
-      }
-    }
-
     // Validate all sessions exist and are bookable
     const sessions = await prisma.session.findMany({
       where: { id: { in: sessionIds }, isActive: true },
@@ -977,14 +936,84 @@ router.post('/batch', authenticate, async (req: Request, res: Response, next: Ne
       },
     });
     const alreadyBooked = new Set(existingBookings.map((b) => b.sessionId));
-    const newSessionIds = sessionIds.filter((id: string) => !alreadyBooked.has(id));
+    const newSessionIds: string[] = sessionIds.filter((id: string) => !alreadyBooked.has(id));
 
     if (newSessionIds.length === 0) {
       throw ApiError.conflict('You are already booked for all selected sessions');
     }
 
-    // Book all sessions in a transaction
+    // ============================================================
+    // Per-week credit grouping (BLOCKER #3 fix).
+    //
+    // Sessions in a single batch can span multiple billing weeks (a user
+    // planning Monday + next-Tuesday hits both this week's and next week's
+    // pools). The old code summed all sessions against THIS week's pool,
+    // which silently over-spent the current week and under-spent future
+    // weeks. We now group new sessions by their session-week and validate
+    // / deduct per group.
+    // ============================================================
     const creditsPerSession = membership.plan.sessionsPerWeek !== null ? 1 : 0;
+    type WeekGroup = {
+      weekStart: Date;
+      weekEnd: Date;
+      sessionIds: string[];
+    };
+    const weekGroups = new Map<string, WeekGroup>();
+    if (creditsPerSession > 0) {
+      for (const sid of newSessionIds) {
+        const session = sessions.find((s) => s.id === sid)!;
+        const weekStart = getWeekStart(session.startTime, membership.billingDay);
+        const key = weekStart.toISOString();
+        let g = weekGroups.get(key);
+        if (!g) {
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekEnd.getDate() + 7);
+          g = { weekStart, weekEnd, sessionIds: [] };
+          weekGroups.set(key, g);
+        }
+        g.sessionIds.push(sid);
+      }
+
+      // Pre-flight credit availability check per week. We materialize the
+      // WeeklyCredit row up front so the in-transaction step is just a
+      // simple `update`. Doing this outside the tx is fine because we
+      // re-read inside.
+      for (const g of weekGroups.values()) {
+        let row = await prisma.weeklyCredit.findFirst({
+          where: {
+            clientId: user.userId,
+            membershipId: membership.id,
+            weekStartDate: g.weekStart,
+          },
+        });
+        if (!row) {
+          row = await prisma.weeklyCredit.create({
+            data: {
+              clientId: user.userId,
+              membershipId: membership.id,
+              creditsTotal: membership.plan.sessionsPerWeek!,
+              creditsUsed: 0,
+              weekStartDate: g.weekStart,
+              weekEndDate: g.weekEnd,
+            },
+          });
+        }
+        const remaining = row.creditsTotal - row.creditsUsed;
+        if (g.sessionIds.length > remaining) {
+          const isFuture = g.weekStart > new Date();
+          const weekLabel = isFuture
+            ? `the week of ${g.weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+            : 'this week';
+          throw ApiError.badRequest(
+            `You only have ${remaining} credit(s) for ${weekLabel}, but tried to book ${g.sessionIds.length} session(s) that week.`
+          );
+        }
+      }
+    }
+
+    // Book all sessions in a transaction. Per-session credit deduction is
+    // grouped by week so each WeeklyCredit row gets exactly N decrements
+    // for its N sessions in this batch.
     const results = await prisma.$transaction(async (tx) => {
       const booked = [];
 
@@ -1013,24 +1042,29 @@ router.post('/batch', authenticate, async (req: Request, res: Response, next: Ne
         booked.push(booking);
       }
 
-      // Deduct all credits at once
-      if (weeklyCredit && creditsPerSession > 0) {
-        await tx.weeklyCredit.update({
-          where: { id: weeklyCredit.id },
-          data: { creditsUsed: { increment: newSessionIds.length } },
-        });
-
-        // Log credit transactions
-        for (const sessionId of newSessionIds) {
-          const session = sessions.find((s) => s.id === sessionId)!;
-          await tx.creditTransaction.create({
-            data: {
+      // Per-week credit deductions + transactions
+      if (creditsPerSession > 0) {
+        for (const g of weekGroups.values()) {
+          await tx.weeklyCredit.updateMany({
+            where: {
               clientId: user.userId,
-              transactionType: 'usage',
-              amount: -1,
-              notes: `Booked: ${session.title} on ${session.startTime.toLocaleDateString()}`,
+              membershipId: membership.id,
+              weekStartDate: g.weekStart,
             },
+            data: { creditsUsed: { increment: g.sessionIds.length } },
           });
+
+          for (const sid of g.sessionIds) {
+            const session = sessions.find((s) => s.id === sid)!;
+            await tx.creditTransaction.create({
+              data: {
+                clientId: user.userId,
+                transactionType: 'usage',
+                amount: -1,
+                notes: `Booked: ${session.title} on ${session.startTime.toLocaleDateString()}`,
+              },
+            });
+          }
         }
       }
 
@@ -1066,18 +1100,47 @@ router.post('/batch', authenticate, async (req: Request, res: Response, next: Ne
 
 /**
  * GET /api/bookings/my
- * Client: get all my bookings (upcoming and past).
+ *
+ * Client: list my bookings, optionally filtered.
+ *
+ * Query params:
+ *   ?status=CONFIRMED|CANCELLED|COMPLETED|NO_SHOW   filter by booking status
+ *   ?upcoming=true                                  only future-session bookings
+ *   ?start=<ISO date>  ?end=<ISO date>              session startTime within window
+ *   ?limit=<n>                                      default 200
+ *
+ * The /client/history page uses ?start=&end= to render a real timeline
+ * across multiple weeks. /my-week (sibling endpoint) is the locked-to-
+ * current-week version used on the dashboard's "My Week" card.
  */
 router.get('/my', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
-    const { status, upcoming } = req.query;
+    const { status, upcoming, start, end, limit } = req.query as Record<string, string | undefined>;
 
     const where: Record<string, unknown> = { clientId: user.userId };
     if (status) where.status = status;
-    if (upcoming === 'true') {
-      where.session = { startTime: { gte: new Date() } };
+
+    // Session-level time filter — supports either an explicit window
+    // (?start=&end=) or the legacy ?upcoming=true flag.
+    const sessionWhere: Record<string, unknown> = {};
+    if (start || end) {
+      const range: Record<string, Date> = {};
+      if (start) {
+        const s = new Date(start);
+        if (!isNaN(s.getTime())) range.gte = s;
+      }
+      if (end) {
+        const e = new Date(end);
+        if (!isNaN(e.getTime())) range.lte = e;
+      }
+      if (Object.keys(range).length > 0) sessionWhere.startTime = range;
+    } else if (upcoming === 'true') {
+      sessionWhere.startTime = { gte: new Date() };
     }
+    if (Object.keys(sessionWhere).length > 0) where.session = sessionWhere;
+
+    const take = limit ? Math.min(Math.max(parseInt(limit, 10) || 200, 1), 500) : 200;
 
     const bookings = await prisma.booking.findMany({
       where: where as any,
@@ -1090,6 +1153,7 @@ router.get('/my', authenticate, async (req: Request, res: Response, next: NextFu
         },
       },
       orderBy: { session: { startTime: 'asc' } },
+      take,
     });
 
     res.json({ success: true, data: bookings });

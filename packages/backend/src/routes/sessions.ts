@@ -725,7 +725,14 @@ router.put('/series/:groupId', authenticate, requireStaffOrAdmin, async (req: Re
       const [newHours, newMinutes] = time ? time.split(':').map(Number) : [null, null];
       const newDuration = durationMinutes || null;
 
-      for (const session of sessions.filter(s => s.startTime > now)) {
+      // Pre-flight conflict detection: compute every new (start, end) and
+      // check whether any of them overlap an existing session at the same
+      // location/room that is NOT part of this series. Without this guard,
+      // moving a recurring series can silently double-book a coach or
+      // a room, and admins only find out when athletes show up.
+      type Move = { sessionId: string; locationId: string; roomId: string | null; coachId: string | null; newStart: Date; newEnd: Date };
+      const moves: Move[] = [];
+      for (const session of sessions.filter((s) => s.startTime > now)) {
         const newStart = new Date(session.startTime);
         if (newHours !== null && newMinutes !== null) {
           newStart.setHours(newHours, newMinutes, 0, 0);
@@ -733,13 +740,57 @@ router.put('/series/:groupId', authenticate, requireStaffOrAdmin, async (req: Re
         const dur = newDuration || ((session.endTime.getTime() - session.startTime.getTime()) / 60000);
         const newEnd = new Date(newStart);
         newEnd.setMinutes(newEnd.getMinutes() + dur);
+        moves.push({
+          sessionId: session.id,
+          locationId: session.locationId,
+          roomId: (roomId !== undefined ? roomId : session.roomId) || null,
+          coachId: (coachId !== undefined ? coachId : session.coachId) || null,
+          newStart,
+          newEnd,
+        });
+      }
 
+      // Find conflicts. A conflict is any other active session at the same
+      // location that overlaps the new window AND shares either the same
+      // room (room double-book) or the same coach (coach double-book).
+      const conflicts: { newStart: Date; conflictWith: { id: string; title: string; startTime: Date } }[] = [];
+      for (const m of moves) {
+        const overlapping = await prisma.session.findFirst({
+          where: {
+            id: { not: m.sessionId, notIn: futureSessionIds },
+            locationId: m.locationId,
+            isActive: true,
+            startTime: { lt: m.newEnd },
+            endTime: { gt: m.newStart },
+            OR: [
+              ...(m.roomId ? [{ roomId: m.roomId }] : []),
+              ...(m.coachId ? [{ coachId: m.coachId }] : []),
+            ],
+          },
+          select: { id: true, title: true, startTime: true },
+        });
+        if (overlapping) {
+          conflicts.push({ newStart: m.newStart, conflictWith: overlapping });
+        }
+      }
+
+      if (conflicts.length > 0) {
+        const sample = conflicts.slice(0, 3).map((c) =>
+          `${c.newStart.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} clashes with "${c.conflictWith.title}"`
+        ).join('; ');
+        const more = conflicts.length > 3 ? ` (+${conflicts.length - 3} more)` : '';
+        throw ApiError.badRequest(
+          `Cannot move series — ${conflicts.length} session(s) would conflict with existing bookings: ${sample}${more}. Resolve the conflicts first or pick a different time.`
+        );
+      }
+
+      for (const m of moves) {
         await prisma.session.update({
-          where: { id: session.id },
+          where: { id: m.sessionId },
           data: {
             ...updateData,
-            startTime: newStart,
-            endTime: newEnd,
+            startTime: m.newStart,
+            endTime: m.newEnd,
           },
         });
       }
