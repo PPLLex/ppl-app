@@ -116,6 +116,7 @@ const adminNav: NavItem[] = [
   { label: 'Campaigns', href: '/admin/campaigns', icon: <Icons.Chat /> },
   { label: 'Screenings', href: '/admin/screenings', icon: <Icons.Shield /> },
   { label: 'Consultations', href: '/admin/consultations', icon: <Icons.Calendar /> },
+  { label: 'Reviews', href: '/admin/reviews', icon: <Icons.Target /> },
   { label: 'Educational Resources', href: '/admin/educational-resources', icon: <Icons.Pencil /> },
   { label: 'Coach Notes Moderation', href: '/admin/coach-notes/moderation', icon: <Icons.Shield /> },
   { label: 'Waivers', href: '/admin/waivers', icon: <Icons.Shield /> },

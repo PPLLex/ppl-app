@@ -739,6 +739,50 @@ class ApiClient {
     }>(`/screenings/revenue/weekly${qs}`);
   }
 
+  // ============================================================
+  // REVIEWS — Phase 2 (#28, #40)
+  // ============================================================
+  async listReviews(params: { rating?: number; status?: string } = {}) {
+    const qs = new URLSearchParams();
+    if (params.rating) qs.set('rating', String(params.rating));
+    if (params.status) qs.set('status', params.status);
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+    return this.request<Array<{
+      id: string;
+      provider: string;
+      authorName: string;
+      authorPhotoUrl: string | null;
+      rating: number;
+      text: string | null;
+      publishedAt: string;
+      url: string | null;
+      draftReply: string | null;
+      publishedReply: string | null;
+      publishedReplyAt: string | null;
+    }>>(`/reviews${query}`);
+  }
+
+  async draftReviewReply(reviewId: string) {
+    return this.request<{ id: string; draftReply: string }>(
+      `/reviews/${encodeURIComponent(reviewId)}/draft-reply`,
+      { method: 'POST' }
+    );
+  }
+
+  async updateReview(reviewId: string, patch: { draftReply?: string; publishedReply?: string; markPublished?: boolean }) {
+    return this.request(`/reviews/${encodeURIComponent(reviewId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  }
+
+  async pollReviewsNow() {
+    return this.request<{ fetched: number; inserted: number; alertedLowStars: number }>(
+      `/reviews/poll-now`,
+      { method: 'POST' }
+    );
+  }
+
   async listTags(kind?: string) {
     const query = kind ? `?kind=${encodeURIComponent(kind)}` : '';
     return this.request<Array<{
