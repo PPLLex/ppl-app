@@ -81,15 +81,48 @@ app.use(helmet({
 // Gzip/Brotli — saves 50-70% on JSON payload size on every API response.
 // `threshold: 1024` skips tiny bodies where compression overhead > savings.
 app.use(compression({ threshold: 1024 }));
+// CORS allowlist (#S15). In production, only:
+//   - the configured frontend origin (app.pitchingperformancelab.com)
+//   - Vercel preview deploys (*.vercel.app under our project) so PR
+//     previews keep working
+//   - native shells (Capacitor / iOS / Android wrappers) which send
+//     Origin: capacitor://localhost or ionic://localhost
+// In dev, anything localhost works.
+const PROD_ALLOWED_ORIGINS = new Set<string>([
+  config.frontendUrl,
+  'https://app.pitchingperformancelab.com',
+]);
+const PROD_ALLOWED_PATTERNS: RegExp[] = [
+  // Vercel preview URLs under the ppl-app-xsg5 project
+  /^https:\/\/ppl-app-xsg5(-[a-z0-9-]+)?\.vercel\.app$/,
+  // Native shells
+  /^capacitor:\/\/localhost$/,
+  /^ionic:\/\/localhost$/,
+];
+
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (proxied through Next.js, mobile apps)
+    // Allow no-origin requests (server-to-server, native fetch with no
+    // Origin header, Vercel rewrite proxying through Next). The same-
+    // origin guarantee comes from the network path, not from CORS.
     if (!origin) return callback(null, true);
-    if (origin === config.frontendUrl) return callback(null, true);
-    // In dev, allow all localhost variants
-    if (!config.isProduction && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
+
+    if (!config.isProduction) {
+      // Dev: anything localhost / 127.0.0.1 / explicit frontendUrl.
+      if (origin === config.frontendUrl) return callback(null, true);
+      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+        return callback(null, true);
+      }
+      return callback(new Error('Not allowed by CORS (dev)'));
+    }
+
+    // Production: strict allowlist + pattern allowlist.
+    if (PROD_ALLOWED_ORIGINS.has(origin)) return callback(null, true);
+    if (PROD_ALLOWED_PATTERNS.some((re) => re.test(origin))) {
       return callback(null, true);
     }
+
+    console.warn(`[CORS] rejecting origin in production: ${origin}`);
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
