@@ -29,24 +29,54 @@ const param = (req: Request, key: string): string =>
 /**
  * Default waiver text — used only if OrgSettings.liabilityWaiverText is
  * empty. Admins should edit this via the admin settings page.
+ *
+ * This is a cleaned-up, 2026-current version of the public waiver
+ * scraped from pitchingperformancelab.com/user-agreement. Major changes
+ * vs. the website copy: effective date set to 2026, indemnification
+ * tightened to exclude PPL gross negligence, photo/likeness clause
+ * scoped to "promotional use" rather than perpetual unlimited license,
+ * and the cancellation/payment sections moved out (they belong in the
+ * membership terms surfaced at checkout, not on the safety waiver).
+ *
+ * Chad: review this text in /admin/waivers (or wherever
+ * OrgSettings.liabilityWaiverText is exposed) and tweak before going
+ * live for new athletes.
  */
-const DEFAULT_WAIVER_TEXT = `LIABILITY WAIVER & RELEASE OF CLAIMS
+const DEFAULT_WAIVER_TEXT = `PITCHING PERFORMANCE LAB, LLC
+LIABILITY WAIVER & RELEASE OF CLAIMS
 
-I understand that participation in baseball training, throwing, pitching, hitting, and related physical activities at Pitching Performance Lab (PPL) involves inherent risks of injury, including but not limited to: strains, sprains, muscle pulls, tendon or ligament damage, fractures, contusions, concussions, overuse injuries, and in rare cases serious or permanent injury.
+Effective for all training participation on or after the date of signature.
 
-On behalf of myself and/or the minor athlete named in this signature, I voluntarily assume these risks and agree:
+ASSUMPTION OF RISK
+I understand that participation in baseball training — throwing, pitching, hitting, conditioning, and related physical activities at Pitching Performance Lab ("PPL") — involves inherent risks of injury, including but not limited to: strains, sprains, muscle pulls, tendon or ligament damage, fractures, contusions, concussions, overuse injuries, and in rare cases serious or permanent injury or death.
+
+ON BEHALF OF MYSELF AND/OR THE MINOR ATHLETE NAMED IN THIS SIGNATURE, I VOLUNTARILY ASSUME THESE RISKS AND AGREE:
 
 1. To follow all PPL coach instructions, safety rules, and facility policies.
-2. To disclose any known medical conditions, injuries, or physical limitations that may be relevant to training.
+2. To disclose any known medical conditions, injuries, or physical limitations that may be relevant to training, and to update PPL if those change.
 3. To immediately report any injury, pain, or discomfort to PPL staff.
-4. To hold PPL, its owners, coaches, employees, and contractors harmless from any claims, damages, or injuries arising out of participation in PPL training, except where caused by PPL's gross negligence or willful misconduct.
-5. To permit PPL staff to obtain emergency medical care for the athlete if needed; I am financially responsible for such care.
+4. To permit PPL staff to obtain emergency medical care for the athlete if needed; I am financially responsible for such care.
 
+WAIVER & RELEASE
+I, FOR MYSELF AND ON BEHALF OF MY HEIRS, EXECUTORS, AND ASSIGNS, HEREBY RELEASE PITCHING PERFORMANCE LAB, LLC, ITS OWNERS, COACHES, EMPLOYEES, AGENTS, AND CONTRACTORS FROM ANY AND ALL CLAIMS, DEMANDS, OR CAUSES OF ACTION ARISING OUT OF OR RELATED TO MY (OR MY CHILD'S) PARTICIPATION IN PPL TRAINING, except where caused by PPL's gross negligence or willful misconduct. I understand this is a release of liability and assumption of risk and I sign it voluntarily.
+
+INDEMNIFICATION
+I AGREE TO INDEMNIFY AND HOLD PPL HARMLESS from any loss, liability, or expense (including reasonable attorney fees) arising out of my violation of this Agreement, except where caused by PPL's gross negligence or willful misconduct.
+
+DISPUTES BETWEEN ATHLETES
+In the event of any dispute between me and another PPL athlete, member, parent, or visitor, I release PPL from claims, demands, and damages arising out of that dispute.
+
+PHOTO & LIKENESS RELEASE
+I grant PPL a non-exclusive, royalty-free license to photograph and record the athlete during PPL training and to use those images and recordings for PPL's promotional, marketing, and advertising purposes (website, social media, printed materials). I may revoke this consent at any time in writing; PPL will discontinue new use within a reasonable time after revocation. I understand PPL is not required to remove materials already published prior to revocation.
+
+PARENTAL CONSENT (FOR ATHLETES UNDER 18)
 If I am signing on behalf of a minor child (under 18), I represent that I am the parent or legal guardian with authority to do so, and I accept these terms on the minor's behalf.
 
+DURATION
 This waiver remains in effect for the duration of my (or my child's) PPL membership or participation in any PPL training. PPL may update this waiver from time to time; I will be required to review and re-sign any material changes.
 
-By typing my name below and clicking "I Agree," I acknowledge that I have read and understand this waiver and am signing it as my legal electronic signature.`;
+ELECTRONIC SIGNATURE
+By typing my name below and clicking "I Agree," I acknowledge that I have read, understood, and accepted this waiver, and I am signing it as my legal electronic signature.`;
 
 /**
  * GET /api/waivers/current
@@ -57,7 +87,7 @@ router.get('/current', authenticate, async (_req: Request, res: Response, next: 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const settings: any = await prisma.orgSettings.findUnique({ where: { id: 'ppl' } });
     const text = (settings?.liabilityWaiverText || '').trim() || DEFAULT_WAIVER_TEXT;
-    const version = settings?.liabilityWaiverVersion || '2026-04-23';
+    const version = settings?.liabilityWaiverVersion || '2026-04-26';
     res.json({ success: true, data: { text, version } });
   } catch (err) {
     next(err);
@@ -118,7 +148,7 @@ router.get('/status', authenticate, async (req: Request, res: Response, next: Ne
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const settings: any = await prisma.orgSettings.findUnique({ where: { id: 'ppl' } });
-    const currentVersion = settings?.liabilityWaiverVersion || '2026-04-23';
+    const currentVersion = settings?.liabilityWaiverVersion || '2026-04-26';
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const p: any = prisma;
@@ -186,7 +216,7 @@ router.post('/sign', authenticate, async (req: Request, res: Response, next: Nex
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const settings: any = await prisma.orgSettings.findUnique({ where: { id: 'ppl' } });
     const text = (settings?.liabilityWaiverText || '').trim() || DEFAULT_WAIVER_TEXT;
-    const version = settings?.liabilityWaiverVersion || '2026-04-23';
+    const version = settings?.liabilityWaiverVersion || '2026-04-26';
 
     const athleteName = `${athlete.firstName} ${athlete.lastName}`.trim();
     const ipAddress =
