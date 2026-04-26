@@ -886,6 +886,18 @@ class ApiClient {
     return this.request(`/workflows/steps/${encodeURIComponent(stepId)}`, { method: 'DELETE' });
   }
 
+  async listWorkflowRunsForEntity(contextType: 'lead' | 'user' | 'booking' | 'athlete', contextId: string) {
+    const qs = new URLSearchParams({ contextType, contextId });
+    return this.request<Array<{
+      id: string;
+      status: string;
+      startedAt: string;
+      completedAt: string | null;
+      error: string | null;
+      workflow: { id: string; name: string; trigger: string };
+    }>>(`/workflows/runs?${qs.toString()}`);
+  }
+
   async getWorkflowRun(runId: string) {
     return this.request<{
       id: string;

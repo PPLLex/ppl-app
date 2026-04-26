@@ -218,6 +218,29 @@ router.post('/:id/run', async (req: Request, res: Response, next: NextFunction) 
   }
 });
 
+/**
+ * GET /api/workflows/runs?contextType=lead&contextId=xxx
+ * List recent workflow runs scoped to a specific entity. Used by the
+ * "Recent Automations" panel on lead/member/booking detail pages.
+ */
+router.get('/runs', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { contextType, contextId } = req.query as Record<string, string | undefined>;
+    if (!contextType || !contextId) {
+      throw ApiError.badRequest('contextType and contextId required');
+    }
+    const runs = await prisma.workflowRun.findMany({
+      where: { contextType: String(contextType), contextId: String(contextId) },
+      orderBy: { startedAt: 'desc' },
+      take: 25,
+      include: { workflow: { select: { id: true, name: true, trigger: true } } },
+    });
+    res.json({ success: true, data: runs });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/runs/:runId', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const runId = param(req, 'runId');

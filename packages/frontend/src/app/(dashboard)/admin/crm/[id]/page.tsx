@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { TagPicker } from '@/components/TagPicker';
 import { CustomFieldsPanel } from '@/components/CustomFieldsPanel';
+import { EntityWorkflowRuns } from '@/components/EntityWorkflowRuns';
 
 type Lead = NonNullable<Awaited<ReturnType<typeof api.getLead>>['data']>;
 type Activity = Lead['activities'][number];
@@ -265,6 +266,11 @@ export default function LeadDetailPage() {
       {/* Custom fields */}
       <div className="mt-6">
         <CustomFieldsPanel entityType="LEAD" entityId={lead.id} />
+      </div>
+
+      {/* Workflow runs */}
+      <div className="mt-6">
+        <EntityWorkflowRuns contextType="lead" contextId={lead.id} />
       </div>
 
       {/* Source meta */}
