@@ -194,6 +194,8 @@ function CampaignComposer({
   const [previewCount, setPreviewCount] = useState<number | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [aiBrief, setAiBrief] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
 
   const tagsByKind = useMemo(() => {
     const map: Record<string, Tag[]> = {};
@@ -307,6 +309,43 @@ function CampaignComposer({
               className="ppl-input w-full mt-1"
               placeholder="Early-bird summer camp — your spot is waiting"
             />
+          </div>
+
+          {/* AI draft */}
+          <div className="ppl-card bg-background/40 border-dashed">
+            <label className="text-xs text-muted uppercase tracking-wider">AI Draft (optional)</label>
+            <div className="flex gap-2 mt-1">
+              <input
+                type="text"
+                value={aiBrief}
+                onChange={(e) => setAiBrief(e.target.value)}
+                placeholder="e.g. Summer camp, early-bird $50 off, ends Friday"
+                className="ppl-input flex-1 text-sm"
+              />
+              <button
+                type="button"
+                disabled={aiLoading || aiBrief.trim().length < 5}
+                onClick={async () => {
+                  setAiLoading(true);
+                  try {
+                    const res = await api.draftCampaignWithAi(aiBrief.trim());
+                    if (res.data?.subject) setSubject(res.data.subject);
+                    if (res.data?.html) setBodyHtml(res.data.html);
+                    toast.success('AI draft inserted — edit before sending');
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : 'AI draft failed');
+                  } finally {
+                    setAiLoading(false);
+                  }
+                }}
+                className="ppl-btn ppl-btn-secondary text-xs whitespace-nowrap disabled:opacity-50"
+              >
+                {aiLoading ? 'Drafting…' : 'Draft with AI'}
+              </button>
+            </div>
+            <p className="text-[11px] text-muted mt-1">
+              Replaces your subject + body with an AI-generated draft. Always review before sending.
+            </p>
           </div>
 
           <div>

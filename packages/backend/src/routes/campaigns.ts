@@ -490,6 +490,30 @@ function dedupeByEmail<T extends { email: string }>(rows: T[]): T[] {
 }
 
 /**
+ * POST /api/campaigns/draft-with-ai
+ * Body: { brief: string }
+ * Returns: { subject, html }
+ *
+ * Calls Anthropic via aiService — UI uses this from the "AI Draft" button
+ * in the campaign composer to generate a starting body the admin then
+ * tweaks. Costs roughly $0.005 per call at current Sonnet pricing.
+ */
+router.post('/draft-with-ai', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { brief } = req.body as { brief?: string };
+    if (!brief || typeof brief !== 'string' || brief.trim().length < 5) {
+      throw ApiError.badRequest('brief must be at least 5 characters');
+    }
+    const { draftMarketingEmail } = await import('../services/aiService');
+    const result = await draftMarketingEmail(brief.trim());
+    if (!result.ok) throw ApiError.badRequest(result.error || 'AI draft failed');
+    res.json({ success: true, data: { subject: result.subject, html: result.html } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * POST /api/campaigns/:id/send
  *
  * Resolves the campaign's audience NOW, creates CampaignRecipient rows,

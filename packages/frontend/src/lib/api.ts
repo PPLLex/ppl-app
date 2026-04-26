@@ -685,6 +685,13 @@ class ApiClient {
     return this.request(`/campaigns/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }
 
+  async draftCampaignWithAi(brief: string) {
+    return this.request<{ subject: string; html: string }>(
+      `/campaigns/draft-with-ai`,
+      { method: 'POST', body: JSON.stringify({ brief }) }
+    );
+  }
+
   async previewCampaignAudience(id: string) {
     return this.request<{
       totalRecipients: number;
@@ -697,6 +704,39 @@ class ApiClient {
       `/campaigns/${encodeURIComponent(id)}/send`,
       { method: 'POST' }
     );
+  }
+
+  // ============================================================
+  // SCREENINGS — Medical role + Admin
+  // ============================================================
+  async listScreenings(params: { status?: string; from?: string; to?: string } = {}) {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set('status', params.status);
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+    return this.request<Array<{
+      id: string;
+      status: string;
+      scheduledAt: string;
+      completedAt: string | null;
+      durationMinutes: number;
+      providerFeeCents: number;
+      marketingOptIn: boolean;
+      athlete: { id: string; firstName: string; lastName: string; ageGroup: string | null };
+      provider: { id: string; fullName: string } | null;
+      location: { id: string; name: string };
+    }>>(`/screenings${query}`);
+  }
+
+  async getScreeningWeeklyRevenue(weekStart?: string) {
+    const qs = weekStart ? `?weekStart=${encodeURIComponent(weekStart)}` : '';
+    return this.request<{
+      weekStart: string;
+      weekEnd: string;
+      perLocation: Array<{ locationId: string; locationName: string; screeningsCompleted: number; totalCents: number }>;
+      totalCents: number;
+    }>(`/screenings/revenue/weekly${qs}`);
   }
 
   async listTags(kind?: string) {
