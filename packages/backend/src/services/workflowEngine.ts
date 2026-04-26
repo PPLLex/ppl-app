@@ -32,6 +32,7 @@ import {
 } from '@prisma/client';
 import { sendEmail } from './emailService';
 import { notify } from './notificationService';
+import { sendSms } from './smsService';
 import { NotificationType, NotificationChannel } from '@prisma/client';
 import { dispatchWebhooks } from './webhookDelivery';
 
@@ -270,10 +271,12 @@ async function runStep(
     }
 
     case WorkflowStepType.SEND_SMS: {
-      // SMS depends on Twilio integration (Phase 4). For now we log and
-      // skip so configured workflows don't crash before that ships.
-      console.log(`[workflowEngine] SEND_SMS not implemented yet — would send to ${ctx.phone}`);
-      return { output: { skipped: 'sms_not_implemented' } };
+      const to = ctx.phone ? String(ctx.phone) : null;
+      if (!to) return { output: { skipped: 'no_phone' } };
+      const body = renderTemplate(String(config.body ?? ''), ctx);
+      if (!body.trim()) return { output: { skipped: 'empty_body' } };
+      const ok = await sendSms({ to, body });
+      return { output: { sent: ok, to } };
     }
 
     case WorkflowStepType.SEND_NOTIFICATION: {

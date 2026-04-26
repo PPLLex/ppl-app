@@ -49,6 +49,7 @@ import customFieldRoutes from './routes/customFields';
 import workflowRoutes from './routes/workflows';
 import outboundWebhookRoutes from './routes/webhooks.outbound';
 import consultationRoutes from './routes/consultations';
+import twilioRoutes from './routes/twilio';
 import screeningRoutes from './routes/screenings';
 import campaignRoutes from './routes/campaigns';
 import emailPreviewRoutes from './routes/emailPreview';
@@ -178,6 +179,10 @@ app.use('/api/workflows', workflowRoutes);
 app.use('/api/outbound-webhooks', outboundWebhookRoutes);
 // Consultation calendar — public booking + admin slot management
 app.use('/api/consultations', consultationRoutes);
+// Twilio webhooks — inbound voice + SMS + missed-call text-back (#8, #9, #42)
+// Mounted unauthenticated; Twilio signs requests with X-Twilio-Signature
+// (TODO: verify signature in middleware once we get the auth token wired).
+app.use('/api/twilio', twilioRoutes);
 
 // ============================================================
 // ERROR HANDLING
