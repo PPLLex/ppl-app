@@ -47,6 +47,7 @@ import publicLeadIntakeRoutes from './routes/publicLeadIntake';
 import tagRoutes from './routes/tags';
 import customFieldRoutes from './routes/customFields';
 import workflowRoutes from './routes/workflows';
+import outboundWebhookRoutes from './routes/webhooks.outbound';
 import screeningRoutes from './routes/screenings';
 import campaignRoutes from './routes/campaigns';
 import emailPreviewRoutes from './routes/emailPreview';
@@ -172,6 +173,8 @@ app.use('/api/email-preview', emailPreviewRoutes);
 app.use('/api/tags', tagRoutes);
 app.use('/api/custom-fields', customFieldRoutes);
 app.use('/api/workflows', workflowRoutes);
+// Outbound webhooks — admin-configured fire-on-event subscribers (Zapier-style)
+app.use('/api/outbound-webhooks', outboundWebhookRoutes);
 
 // ============================================================
 // ERROR HANDLING

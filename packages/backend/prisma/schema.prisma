@@ -528,6 +528,7 @@ model User {
 
   // Workflows authored by this user (Phase 1C)
   createdWorkflows Workflow[] @relation("WorkflowCreatedBy")
+  createdWebhooks  Webhook[]  @relation("WebhookCreatedBy")
 
   @@index([homeLocationId])
   @@index([role])
@@ -2058,6 +2059,67 @@ model WebhookEvent {
 
   @@index([provider, eventType])
   @@map("webhook_events")
+}
+
+// ============================================================================
+// OUTBOUND WEBHOOKS — Phase 2 (#43)
+// ----------------------------------------------------------------------------
+// Admin-configured outbound webhooks that fire when system events happen
+// (booking created, lead stage changed, payment failed, etc.). Lets Chad
+// integrate PPL with external systems (Zapier, Make.com, custom backends)
+// without writing a workflow each time.
+//
+// Each delivery is signed with HMAC-SHA256 using the webhook's `secret`
+// field; receivers should verify the X-PPL-Signature header before trusting
+// the body. Failed deliveries log to WebhookDelivery for retry + audit.
+// ============================================================================
+
+model Webhook {
+  id             String   @id @default(uuid())
+  organizationId String   @default("ppl")
+  // Friendly admin name ("Zapier — new lead → Slack").
+  name           String
+  // Destination URL.
+  url            String
+  // Shared secret — receiver computes HMAC and compares to X-PPL-Signature.
+  // Auto-generated on create unless admin overrides.
+  secret         String
+  // Events to subscribe to. Stored as text[] of WorkflowTrigger names so we
+  // can reuse the same trigger taxonomy as the workflow engine.
+  events         String[]
+  isActive       Boolean  @default(true)
+  // Last successful delivery — useful for "is this still working?" admin glance.
+  lastSuccessAt  DateTime?
+  // Track consecutive failures so we can auto-disable noisy dead webhooks.
+  consecutiveFailures Int @default(0)
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  createdBy  User?              @relation("WebhookCreatedBy", fields: [createdById], references: [id])
+  deliveries WebhookDelivery[]
+
+  @@index([organizationId, isActive])
+  @@map("webhooks")
+}
+
+model WebhookDelivery {
+  id           String   @id @default(uuid())
+  webhookId    String
+  event        String   // WorkflowTrigger name
+  payload      Json
+  // HTTP status from the receiver. Null if request failed entirely (DNS, timeout).
+  statusCode   Int?
+  // Response body (truncated) for debugging.
+  responseBody String?  @db.Text
+  // Error if the request couldn't even be sent.
+  error        String?
+  attemptedAt  DateTime @default(now())
+
+  webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId, attemptedAt])
+  @@map("webhook_deliveries")
 }
 
 // ============================================================================

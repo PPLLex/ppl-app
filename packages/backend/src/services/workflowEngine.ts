@@ -33,6 +33,7 @@ import {
 import { sendEmail } from './emailService';
 import { notify } from './notificationService';
 import { NotificationType, NotificationChannel } from '@prisma/client';
+import { dispatchWebhooks } from './webhookDelivery';
 
 type ContextType = 'lead' | 'user' | 'booking' | 'athlete';
 
@@ -70,6 +71,11 @@ async function emitTriggerAsync(
   contextId: string,
   payload?: Record<string, unknown>
 ): Promise<void> {
+  // Outbound webhooks subscribe to triggers independently of workflows —
+  // a single event can fan out to both visual workflows AND any number
+  // of admin-configured webhook URLs.
+  dispatchWebhooks(trigger, contextType, contextId, payload);
+
   const workflows = await prisma.workflow.findMany({
     where: { trigger, isActive: true, organizationId: 'ppl' },
     include: { steps: { orderBy: { displayOrder: 'asc' } } },
