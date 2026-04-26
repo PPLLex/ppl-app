@@ -11,6 +11,7 @@ import { recordReferral } from '../services/referralService';
 import { generatePendingChallenge } from '../services/twoFactorService';
 import { createAuditLog } from '../services/auditService';
 import { sendVerificationEmail } from '../services/emailVerificationService';
+import { assertPasswordPolicy } from '../services/passwordPolicyService';
 
 // ============================================================
 // LOGIN HARDENING (#141 / S2 / S6)
@@ -162,6 +163,10 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
         throw ApiError.badRequest('Invalid location');
       }
     }
+
+    // Server-side password policy (#S10) — length, blocklist, HIBP breach
+    // check. Throws ApiError.badRequest on rejection.
+    await assertPasswordPolicy(password);
 
     // Hash password
     const passwordHash = await bcrypt.hash(password, 12);
@@ -602,6 +607,9 @@ router.post('/create-staff', authenticate, async (req: Request, res: Response, n
     if (existing) {
       throw ApiError.conflict('An account with this email already exists');
     }
+
+    // Password policy (#S10) — applies to admin-created staff too.
+    await assertPasswordPolicy(password);
 
     const passwordHash = await bcrypt.hash(password, 12);
 

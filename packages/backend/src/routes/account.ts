@@ -3,6 +3,7 @@ import { prisma } from '../utils/prisma';
 import { ApiError } from '../utils/apiError';
 import { authenticate } from '../middleware/auth';
 import { createAuditLog } from '../services/auditService';
+import { assertPasswordPolicy } from '../services/passwordPolicyService';
 import { BookingStatus, Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
@@ -162,9 +163,6 @@ router.put('/password', async (req: Request, res: Response, next: NextFunction) 
     if (!currentPassword || !newPassword) {
       throw ApiError.badRequest('Current and new passwords are required');
     }
-    if (newPassword.length < 8) {
-      throw ApiError.badRequest('New password must be at least 8 characters');
-    }
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -175,6 +173,10 @@ router.put('/password', async (req: Request, res: Response, next: NextFunction) 
 
     const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
     if (!isValid) throw ApiError.unauthorized('Current password is incorrect');
+
+    // Password policy (#S10) — done AFTER current-password check so an
+    // attacker can't probe the policy without knowing the current password.
+    await assertPasswordPolicy(newPassword);
 
     const newHash = await bcrypt.hash(newPassword, 12);
     await prisma.user.update({

@@ -3,6 +3,7 @@ import { prisma } from '../utils/prisma';
 import { ApiError } from '../utils/apiError';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { createAuditLog } from '../services/auditService';
+import { assertPasswordPolicy } from '../services/passwordPolicyService';
 import {
   sendStaffReinstateEmail,
   sendStaffInviteEmail,
@@ -894,9 +895,12 @@ staffPublicRouter.post('/invite/:token/accept', async (req: Request, res: Respon
     const token = param(req, 'token');
     const { password, phone, profileImageUrl } = req.body;
 
-    if (!password || password.length < 8) {
-      throw ApiError.badRequest('Password must be at least 8 characters');
+    if (!password) {
+      throw ApiError.badRequest('Password is required');
     }
+    // Centralized password policy (#S10) — same length / blocklist / HIBP
+    // check the rest of the auth surface uses.
+    await assertPasswordPolicy(password);
 
     const invite = await prisma.staffInvite.findUnique({ where: { token } });
     if (!invite) throw ApiError.notFound('Invitation not found');

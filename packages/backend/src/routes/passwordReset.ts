@@ -3,6 +3,7 @@ import { prisma } from '../utils/prisma';
 import { ApiError } from '../utils/apiError';
 import { sendEmail, buildPPLEmail } from '../services/emailService';
 import { sensitiveLimiter } from '../middleware/rateLimit';
+import { assertPasswordPolicy } from '../services/passwordPolicyService';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
@@ -106,9 +107,12 @@ router.post('/reset-password', async (req: Request, res: Response, next: NextFun
     if (!token || !newPassword) {
       throw ApiError.badRequest('Token and new password are required');
     }
-    if (newPassword.length < 8) {
-      throw ApiError.badRequest('Password must be at least 8 characters');
-    }
+
+    // Centralized password policy — length + blocklist + HIBP breach check.
+    // Done BEFORE the token lookup so an attacker who's leaked a reset
+    // token can't probe valid passwords against the policy without
+    // simultaneously consuming the token.
+    await assertPasswordPolicy(newPassword);
 
     const tokenHash = hashToken(token);
     const resetRow = await p.passwordResetToken.findUnique({
