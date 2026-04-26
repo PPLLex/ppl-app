@@ -19,6 +19,7 @@ import {
 } from '@prisma/client';
 import { notifyLocationCoordinators } from '../services/paymentRetryService';
 import { computeChurnRisk } from '../services/scoringService';
+import { awardReferralIfPending } from '../services/referralService';
 
 const router = Router();
 
@@ -275,6 +276,12 @@ async function handlePaymentSucceeded(invoice: Stripe.Invoice) {
       planName: membership.plan.name,
     },
   });
+
+  // Referral program (#134) — first paid invoice triggers the reward
+  // for both parties. Idempotent inside the service.
+  void awardReferralIfPending(membership.clientId).catch((e) =>
+    console.error('[referrals] awardReferralIfPending failed:', e)
+  );
 }
 
 /**

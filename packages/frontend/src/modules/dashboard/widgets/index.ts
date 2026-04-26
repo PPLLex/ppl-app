@@ -25,3 +25,4 @@ export { AttachedAthletesWidget } from './AttachedAthletes';
 export { AthleteNotesReadOnlyWidget } from './AthleteNotesReadOnly';
 export { AthleteMetricsReadOnlyWidget } from './AthleteMetricsReadOnly';
 export { MessagePplStaffWidget } from './MessagePplStaff';
+export { ReferAFriendWidget } from './ReferAFriend';

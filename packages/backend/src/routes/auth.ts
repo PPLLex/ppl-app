@@ -7,6 +7,7 @@ import { authenticate, generateToken, JwtPayload } from '../middleware/auth';
 import { Role, WorkflowTrigger } from '@prisma/client';
 import { sendEmail, buildWelcomeEmail } from '../services/emailService';
 import { emitTrigger } from '../services/workflowEngine';
+import { recordReferral } from '../services/referralService';
 
 const router = Router();
 
@@ -49,6 +50,8 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
       // extra athletes (10 total including primary) per Chad 2026-04-23.
       // Only honored when registeringAs === 'PARENT'.
       additionalAthletes,
+      // Referral program (#134) — code passed through from /register?ref=CODE
+      referralCode,
     } = req.body as {
       email?: string;
       password?: string;
@@ -67,6 +70,7 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
         dateOfBirth?: string;
         ageGroup?: string;
       }>;
+      referralCode?: string;
     };
 
     if (!email || !password || !fullName) {
@@ -307,6 +311,15 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
       ageGroup: user.clientProfile?.ageGroup ?? null,
       isParent: user.isParent ?? false,
     });
+
+    // Referral program (#134) — if they registered via someone else's
+    // code, record the pending referral. Reward fires from the Stripe
+    // webhook when the referee makes their first qualifying payment.
+    if (referralCode && typeof referralCode === 'string') {
+      void recordReferral(user.id, referralCode).catch((e) =>
+        console.error('[referrals] recordReferral failed:', e)
+      );
+    }
 
     // Generate token
     const tokenPayload: JwtPayload = {

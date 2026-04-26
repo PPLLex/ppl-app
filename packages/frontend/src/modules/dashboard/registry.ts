@@ -32,6 +32,7 @@ import {
   AthleteNotesReadOnlyWidget,
   AthleteMetricsReadOnlyWidget,
   MessagePplStaffWidget,
+  ReferAFriendWidget,
 } from './widgets';
 
 /**
@@ -163,6 +164,13 @@ export const WIDGETS: Record<string, WidgetDefinition> = {
     defaultSize: '1x1',
     allowedRoles: ['OUTSIDE_COACH'],
     component: MessagePplStaffWidget,
+  },
+  'refer-a-friend': {
+    id: 'refer-a-friend',
+    title: 'Refer a Friend',
+    defaultSize: '1x1',
+    allowedRoles: ['CLIENT'],
+    component: ReferAFriendWidget,
   },
 };
 

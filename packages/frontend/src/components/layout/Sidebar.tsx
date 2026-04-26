@@ -152,6 +152,7 @@ const clientNav: NavItem[] = [
   { label: 'My Programs', href: '/client/programs', icon: <Icons.Dumbbell /> },
   { label: 'Coach View', href: '/client/coaches', icon: <Icons.Users /> },
   { label: 'Membership', href: '/client/membership', icon: <Icons.CreditCard /> },
+  { label: 'Refer a Friend', href: '/client/refer', icon: <Icons.Users /> },
   { label: 'Liability Waiver', href: '/client/waiver', icon: <Icons.Shield /> },
   { label: 'Messages', href: '/client/messages', icon: <Icons.Chat /> },
   { label: 'My Account', href: '/client/account', icon: <Icons.Settings /> },

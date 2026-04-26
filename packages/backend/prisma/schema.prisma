@@ -453,6 +453,9 @@ model User {
   magicLinkToken  String?   @unique
   magicLinkExpiry DateTime?
 
+  // Referral program (#134) — generated lazily on first need
+  referralCode    String? @unique
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -542,6 +545,10 @@ model User {
   // Marketing forms (#133)
   createdMarketingForms     MarketingForm[]           @relation("MarketingFormsCreated")
   marketingFormSubmissions  MarketingFormSubmission[] @relation("MarketingFormSubmissionUser")
+
+  // Referral program (#134)
+  referralsMade     Referral[] @relation("ReferralsMade")
+  referralReceived  Referral?  @relation("ReferralReceived")
 
   @@index([homeLocationId])
   @@index([role])
@@ -1303,6 +1310,45 @@ model MarketingFormSubmission {
   @@index([leadId])
   @@index([userId])
   @@map("marketing_form_submissions")
+}
+
+// ============================================================
+// REFERRAL PROGRAM (#134) — refer a friend, both get a free week.
+//
+// Each user gets a unique referralCode (auto-generated). When someone
+// registers using ?ref=CODE, a Referral row is created with status
+// PENDING. When the referee makes their first paid purchase (handled
+// in the Stripe payment.succeeded webhook), the Referral is marked
+// REWARDED and 7 booking credits are issued to BOTH users.
+//
+// Referrals expire 90 days after registration if the referee never
+// pays — that prevents stale rewards from accumulating indefinitely.
+// ============================================================
+
+enum ReferralStatus {
+  PENDING   // Referee registered but hasn't paid yet
+  REWARDED  // Referee paid; both sides got their reward
+  EXPIRED   // 90 days elapsed without payment
+}
+
+model Referral {
+  id                  String         @id @default(uuid())
+  referrerId          String
+  refereeId           String         @unique // Each user can be referred only once
+  status              ReferralStatus @default(PENDING)
+  referralCodeUsed    String         // Snapshot in case codes are regenerated
+  registeredAt        DateTime       @default(now())
+  rewardedAt          DateTime?
+  expiresAt           DateTime       // registeredAt + 90 days
+  // Free-form note for ops if a reward is manually adjusted
+  notes               String?
+
+  referrer User @relation("ReferralsMade", fields: [referrerId], references: [id])
+  referee  User @relation("ReferralReceived", fields: [refereeId], references: [id])
+
+  @@index([referrerId, status])
+  @@index([status, expiresAt])
+  @@map("referrals")
 }
 
 // ============================================================

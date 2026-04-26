@@ -49,6 +49,7 @@ import customFieldRoutes from './routes/customFields';
 import workflowRoutes from './routes/workflows';
 import outboundWebhookRoutes from './routes/webhooks.outbound';
 import marketingFormRoutes from './routes/marketingForms';
+import referralRoutes from './routes/referrals';
 import consultationRoutes from './routes/consultations';
 import twilioRoutes from './routes/twilio';
 import reviewRoutes from './routes/reviews';
@@ -182,6 +183,8 @@ app.use('/api/workflows', workflowRoutes);
 app.use('/api/outbound-webhooks', outboundWebhookRoutes);
 // Marketing forms — public form builder + submissions (#133)
 app.use('/api/marketing-forms', marketingFormRoutes);
+// Referral program — refer-a-friend free-week reward (#134)
+app.use('/api/referrals', referralRoutes);
 // Consultation calendar — public booking + admin slot management
 app.use('/api/consultations', consultationRoutes);
 // Twilio webhooks — inbound voice + SMS + missed-call text-back (#8, #9, #42)

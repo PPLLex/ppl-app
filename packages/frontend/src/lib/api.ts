@@ -1178,6 +1178,38 @@ class ApiClient {
     );
   }
 
+  // ============================================================
+  // REFERRALS (#134)
+  // ============================================================
+  async getMyReferrals() {
+    return this.request<{
+      code: string;
+      shareUrl: string;
+      summary: { total: number; pending: number; rewarded: number; expired: number };
+      referrals: Array<{
+        id: string;
+        status: 'PENDING' | 'REWARDED' | 'EXPIRED';
+        registeredAt: string;
+        rewardedAt: string | null;
+        expiresAt: string;
+        refereeName: string;
+      }>;
+      referredBy: {
+        status: string;
+        referrerName: string;
+        registeredAt: string;
+        rewardedAt: string | null;
+      } | null;
+    }>(`/referrals/me`);
+  }
+
+  async validateReferralCode(code: string) {
+    return this.request<{ valid: boolean; referrerFirstName?: string }>(
+      `/referrals/validate`,
+      { method: 'POST', body: JSON.stringify({ code }) }
+    );
+  }
+
   /**
    * Lead-source ROI: per-source funnel breakdown — total leads in
    * period, conversions, lost, in-progress, conversion rate, avg days
@@ -2183,6 +2215,20 @@ export interface RegisterData {
    * their own scheduling/billing without a parent/guardian account.
    */
   parentOptOut?: boolean;
+  /**
+   * Multi-athlete parent registration — additional athletes beyond the
+   * primary one. Validated on the server.
+   */
+  additionalAthletes?: Array<{
+    firstName: string;
+    lastName: string;
+    dateOfBirth?: string;
+    ageGroup?: string;
+  }>;
+  /**
+   * Referral program (#134) — code from /register?ref=CODE.
+   */
+  referralCode?: string;
 }
 
 export interface Location {

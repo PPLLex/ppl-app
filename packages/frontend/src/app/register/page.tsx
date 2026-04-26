@@ -126,6 +126,15 @@ function RegisterForm() {
   const oauthProvider = searchParams.get('oauth');
   const stepParam = searchParams.get('step');
   const paymentStatus = searchParams.get('payment');
+  const refParam = searchParams.get('ref');
+
+  // Capture ?ref=CODE referral code into localStorage so it survives
+  // OAuth round trips, Stripe checkout redirects, and back/forward nav.
+  useEffect(() => {
+    if (refParam && typeof window !== 'undefined') {
+      window.localStorage.setItem('ppl_ref', refParam.toUpperCase());
+    }
+  }, [refParam]);
 
   const getInitialStep = (): number => {
     if (stepParam === 'after-fee' && paymentStatus === 'success') return 4;
@@ -754,6 +763,12 @@ function RegisterForm() {
               ageGroup: a.ageGroup || undefined,
             })),
         }),
+        // Referral program (#134) — pass through ?ref=CODE if present.
+        // Stays alive until the account is actually created so users
+        // can navigate around between landing and register.
+        ...(typeof window !== 'undefined' && window.localStorage.getItem('ppl_ref')
+          ? { referralCode: window.localStorage.getItem('ppl_ref')! }
+          : {}),
       };
 
       const res = await api.register(registerPayload);

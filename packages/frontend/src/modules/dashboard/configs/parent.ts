@@ -25,6 +25,7 @@ export const parentDashboardConfig: DashboardConfig = {
     { id: 'recent-coach-notes', size: '1x2' },
     { id: 'messages', size: '1x1' },
     { id: 'billing-status', size: '1x1' },
+    { id: 'refer-a-friend', size: '1x1' },
     { id: 'educational-content', size: '2x1' },
   ],
 };

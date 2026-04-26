@@ -7,6 +7,7 @@ import { pollGoogleReviews } from './reviewMonitor';
 import { resumeDueWorkflowRuns } from './workflowEngine';
 import { sendDailyAdminDigest } from './dailyDigest';
 import { dispatchScheduledForms } from './scheduledFormSender';
+import { expireStaleReferrals } from './referralService';
 
 interface CronJob {
   name: string;
@@ -103,6 +104,17 @@ const jobs: CronJob[] = [
     name: 'Scheduled Marketing Form Sender',
     intervalMs: 60 * 60 * 1000,
     handler: dispatchScheduledForms,
+    enabled: true,
+  },
+  {
+    // Daily — mark PENDING referrals past their 90-day expiry as EXPIRED
+    name: 'Expire Stale Referrals',
+    intervalMs: 60 * 60 * 1000, // Hourly check; only fires at 3 AM ET
+    handler: async () => {
+      const hour = getEasternHour();
+      if (hour !== 3) return { skipped: true, reason: `Not 3 AM ET (currently ${hour})` };
+      return expireStaleReferrals();
+    },
     enabled: true,
   },
   {
