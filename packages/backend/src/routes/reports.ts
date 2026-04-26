@@ -7,6 +7,7 @@ import {
   PaymentStatus,
   SessionType,
 } from '@prisma/client';
+import { recomputeAllLeadScores, recomputeAllChurnRisks } from '../services/scoringService';
 
 const router = Router();
 
@@ -577,6 +578,61 @@ router.get('/dashboard', async (req: Request, res: Response, next: NextFunction)
     });
   } catch (error) {
     next(error);
+  }
+});
+
+// ============================================================
+// SCORING — manual recompute trigger
+// ============================================================
+//
+// Admin "Recalculate Now" button on the CRM + at-risk dashboards. Returns
+// counts of rows updated. Heavy operation — N+1 queries per scored row —
+// so cron handles the daily pass; this is for immediate refresh after
+// a big data import.
+router.post('/recompute-scores', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const [leads, churn] = await Promise.all([
+      recomputeAllLeadScores(),
+      recomputeAllChurnRisks(),
+    ]);
+    res.json({ success: true, data: { leadsUpdated: leads.updated, churnUpdated: churn.updated } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ============================================================
+// CRM — AT-RISK MEMBERS (highest churn risk)
+// ============================================================
+//
+// Top-N active members ordered by churnRiskScore desc. Used by the
+// admin dashboard to surface "people about to drop off so you can
+// intervene." Threshold default is score >= 50.
+router.get('/at-risk-members', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const threshold = Number(req.query.threshold ?? 50);
+    const limit = Math.min(Number(req.query.limit ?? 50), 200);
+    const members = await prisma.user.findMany({
+      where: {
+        role: 'CLIENT',
+        isActive: true,
+        churnRiskScore: { gte: threshold },
+      },
+      orderBy: [{ churnRiskScore: 'desc' }, { churnScoreUpdatedAt: 'desc' }],
+      take: limit,
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        phone: true,
+        churnRiskScore: true,
+        churnScoreUpdatedAt: true,
+        homeLocation: { select: { id: true, name: true } },
+      },
+    });
+    res.json({ success: true, data: members, threshold });
+  } catch (err) {
+    next(err);
   }
 });
 

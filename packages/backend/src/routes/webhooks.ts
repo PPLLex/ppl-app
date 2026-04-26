@@ -18,6 +18,7 @@ import {
   BookingStatus,
 } from '@prisma/client';
 import { notifyLocationCoordinators } from '../services/paymentRetryService';
+import { computeChurnRisk } from '../services/scoringService';
 
 const router = Router();
 
@@ -339,6 +340,13 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
     where: { id: membership.id },
     data: { status: MembershipStatus.PAST_DUE },
   });
+
+  // Failed payment is the strongest churn signal we have — recompute the
+  // member's churn-risk score now so the at-risk dashboard updates
+  // immediately instead of waiting for the nightly cron.
+  void computeChurnRisk(membership.clientId).catch((err) =>
+    console.error('[scoring] churn recompute failed:', err)
+  );
 
   // ---- REMOVE ATHLETE FROM ALL FUTURE BOOKED SESSIONS ----
   // Cancel all upcoming bookings and return credits to account (frozen)

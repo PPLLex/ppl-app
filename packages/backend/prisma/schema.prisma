@@ -430,6 +430,12 @@ model User {
   isActive         Boolean @default(true)
   stripeCustomerId String? @unique
 
+  // Churn risk score 0-100 for active members — computed nightly via
+  // services/churnRisk.ts. Higher = more likely to drop off. Drives the
+  // "At-Risk Members" admin dashboard.
+  churnRiskScore     Int       @default(0)
+  churnScoreUpdatedAt DateTime?
+
   // Family & account type fields
   accountType  AccountType @default(INDIVIDUAL)
   isParent     Boolean     @default(false)
@@ -1799,6 +1805,11 @@ model Lead {
   // so we can analyze which creatives / sources convert best without
   // having to predict every field schema-side.
   sourceMetadata    Json?
+  // Lead score 0-100 — computed nightly + on stage changes via
+  // services/leadScoring.ts. Higher = warmer / more likely to close.
+  // Drives CRM kanban sort order and the "Hot Leads" filter.
+  score             Int           @default(0)
+  scoreUpdatedAt    DateTime?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 

@@ -37,6 +37,7 @@ import {
   WorkflowTrigger,
 } from '@prisma/client';
 import { emitTrigger } from '../services/workflowEngine';
+import { computeLeadScore } from '../services/scoringService';
 
 const router = Router();
 
@@ -338,6 +339,14 @@ router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => 
       });
     }
 
+    // Stage / owner changes affect the lead score — recompute in the
+    // background so the CRM kanban order stays accurate.
+    if (stageChanged || ownerChanged) {
+      void computeLeadScore(id).catch((err) =>
+        console.error(`[scoring] lead ${id}:`, err)
+      );
+    }
+
     res.json({ success: true, data: lead });
   } catch (err) {
     next(err);
@@ -380,6 +389,9 @@ router.post('/:id/activities', async (req: Request, res: Response, next: NextFun
         metadata: (metadata as Prisma.InputJsonValue | undefined) ?? Prisma.JsonNull,
       },
     });
+
+    // Engagement bumps lead score — recompute in the background.
+    void computeLeadScore(id).catch(() => {});
 
     res.status(201).json({ success: true, data: activity });
   } catch (err) {

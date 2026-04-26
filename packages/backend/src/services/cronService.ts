@@ -2,6 +2,7 @@ import { sendSessionReminders, sendDailyStaffSchedule } from './reminderService'
 import { generateSessionsFromTemplates } from './scheduleGenerator';
 import { runDailyPaymentRetries } from './paymentRetryService';
 import { getEasternHour, getEasternDay } from './stripeService';
+import { recomputeAllLeadScores, recomputeAllChurnRisks } from './scoringService';
 
 interface CronJob {
   name: string;
@@ -59,6 +60,20 @@ const jobs: CronJob[] = [
         return generateSessionsFromTemplates(2);
       }
       return { skipped: true, reason: 'Not Sunday evening ET' };
+    },
+    enabled: true,
+  },
+  {
+    name: 'Nightly Lead + Churn Scoring',
+    intervalMs: 60 * 60 * 1000, // Every hour, only runs at 2 AM Eastern
+    handler: async () => {
+      const hour = getEasternHour();
+      if (hour !== 2) return { skipped: true, reason: `Not 2 AM ET (currently ${hour})` };
+      const [leads, churn] = await Promise.all([
+        recomputeAllLeadScores(),
+        recomputeAllChurnRisks(),
+      ]);
+      return { leadsUpdated: leads.updated, churnUpdated: churn.updated };
     },
     enabled: true,
   },
