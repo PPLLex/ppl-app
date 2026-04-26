@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { BulkActionBar, useRowSelection } from '@/components/bulk/BulkActionBar';
 import { HoverPreview } from '@/components/HoverPreview';
+import { ContextMenu } from '@/components/ContextMenu';
 
 type Lead = Awaited<ReturnType<typeof api.listLeads>>['data'] extends Array<infer T> | null | undefined
   ? T
@@ -273,6 +274,27 @@ function LeadCard({
       : 'bg-gray-500/10 text-gray-400 border-gray-500/30';
 
   return (
+    <ContextMenu
+      items={[
+        {
+          label: 'Open lead',
+          onSelect: () => {
+            window.location.href = `/admin/crm/${lead.id}`;
+          },
+        },
+        {
+          label: 'Open in new tab',
+          hrefNewTab: `/admin/crm/${lead.id}`,
+        },
+        { label: isSelected ? 'Deselect' : 'Select', onSelect: onToggleSelect },
+        ...(nextStage
+          ? [{ label: `Move to ${nextStage.label}`, onSelect: () => onAdvance(lead, nextStage.id) }]
+          : []),
+        ...(lead.email
+          ? [{ label: `Email ${lead.email}`, hrefNewTab: `mailto:${lead.email}` }]
+          : []),
+      ]}
+    >
     <div
       className={`border rounded-lg p-3 transition group ${
         isSelected
@@ -347,6 +369,7 @@ function LeadCard({
         </button>
       )}
     </div>
+    </ContextMenu>
   );
 }
 

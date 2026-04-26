@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { BulkActionBar, useRowSelection } from '@/components/bulk/BulkActionBar';
 import { HoverPreview } from '@/components/HoverPreview';
+import { ContextMenu } from '@/components/ContextMenu';
 
 const AGE_GROUP_LABELS: Record<string, string> = {
   college: 'College',
@@ -208,8 +209,45 @@ export default function AdminMembersPage() {
             </span>
           </div>
           {clients.map((client) => (
-            <div
+            <ContextMenu
               key={client.id}
+              items={[
+                {
+                  label: 'Open profile',
+                  onSelect: () => {
+                    window.location.href = `/admin/members/${client.id}`;
+                  },
+                },
+                {
+                  label: 'Open in new tab',
+                  hrefNewTab: `/admin/members/${client.id}`,
+                },
+                {
+                  label: sel.isSelected(client.id) ? 'Deselect' : 'Select',
+                  onSelect: () => sel.toggle(client.id),
+                },
+                {
+                  label: client.email ? `Email ${client.email}` : 'Email',
+                  hrefNewTab: client.email ? `mailto:${client.email}` : undefined,
+                  disabled: !client.email,
+                },
+                {
+                  label: 'Archive member',
+                  onSelect: async () => {
+                    if (!confirm(`Archive ${client.fullName}? Sets isActive=false.`)) return;
+                    try {
+                      await api.bulkMembersArchive({ userIds: [client.id] });
+                      toast.success('Archived');
+                      await loadClients();
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : 'Archive failed');
+                    }
+                  },
+                  danger: true,
+                },
+              ]}
+            >
+            <div
               className={`ppl-card flex items-center justify-between cursor-pointer transition-colors ${
                 sel.isSelected(client.id)
                   ? 'border-highlight bg-highlight/5'
@@ -283,6 +321,7 @@ export default function AdminMembersPage() {
                 </p>
               </div>
             </div>
+            </ContextMenu>
           ))}
         </div>
       )}
