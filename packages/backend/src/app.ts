@@ -51,6 +51,7 @@ import outboundWebhookRoutes from './routes/webhooks.outbound';
 import consultationRoutes from './routes/consultations';
 import twilioRoutes from './routes/twilio';
 import reviewRoutes from './routes/reviews';
+import swiftImportRoutes from './routes/swiftImport';
 import screeningRoutes from './routes/screenings';
 import campaignRoutes from './routes/campaigns';
 import emailPreviewRoutes from './routes/emailPreview';
@@ -186,6 +187,8 @@ app.use('/api/consultations', consultationRoutes);
 app.use('/api/twilio', twilioRoutes);
 // Reputation management — Google reviews + AI draft replies (#28, #40)
 app.use('/api/reviews', reviewRoutes);
+// Swift CSV importer — launch unblocker for migrating off Swift
+app.use('/api/admin/swift-import', swiftImportRoutes);
 
 // ============================================================
 // ERROR HANDLING
