@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, BookingHistoryItem, SessionWithAvailability } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { EmptyState } from '@/components/EmptyState';
 
 type StatusFilter = 'all' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
 
@@ -275,12 +276,13 @@ export default function ClientBookingHistoryPage() {
           )}
         </div>
       ) : (
-        <div className="ppl-card text-center py-12">
-          <p className="text-muted">No bookings found</p>
-          <a href="/client/book" className="text-sm text-accent-text hover:underline mt-2 inline-block">
-            Book a session &rarr;
-          </a>
-        </div>
+        <EmptyState
+          icon="calendar"
+          title="No sessions yet"
+          description="Book your first session and your training history will start filling up here."
+          href="/client/book"
+          ctaLabel="Book a Session"
+        />
       )}
 
       {/* Reschedule modal */}

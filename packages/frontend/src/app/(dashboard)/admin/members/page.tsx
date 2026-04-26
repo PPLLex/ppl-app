@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { api, ClientListItem, Location } from '@/lib/api';
+import { EmptyState } from '@/components/EmptyState';
+import { usePersistedState } from '@/hooks/usePersistedState';
 
 const AGE_GROUP_LABELS: Record<string, string> = {
   college: 'College',
@@ -13,10 +15,12 @@ const AGE_GROUP_LABELS: Record<string, string> = {
 export default function AdminMembersPage() {
   const [clients, setClients] = useState<ClientListItem[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
-  const [search, setSearch] = useState('');
-  const [filterLocation, setFilterLocation] = useState('');
-  const [filterAgeGroup, setFilterAgeGroup] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
+  // Persist filter state per-page so navigating away + back keeps the
+  // user's selections. Keys are page-scoped to avoid collisions.
+  const [search, setSearch] = usePersistedState<string>('members-search', '');
+  const [filterLocation, setFilterLocation] = usePersistedState<string>('members-location', '');
+  const [filterAgeGroup, setFilterAgeGroup] = usePersistedState<string>('members-age-group', '');
+  const [filterStatus, setFilterStatus] = usePersistedState<string>('members-status', '');
   const [isLoading, setIsLoading] = useState(true);
   const [selectedClient, setSelectedClient] = useState<ClientListItem | null>(null);
 
@@ -119,11 +123,30 @@ export default function AdminMembersPage() {
           <span className="sr-only">Loading members…</span>
         </div>
       ) : clients.length === 0 ? (
-        <div className="ppl-card text-center py-12">
-          <p className="text-muted">
-            {search ? 'No members match your search.' : 'No members found.'}
-          </p>
-        </div>
+        <EmptyState
+          icon="users"
+          title={search || filterLocation || filterAgeGroup || filterStatus
+            ? 'No members match those filters'
+            : 'No members yet'}
+          description={search || filterLocation || filterAgeGroup || filterStatus
+            ? 'Try clearing a filter or searching by a different name.'
+            : 'New athletes will appear here once they register.'}
+          action={
+            search || filterLocation || filterAgeGroup || filterStatus ? (
+              <button
+                onClick={() => {
+                  setSearch('');
+                  setFilterLocation('');
+                  setFilterAgeGroup('');
+                  setFilterStatus('');
+                }}
+                className="ppl-btn ppl-btn-secondary text-sm"
+              >
+                Clear all filters
+              </button>
+            ) : undefined
+          }
+        />
       ) : (
         <div className="space-y-2">
           {clients.map((client) => (

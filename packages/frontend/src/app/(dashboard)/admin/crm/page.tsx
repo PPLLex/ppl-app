@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { usePersistedState } from '@/hooks/usePersistedState';
 
 type Lead = Awaited<ReturnType<typeof api.listLeads>>['data'] extends Array<infer T> | null | undefined
   ? T
@@ -54,7 +55,9 @@ const SOURCE_LABELS: Record<string, string> = {
 
 export default function AdminCrmPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [search, setSearch] = useState('');
+  // Persist search across page navigations — staff routinely set a
+  // search, click into a lead, then return; losing the term is annoying.
+  const [search, setSearch] = usePersistedState<string>('crm-search', '');
   const [loading, setLoading] = useState(true);
   const [showNewForm, setShowNewForm] = useState(false);
 
