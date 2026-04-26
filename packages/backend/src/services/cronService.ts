@@ -5,6 +5,7 @@ import { getEasternHour, getEasternDay } from './stripeService';
 import { recomputeAllLeadScores, recomputeAllChurnRisks } from './scoringService';
 import { pollGoogleReviews } from './reviewMonitor';
 import { resumeDueWorkflowRuns } from './workflowEngine';
+import { sendDailyAdminDigest } from './dailyDigest';
 
 interface CronJob {
   name: string;
@@ -76,6 +77,16 @@ const jobs: CronJob[] = [
         recomputeAllChurnRisks(),
       ]);
       return { leadsUpdated: leads.updated, churnUpdated: churn.updated };
+    },
+    enabled: true,
+  },
+  {
+    name: 'Daily Admin Digest',
+    intervalMs: 60 * 60 * 1000, // hourly check; only fires at 7 AM ET
+    handler: async () => {
+      const hour = getEasternHour();
+      if (hour !== 7) return { skipped: true, reason: `Not 7 AM ET (currently ${hour})` };
+      return sendDailyAdminDigest();
     },
     enabled: true,
   },
