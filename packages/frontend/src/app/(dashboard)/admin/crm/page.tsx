@@ -136,9 +136,16 @@ export default function AdminCrmPage() {
         </div>
 
         {loading ? (
+          // Layout-matched skeleton — same column count + width as the
+          // real kanban so there's no shift when data lands.
           <div className="flex gap-3 overflow-x-auto pb-4">
             {STAGES.map((s) => (
-              <div key={s.id} className="min-w-[260px] ppl-card animate-pulse h-64" />
+              <div key={s.id} className="min-w-[280px] flex-shrink-0 space-y-3">
+                <div className="ppl-skeleton h-6 w-32" aria-hidden />
+                <div className="ppl-skeleton h-20" aria-hidden />
+                <div className="ppl-skeleton h-20" aria-hidden />
+                <div className="ppl-skeleton h-20" aria-hidden />
+              </div>
             ))}
           </div>
         ) : (

@@ -103,10 +103,20 @@ export default function AdminMembersPage() {
 
       {/* Members List */}
       {isLoading ? (
-        <div className="space-y-3">
-          {[1, 2, 3, 4, 5].map((n) => (
-            <div key={n} className="ppl-card animate-pulse h-20" />
+        // Layout-matched shimmer rows — avatar circle + 2 lines + status pill,
+        // same heights as the real row so no layout shift on data arrival.
+        <div className="space-y-2">
+          {Array.from({ length: 6 }).map((_, n) => (
+            <div key={n} className="ppl-card flex items-center gap-3" aria-hidden>
+              <div className="ppl-skeleton w-10 h-10 rounded-full" />
+              <div className="flex-1 space-y-2">
+                <div className="ppl-skeleton h-4 w-1/3" />
+                <div className="ppl-skeleton h-3 w-1/2" />
+              </div>
+              <div className="ppl-skeleton h-6 w-16 rounded-full" />
+            </div>
           ))}
+          <span className="sr-only">Loading members…</span>
         </div>
       ) : clients.length === 0 ? (
         <div className="ppl-card text-center py-12">

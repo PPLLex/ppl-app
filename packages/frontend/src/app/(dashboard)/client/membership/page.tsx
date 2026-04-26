@@ -143,10 +143,22 @@ function ClientMembershipPageInner() {
 
   if (isLoading) {
     return (
-      <div className="max-w-2xl mx-auto space-y-4">
-        <div className="h-8 bg-surface-hover rounded animate-pulse w-48" />
-        <div className="ppl-card animate-pulse h-48" />
-        <div className="ppl-card animate-pulse h-32" />
+      // Shimmer skeleton matched to membership-card layout (header → big
+      // status block → recent payments list).
+      <div className="max-w-2xl mx-auto space-y-4" aria-hidden>
+        <div className="ppl-skeleton h-8 w-48" />
+        <div className="ppl-card space-y-3">
+          <div className="ppl-skeleton h-5 w-1/3" />
+          <div className="ppl-skeleton h-10 w-1/2" />
+          <div className="ppl-skeleton h-4 w-2/3" />
+        </div>
+        <div className="ppl-card space-y-2">
+          <div className="ppl-skeleton h-4 w-1/4" />
+          {[1, 2, 3].map((n) => (
+            <div key={n} className="ppl-skeleton h-10 w-full" />
+          ))}
+        </div>
+        <span className="sr-only">Loading membership…</span>
       </div>
     );
   }
@@ -537,9 +549,9 @@ export default function ClientMembershipPage() {
   return (
     <Suspense
       fallback={
-        <div className="max-w-2xl mx-auto space-y-4">
-          <div className="h-8 bg-surface-hover rounded animate-pulse w-48" />
-          <div className="ppl-card animate-pulse h-48" />
+        <div className="max-w-2xl mx-auto space-y-4" aria-hidden>
+          <div className="ppl-skeleton h-8 w-48" />
+          <div className="ppl-skeleton h-48 rounded-xl" />
         </div>
       }
     >

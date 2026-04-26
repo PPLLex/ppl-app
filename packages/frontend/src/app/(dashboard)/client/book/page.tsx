@@ -570,10 +570,19 @@ export default function ClientBookPage() {
           </h2>
 
           {isLoading ? (
-            <div className="space-y-3">
+            // Layout-matched skeleton — time pill + title + spots-left chip
+            <div className="space-y-3" aria-hidden>
               {[1, 2, 3].map((n) => (
-                <div key={n} className="ppl-card animate-pulse h-20" />
+                <div key={n} className="ppl-card flex items-center gap-3">
+                  <div className="ppl-skeleton h-10 w-16 rounded-md" />
+                  <div className="flex-1 space-y-2">
+                    <div className="ppl-skeleton h-4 w-2/3" />
+                    <div className="ppl-skeleton h-3 w-1/3" />
+                  </div>
+                  <div className="ppl-skeleton h-6 w-20 rounded-full" />
+                </div>
               ))}
+              <span className="sr-only">Loading sessions…</span>
             </div>
           ) : selectedDateSessions.length === 0 ? (
             <div className="ppl-card text-center py-8">
