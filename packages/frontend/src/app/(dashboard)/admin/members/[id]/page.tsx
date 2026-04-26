@@ -66,6 +66,20 @@ export default function MemberDetailPage() {
     }
   }
 
+  async function handleSendReviewRequest() {
+    if (!member) return;
+    if (!confirm(`Send a review request email to ${member.fullName}?`)) return;
+    try {
+      const res = await api.sendReviewRequest(id);
+      setMessage({ type: 'success', text: res.message || 'Review request sent.' });
+    } catch (err) {
+      setMessage({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Failed to send review request.',
+      });
+    }
+  }
+
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
@@ -114,12 +128,20 @@ export default function MemberDetailPage() {
             <h1 className="text-2xl font-bold text-foreground">{member.fullName}</h1>
             <p className="text-sm text-muted">{member.email} {member.phone && `Â· ${member.phone}`}</p>
           </div>
-          <button
-            onClick={handleDeactivate}
-            className="ppl-btn text-sm bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20"
-          >
-            Deactivate
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleSendReviewRequest}
+              className="ppl-btn text-sm bg-highlight/15 text-accent-text border border-highlight/30 hover:bg-highlight/25"
+            >
+              Send Review Request
+            </button>
+            <button
+              onClick={handleDeactivate}
+              className="ppl-btn text-sm bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20"
+            >
+              Deactivate
+            </button>
+          </div>
         </div>
       </div>
 

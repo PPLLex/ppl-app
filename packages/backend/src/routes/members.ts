@@ -2,7 +2,10 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../utils/prisma';
 import { ApiError } from '../utils/apiError';
 import { authenticate, requireStaffOrAdmin, requireAdmin } from '../middleware/auth';
-import { Role } from '@prisma/client';
+import { Role, NotificationType, NotificationChannel } from '@prisma/client';
+import { notify } from '../services/notificationService';
+import { buildReviewRequestEmail } from '../services/emailService';
+import { createAuditLog } from '../services/auditService';
 
 const router = Router();
 
@@ -208,6 +211,79 @@ router.put(
       res.json({ success: true, message: 'Client account deactivated.' });
     } catch (error) {
       next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/members/:id/review-request
+ * Staff/Admin: send a one-click review request email to this client.
+ *
+ * Pulls the org-level Google + Facebook review URLs from OrgSettings —
+ * if neither is configured, returns 400 so the admin knows to fill them
+ * in on the Settings page first. The fromName field is the admin's own
+ * full name so the email reads as a personal ask.
+ */
+router.post(
+  '/:id/review-request',
+  authenticate,
+  requireStaffOrAdmin,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const clientId = param(req, 'id');
+      const client = await prisma.user.findUnique({
+        where: { id: clientId },
+        select: { id: true, email: true, fullName: true, isActive: true, role: true },
+      });
+      if (!client) throw ApiError.notFound('Member not found');
+      if (!client.isActive) throw ApiError.badRequest('Member is deactivated');
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const settings: any = await prisma.orgSettings.findUnique({ where: { id: 'ppl' } });
+      const googleReviewUrl: string | null = settings?.googleReviewUrl ?? null;
+      const facebookReviewUrl: string | null = settings?.facebookReviewUrl ?? null;
+      if (!googleReviewUrl && !facebookReviewUrl) {
+        throw ApiError.badRequest(
+          'No review URL configured. Add a Google or Facebook review link on the Settings page first.'
+        );
+      }
+
+      const sender = await prisma.user.findUnique({
+        where: { id: req.user!.userId },
+        select: { fullName: true },
+      });
+
+      const html = buildReviewRequestEmail({
+        athleteName: client.fullName || 'there',
+        googleReviewUrl,
+        facebookReviewUrl,
+        fromName: sender?.fullName ?? null,
+      });
+
+      await notify({
+        userId: client.id,
+        type: NotificationType.NEW_MESSAGE,
+        title: `Quick favor — drop us a review?`,
+        body: `Open this email for the link.`,
+        channels: [NotificationChannel.EMAIL],
+        emailHtml: html,
+        metadata: { kind: 'review_request', sentBy: req.user!.userId },
+      });
+
+      await createAuditLog({
+        userId: req.user!.userId,
+        action: 'member.review_request_sent',
+        resourceType: 'user',
+        resourceId: clientId,
+        changes: { to: client.email },
+      });
+
+      res.json({
+        success: true,
+        message: `Review request sent to ${client.fullName || client.email}.`,
+      });
+    } catch (err) {
+      next(err);
     }
   }
 );

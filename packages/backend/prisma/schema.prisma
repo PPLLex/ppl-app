@@ -1747,6 +1747,13 @@ model OrgSettings {
   financeWeekResetDay  Int @default(1) // day the snapshot is taken
   financeWeekResetHour Int @default(5) // 24h local time
 
+  // Reputation management — review URLs used by the "Send Review Request"
+  // button on each member profile. Admins paste a Google Places writereview
+  // link or Facebook page review URL; the request email links there
+  // directly so the recipient's tap → review takes one click.
+  googleReviewUrl   String?
+  facebookReviewUrl String?
+
   updatedAt DateTime @updatedAt
 
   @@map("org_settings")

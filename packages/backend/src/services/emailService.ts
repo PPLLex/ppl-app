@@ -829,6 +829,44 @@ export function buildMembershipStatusEmail(
 }
 
 /**
+ * Review-request email — fired by the "Send Review Request" button on
+ * each member profile. Body shows the org's review URL as a single
+ * unmissable button. We render BOTH Google + Facebook URLs if both are
+ * configured; otherwise we skip the missing one.
+ */
+export function buildReviewRequestEmail(args: {
+  athleteName: string;
+  googleReviewUrl?: string | null;
+  facebookReviewUrl?: string | null;
+  fromName?: string | null;
+}): string {
+  const firstName = args.athleteName.split(' ')[0] || 'there';
+  const fromLine = args.fromName
+    ? `<strong style="color:#1a1a1a;">${args.fromName}</strong> here from Pitching Performance Lab.`
+    : `It's the team at Pitching Performance Lab.`;
+  const buttons: string[] = [];
+  if (args.googleReviewUrl) {
+    buttons.push(
+      `<a href="${args.googleReviewUrl}" style="display:inline-block;padding:14px 28px;background:#95c83c;color:#1a1a1a;text-decoration:none;border-radius:8px;font-size:14px;font-weight:700;letter-spacing:0.4px;">Leave a Google Review</a>`
+    );
+  }
+  if (args.facebookReviewUrl) {
+    buttons.push(
+      `<a href="${args.facebookReviewUrl}" style="display:inline-block;padding:14px 28px;background:#1877F2;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:700;letter-spacing:0.4px;margin-left:8px;">Review on Facebook</a>`
+    );
+  }
+  const buttonRow = buttons.join('');
+
+  return buildPPLEmail(`How's it going?`, `
+    <p style="margin:0 0 14px;font-size:15px;color:#1a1a1a;line-height:1.6;">Hey ${firstName},</p>
+    <p style="margin:0 0 18px;font-size:14.5px;color:#374151;line-height:1.65;">${fromLine} Hope your training has been clicking lately.</p>
+    <p style="margin:0 0 24px;font-size:14.5px;color:#374151;line-height:1.65;">If we've made a difference for you, would you mind dropping us a quick review? It takes 30 seconds and it helps other families find PPL.</p>
+    <p style="margin:0 0 22px;text-align:center;">${buttonRow || '<span style="color:#666;">No review URL configured yet.</span>'}</p>
+    <p style="margin:0;font-size:12px;color:#666;text-align:center;">Even one or two sentences makes a huge difference. Thanks for being part of the lab.</p>
+  `);
+}
+
+/**
  * Card update required email (for failed payments).
  */
 export function buildCardUpdateEmail(

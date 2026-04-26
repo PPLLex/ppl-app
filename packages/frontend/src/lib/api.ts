@@ -618,6 +618,18 @@ class ApiClient {
   }
 
   /**
+   * Fire a one-click review request email to the member. The org's
+   * Google + Facebook review URLs (set in OrgSettings) determine the
+   * destination links — if neither is configured, backend returns 400.
+   */
+  async sendReviewRequest(memberId: string) {
+    return this.request<{ message: string }>(
+      `/members/${encodeURIComponent(memberId)}/review-request`,
+      { method: 'POST' }
+    );
+  }
+
+  /**
    * Role-first invite (April 2026). Supports all 11 roles — pass the target
    * Role enum value + optional scope (locationId for location-scoped roles,
    * schoolTeamId for PARTNERSHIP_COACH). Used by the /admin/invite v2 page.
