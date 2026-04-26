@@ -18,6 +18,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { TagPicker } from '@/components/TagPicker';
+import { CustomFieldsPanel } from '@/components/CustomFieldsPanel';
 
 type Lead = NonNullable<Awaited<ReturnType<typeof api.getLead>>['data']>;
 type Activity = Lead['activities'][number];
@@ -259,6 +260,11 @@ export default function LeadDetailPage() {
             </p>
           )}
         </div>
+      </div>
+
+      {/* Custom fields */}
+      <div className="mt-6">
+        <CustomFieldsPanel entityType="LEAD" entityId={lead.id} />
       </div>
 
       {/* Source meta */}

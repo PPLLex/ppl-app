@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api, ClientDetail } from '@/lib/api';
 import { TagPicker } from '@/components/TagPicker';
+import { CustomFieldsPanel } from '@/components/CustomFieldsPanel';
 
 const STATUS_COLORS: Record<string, string> = {
   ACTIVE: 'bg-green-500/10 text-green-400 border border-green-500/20',
@@ -163,6 +164,11 @@ export default function MemberDetailPage() {
       <div className="mb-4">
         <p className="text-[10px] uppercase tracking-[0.12em] text-muted mb-2">Tags</p>
         <TagPicker subjectType="user" subjectId={member.id} />
+      </div>
+
+      {/* Custom fields */}
+      <div className="mb-4">
+        <CustomFieldsPanel entityType="USER" entityId={member.id} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

@@ -897,6 +897,35 @@ class ApiClient {
     return this.request(`/custom-fields/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }
 
+  async getCustomFieldValues(entityType: 'LEAD' | 'USER' | 'ATHLETE_PROFILE', entityId: string) {
+    return this.request<Array<{
+      id: string;
+      fieldId: string;
+      value: string | null;
+      field: {
+        id: string;
+        name: string;
+        slug: string;
+        fieldType: string;
+        config: Record<string, unknown> | null;
+        required: boolean;
+        order: number;
+        active: boolean;
+      };
+    }>>(`/custom-fields/values/${entityType}/${encodeURIComponent(entityId)}`);
+  }
+
+  async setCustomFieldValues(
+    entityType: 'LEAD' | 'USER' | 'ATHLETE_PROFILE',
+    entityId: string,
+    values: Record<string, unknown>
+  ) {
+    return this.request(`/custom-fields/values/${entityType}/${encodeURIComponent(entityId)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ values }),
+    });
+  }
+
   // ============================================================
   // OUTBOUND WEBHOOKS
   // ============================================================
