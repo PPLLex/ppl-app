@@ -33,6 +33,7 @@ import {
   AthleteMetricsReadOnlyWidget,
   MessagePplStaffWidget,
   ReferAFriendWidget,
+  TrainingStreakWidget,
 } from './widgets';
 
 /**
@@ -171,6 +172,15 @@ export const WIDGETS: Record<string, WidgetDefinition> = {
     defaultSize: '1x1',
     allowedRoles: ['CLIENT'],
     component: ReferAFriendWidget,
+  },
+  // Streak indicator (#U22) — retention + delight, shows up on every
+  // CLIENT dashboard variant.
+  'training-streak': {
+    id: 'training-streak',
+    title: 'Training Streak',
+    defaultSize: '1x1',
+    allowedRoles: ['CLIENT'],
+    component: TrainingStreakWidget,
   },
 };
 

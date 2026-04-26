@@ -16,6 +16,7 @@ export const athleteDashboardConfig: DashboardConfig = {
   widgets: [
     { id: 'todays-program', size: '2x2' },
     { id: 'my-goals', size: '1x1' },
+    { id: 'training-streak', size: '1x1' },
     { id: 'my-metrics', size: '2x1' },
     { id: 'coach-notes', size: '1x1' },
     { id: 'refer-a-friend', size: '1x1' },

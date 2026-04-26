@@ -23,6 +23,7 @@ export const parentDashboardConfig: DashboardConfig = {
     { id: 'upcoming-sessions', size: '2x1' },
     { id: 'my-athletes', size: '1x2' },
     { id: 'recent-coach-notes', size: '1x2' },
+    { id: 'training-streak', size: '1x1' },
     { id: 'messages', size: '1x1' },
     { id: 'billing-status', size: '1x1' },
     { id: 'refer-a-friend', size: '1x1' },

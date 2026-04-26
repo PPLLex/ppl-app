@@ -298,6 +298,18 @@ class ApiClient {
     });
   }
 
+  // Training streak (#U22). Optional athleteId narrows to a specific
+  // family kid; otherwise defaults to the caller's own profile.
+  async getMyStreak(athleteId?: string) {
+    const q = athleteId ? `?athleteId=${encodeURIComponent(athleteId)}` : '';
+    return this.request<{
+      currentWeeks: number;
+      longestWeeks: number;
+      thisWeekCompleted: number;
+      lastSessionAt: string | null;
+    }>(`/streaks/me${q}`);
+  }
+
   // ============================================================
   // Promo codes (#138)
   // ============================================================
