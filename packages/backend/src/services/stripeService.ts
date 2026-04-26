@@ -326,6 +326,103 @@ export async function cancelSubscription(membershipId: string): Promise<void> {
 }
 
 /**
+ * Pause a membership for N weeks. Stripe-side: pause_collection so no
+ * invoices fire while paused. Resumed automatically by the daily cron
+ * when pauseUntil falls in the past, OR manually via resumeMembership.
+ */
+export async function pauseMembership(
+  membershipId: string,
+  pauseUntil: Date,
+  reason?: string
+): Promise<void> {
+  const membership = await prisma.clientMembership.findUnique({
+    where: { id: membershipId },
+  });
+  if (!membership) throw new Error('Membership not found');
+  if (membership.status === MembershipStatus.CANCELLED) {
+    throw new Error('Cannot pause a cancelled membership');
+  }
+  if (!membership.stripeSubscriptionId) {
+    throw new Error('Membership has no Stripe subscription');
+  }
+
+  // Stripe: void invoices during pause so the subscription doesn't
+  // accumulate unpaid invoices that the user is on the hook for.
+  // Subscription resumes when we clear pause_collection (in resume).
+  await stripe.subscriptions.update(membership.stripeSubscriptionId, {
+    pause_collection: { behavior: 'void', resumes_at: Math.floor(pauseUntil.getTime() / 1000) },
+  });
+
+  await prisma.clientMembership.update({
+    where: { id: membershipId },
+    data: {
+      status: MembershipStatus.PAUSED,
+      pausedAt: new Date(),
+      pauseUntil,
+      pauseReason: reason ?? null,
+    },
+  });
+}
+
+/**
+ * Resume a paused membership immediately, regardless of the original
+ * pauseUntil date.
+ */
+export async function resumeMembership(membershipId: string): Promise<void> {
+  const membership = await prisma.clientMembership.findUnique({
+    where: { id: membershipId },
+  });
+  if (!membership) throw new Error('Membership not found');
+  if (membership.status !== MembershipStatus.PAUSED) {
+    throw new Error('Only PAUSED memberships can be resumed');
+  }
+  if (!membership.stripeSubscriptionId) {
+    throw new Error('Membership has no Stripe subscription');
+  }
+
+  // Stripe: clearing pause_collection by passing '' resumes billing.
+  // (Stripe API: pass the empty value to remove pause.)
+  await stripe.subscriptions.update(membership.stripeSubscriptionId, {
+    pause_collection: '' as unknown as null,
+  });
+
+  await prisma.clientMembership.update({
+    where: { id: membershipId },
+    data: {
+      status: MembershipStatus.ACTIVE,
+      pauseUntil: null,
+      pausedAt: null,
+      pauseReason: null,
+    },
+  });
+}
+
+/**
+ * Daily cron — find every PAUSED membership whose pauseUntil has
+ * elapsed and resume it. Tolerates Stripe errors per-row so one
+ * failure doesn't block the rest of the batch.
+ */
+export async function autoResumePausedMemberships(): Promise<{ resumed: number; failed: number }> {
+  const now = new Date();
+  const paused = await prisma.clientMembership.findMany({
+    where: { status: MembershipStatus.PAUSED, pauseUntil: { lte: now } },
+    select: { id: true, clientId: true },
+  });
+  let resumed = 0;
+  let failed = 0;
+  for (const m of paused) {
+    try {
+      await resumeMembership(m.id);
+      resumed++;
+    } catch (e) {
+      console.error(`[stripe] auto-resume failed for ${m.id}:`, e);
+      failed++;
+    }
+  }
+  return { resumed, failed };
+}
+
+/**
  * Create a secure card update session for a client.
  * Returns a URL the client can use to update their payment method.
  */

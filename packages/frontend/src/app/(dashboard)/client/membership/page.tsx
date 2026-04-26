@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { toast } from 'sonner';
 import { api, MembershipPlan, MembershipDetail, PaymentRecord, SubscribeResult } from '@/lib/api';
 import StripeCheckout from '@/components/payments/StripeCheckout';
 
@@ -35,6 +36,7 @@ function ClientMembershipPageInner() {
   const [showPlans, setShowPlans] = useState(false);
   const [actionInProgress, setActionInProgress] = useState(false);
   const [checkoutData, setCheckoutData] = useState<SubscribeResult | null>(null);
+  const [showPauseModal, setShowPauseModal] = useState(false);
 
   // Resolve the active athlete (when parent is managing a specific kid).
   // null = self-managed / no selection. Used for the header name +
@@ -311,7 +313,43 @@ function ClientMembershipPageInner() {
                 </svg>
                 Update Payment Card
               </button>
-              {!membership.cancelRequestedAt && (
+              {membership.status === 'PAUSED' ? (
+                <button
+                  onClick={async () => {
+                    if (!confirm('Resume your membership now? Billing restarts today.')) return;
+                    setActionInProgress(true);
+                    try {
+                      await api.resumeMembership(membership.id);
+                      toast.success('Membership resumed');
+                      void loadData();
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : 'Resume failed');
+                    } finally {
+                      setActionInProgress(false);
+                    }
+                  }}
+                  disabled={actionInProgress}
+                  className="ppl-btn ppl-btn-primary w-full text-left justify-start"
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Resume Membership
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowPauseModal(true)}
+                  disabled={actionInProgress || membership.status !== 'ACTIVE'}
+                  className="ppl-btn ppl-btn-secondary w-full text-left justify-start"
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Pause Membership
+                </button>
+              )}
+              {!membership.cancelRequestedAt && membership.status !== 'PAUSED' && (
                 <button
                   onClick={handleCancelRequest}
                   disabled={actionInProgress}
@@ -325,6 +363,38 @@ function ClientMembershipPageInner() {
               )}
             </div>
           </div>
+
+          {/* Paused banner — when status is PAUSED, show the resume date and reason */}
+          {membership.status === 'PAUSED' && membership.pauseUntil && (
+            <div className="mb-4 p-4 rounded-xl bg-blue-500/10 border border-blue-500/30">
+              <p className="text-sm font-semibold text-blue-400">Membership paused</p>
+              <p className="text-sm text-muted mt-1">
+                Auto-resumes on{' '}
+                <span className="text-foreground font-medium">{formatDate(membership.pauseUntil)}</span>.
+                No payments will be taken in the meantime.
+              </p>
+            </div>
+          )}
+
+          {/* Pause modal */}
+          {showPauseModal && (
+            <PauseMembershipModal
+              onClose={() => setShowPauseModal(false)}
+              onConfirm={async (weeks, reason) => {
+                setActionInProgress(true);
+                try {
+                  await api.pauseMembership(membership.id, weeks, reason);
+                  toast.success(`Paused for ${weeks} week${weeks === 1 ? '' : 's'}`);
+                  setShowPauseModal(false);
+                  void loadData();
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : 'Pause failed');
+                } finally {
+                  setActionInProgress(false);
+                }
+              }}
+            />
+          )}
 
           {/* Recent Payments */}
           {payments.length > 0 && (
@@ -475,5 +545,93 @@ export default function ClientMembershipPage() {
     >
       <ClientMembershipPageInner />
     </Suspense>
+  );
+}
+
+// ============================================================
+// PauseMembershipModal — picks 1-12 weeks + optional reason
+// ============================================================
+function PauseMembershipModal({
+  onClose,
+  onConfirm,
+}: {
+  onClose: () => void;
+  onConfirm: (weeks: number, reason: string) => void;
+}) {
+  const [weeks, setWeeks] = useState(2);
+  const [reason, setReason] = useState('');
+
+  const resumeDate = new Date(Date.now() + weeks * 7 * 24 * 60 * 60 * 1000);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-surface border border-border rounded-xl p-6 max-w-md w-full">
+        <h2 className="text-lg font-bold text-foreground">Pause your membership</h2>
+        <p className="text-sm text-muted mt-1">
+          We&apos;ll pause your billing and your bookings for the chosen window. Your
+          membership resumes automatically — no action required.
+        </p>
+
+        <label className="block mt-5 text-sm font-semibold text-foreground">How long?</label>
+        <div className="grid grid-cols-6 gap-2 mt-2">
+          {[1, 2, 3, 4, 6, 8].map((w) => (
+            <button
+              key={w}
+              type="button"
+              onClick={() => setWeeks(w)}
+              className={`py-2 rounded-md text-sm transition ${
+                weeks === w
+                  ? 'bg-[#5E9E50] text-white'
+                  : 'bg-bg-secondary border border-border text-muted hover:text-foreground'
+              }`}
+            >
+              {w}w
+            </button>
+          ))}
+        </div>
+        <input
+          type="range"
+          min={1}
+          max={12}
+          value={weeks}
+          onChange={(e) => setWeeks(Number(e.target.value))}
+          className="w-full mt-3"
+        />
+        <p className="text-xs text-muted mt-1">
+          Pausing for <span className="text-foreground font-semibold">{weeks} week{weeks === 1 ? '' : 's'}</span> — resumes on{' '}
+          <span className="text-foreground font-semibold">
+            {resumeDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+          </span>
+        </p>
+
+        <label className="block mt-5 text-sm font-semibold text-foreground">
+          Reason (optional)
+        </label>
+        <textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          rows={2}
+          className="ppl-input mt-1"
+          placeholder="On vacation, injury recovery, etc."
+        />
+
+        <div className="flex justify-end gap-2 mt-6">
+          <button
+            type="button"
+            onClick={onClose}
+            className="ppl-btn ppl-btn-secondary text-sm"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => onConfirm(weeks, reason.trim())}
+            className="ppl-btn ppl-btn-primary text-sm"
+          >
+            Pause for {weeks} week{weeks === 1 ? '' : 's'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

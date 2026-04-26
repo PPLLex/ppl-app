@@ -351,6 +351,27 @@ class ApiClient {
     });
   }
 
+  /**
+   * Pause a membership for 1-12 weeks. Self-service for the owner; admins
+   * may also call this for any user. (#137)
+   */
+  async pauseMembership(membershipId: string, weeks: number, reason?: string) {
+    return this.request<{ pauseUntil: string }>(
+      `/memberships/${encodeURIComponent(membershipId)}/pause`,
+      { method: 'POST', body: JSON.stringify({ weeks, reason }) }
+    );
+  }
+
+  /**
+   * Resume a paused membership immediately, regardless of original pause window.
+   */
+  async resumeMembership(membershipId: string) {
+    return this.request(
+      `/memberships/${encodeURIComponent(membershipId)}/resume`,
+      { method: 'POST' }
+    );
+  }
+
   // Admin memberships
   async getMemberships(params?: { status?: string; locationId?: string; page?: number }) {
     const query = new URLSearchParams();
@@ -2463,6 +2484,9 @@ export interface MembershipDetail {
     billingAnchorDate: string;
     startedAt: string;
     cancelRequestedAt: string | null;
+    pausedAt?: string | null;
+    pauseUntil?: string | null;
+    pauseReason?: string | null;
     plan: MembershipPlan;
     location: { id: string; name: string };
   };

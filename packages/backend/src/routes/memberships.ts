@@ -11,6 +11,8 @@ import {
   createCardUpdateSession,
   retryPayment,
   getOrCreateStripePrice,
+  pauseMembership,
+  resumeMembership,
   stripe,
 } from '../services/stripeService';
 import { config } from '../config';
@@ -402,7 +404,8 @@ router.get('/my', authenticate, async (req: Request, res: Response, next: NextFu
     const membership = await prisma.clientMembership.findFirst({
       where: {
         clientId: user.userId,
-        status: { in: [MembershipStatus.ACTIVE, MembershipStatus.PAST_DUE] },
+        // Include PAUSED so the user can see + resume it from /client/membership.
+        status: { in: [MembershipStatus.ACTIVE, MembershipStatus.PAST_DUE, MembershipStatus.PAUSED] },
         ...(filterAthleteId ? { athleteId: filterAthleteId } : {}),
       },
       include: {
@@ -959,6 +962,127 @@ router.post(
         success: true,
         message: 'Membership has been cancelled. Client will retain access until the end of their billing period.',
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/memberships/:id/pause
+ * Body: { weeks: number, reason?: string }
+ *
+ * Self-service: client pauses their OWN membership for 1-12 weeks.
+ * No invoices fire while paused. Auto-resumes via daily cron when
+ * pauseUntil falls in the past, or manually via /resume.
+ */
+router.post(
+  '/:id/pause',
+  authenticate,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const membershipId = param(req, 'id');
+      const user = req.user!;
+      const { weeks, reason } = req.body as { weeks?: number; reason?: string };
+
+      const wks = typeof weeks === 'number' ? Math.floor(weeks) : 0;
+      if (wks < 1 || wks > 12) {
+        return res.status(400).json({
+          success: false,
+          message: 'weeks must be between 1 and 12',
+        });
+      }
+
+      const membership = await prisma.clientMembership.findUnique({
+        where: { id: membershipId },
+        include: { plan: true },
+      });
+      if (!membership) {
+        return res.status(404).json({ success: false, message: 'Membership not found' });
+      }
+      // Self-service: only the membership owner OR an admin can pause.
+      if (membership.clientId !== user.userId && user.role !== Role.ADMIN) {
+        return res.status(403).json({ success: false, message: 'Not your membership' });
+      }
+      if (membership.status === MembershipStatus.PAUSED) {
+        return res.status(400).json({ success: false, message: 'Membership is already paused' });
+      }
+      if (membership.status === MembershipStatus.CANCELLED) {
+        return res.status(400).json({ success: false, message: 'Cannot pause a cancelled membership' });
+      }
+
+      const pauseUntil = new Date(Date.now() + wks * 7 * 24 * 60 * 60 * 1000);
+      await pauseMembership(membershipId, pauseUntil, reason?.trim() || undefined);
+
+      await notify({
+        userId: membership.clientId,
+        type: NotificationType.MEMBERSHIP_STATUS_CHANGE,
+        title: 'Membership Paused',
+        body: `Your ${membership.plan.name} membership is paused until ${pauseUntil.toLocaleDateString()}. No payments will be taken in the meantime, and it'll resume automatically.`,
+        channels: [NotificationChannel.EMAIL],
+        metadata: { membershipId, pauseUntil: pauseUntil.toISOString() },
+      });
+
+      await createAuditLog({
+        userId: user.userId,
+        action: 'membership.paused',
+        resourceType: 'membership',
+        resourceId: membershipId,
+        changes: { weeks: wks, pauseUntil: pauseUntil.toISOString(), reason: reason ?? null },
+      });
+
+      res.json({ success: true, data: { pauseUntil } });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/memberships/:id/resume
+ * Owner OR admin can manually un-pause before pauseUntil elapses.
+ */
+router.post(
+  '/:id/resume',
+  authenticate,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const membershipId = param(req, 'id');
+      const user = req.user!;
+
+      const membership = await prisma.clientMembership.findUnique({
+        where: { id: membershipId },
+        include: { plan: true },
+      });
+      if (!membership) {
+        return res.status(404).json({ success: false, message: 'Membership not found' });
+      }
+      if (membership.clientId !== user.userId && user.role !== Role.ADMIN) {
+        return res.status(403).json({ success: false, message: 'Not your membership' });
+      }
+      if (membership.status !== MembershipStatus.PAUSED) {
+        return res.status(400).json({ success: false, message: 'Membership is not paused' });
+      }
+
+      await resumeMembership(membershipId);
+
+      await notify({
+        userId: membership.clientId,
+        type: NotificationType.MEMBERSHIP_STATUS_CHANGE,
+        title: 'Welcome Back!',
+        body: `Your ${membership.plan.name} membership has been resumed. Your next billing cycle starts today.`,
+        channels: [NotificationChannel.EMAIL],
+        metadata: { membershipId },
+      });
+
+      await createAuditLog({
+        userId: user.userId,
+        action: 'membership.resumed',
+        resourceType: 'membership',
+        resourceId: membershipId,
+      });
+
+      res.json({ success: true });
     } catch (error) {
       next(error);
     }

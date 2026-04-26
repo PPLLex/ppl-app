@@ -60,6 +60,7 @@ enum MembershipStatus {
   PAST_DUE
   SUSPENDED
   CANCELLED
+  PAUSED // Member voluntarily paused — Stripe sub paused, auto-resumes on pauseUntil
 }
 
 enum BillingDay {
@@ -888,6 +889,10 @@ model ClientMembership {
   startedAt            DateTime         @default(now())
   cancelledAt          DateTime?
   cancelRequestedAt    DateTime?
+  // Pause/resume (#137) — when status=PAUSED, pauseUntil is the auto-resume date.
+  pausedAt             DateTime?
+  pauseUntil           DateTime?
+  pauseReason          String?
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 

@@ -8,6 +8,7 @@ import { resumeDueWorkflowRuns } from './workflowEngine';
 import { sendDailyAdminDigest } from './dailyDigest';
 import { dispatchScheduledForms } from './scheduledFormSender';
 import { expireStaleReferrals } from './referralService';
+import { autoResumePausedMemberships } from './stripeService';
 
 interface CronJob {
   name: string;
@@ -114,6 +115,17 @@ const jobs: CronJob[] = [
       const hour = getEasternHour();
       if (hour !== 3) return { skipped: true, reason: `Not 3 AM ET (currently ${hour})` };
       return expireStaleReferrals();
+    },
+    enabled: true,
+  },
+  {
+    // Daily — auto-resume PAUSED memberships whose pauseUntil has elapsed (#137)
+    name: 'Auto-Resume Paused Memberships',
+    intervalMs: 60 * 60 * 1000, // Hourly check; only fires at 4 AM ET
+    handler: async () => {
+      const hour = getEasternHour();
+      if (hour !== 4) return { skipped: true, reason: `Not 4 AM ET (currently ${hour})` };
+      return autoResumePausedMemberships();
     },
     enabled: true,
   },

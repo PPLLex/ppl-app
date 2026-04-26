@@ -87,6 +87,10 @@ export const membershipGuard = async (req: Request, _res: Response, next: NextFu
           case 'CANCELLED':
             message = 'Your membership has been cancelled. Please sign up for a new membership to access this feature.';
             break;
+          case 'PAUSED':
+            // Voluntary pause — friendlier copy + offer the resume action
+            message = 'Your membership is paused. Resume it from your membership page to start training again.';
+            break;
         }
       }
 
