@@ -2776,14 +2776,17 @@ export interface DashboardStats {
 // Notification types
 export interface AppNotification {
   id: string;
-  userId: string;
+  userId?: string;
   type: string;
   title: string;
   body: string;
-  channel: string;
-  status: string;
+  channel?: string;
+  status?: string;
   metadata: Record<string, unknown> | null;
-  sentAt: string | null;
+  link?: string | null;
+  /** ISO timestamp when this notification was first opened in the bell. Null = unread. */
+  readAt: string | null;
+  sentAt?: string | null;
   createdAt: string;
 }
 

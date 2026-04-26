@@ -44,7 +44,8 @@ export default function NotificationBell() {
     try {
       await api.markAllNotificationsRead();
       setUnreadCount(0);
-      setNotifications((prev) => prev.map((n) => ({ ...n, status: 'READ' })));
+      const now = new Date().toISOString();
+      setNotifications((prev) => prev.map((n) => ({ ...n, readAt: n.readAt ?? now })));
     } catch (err) {
       console.error(err);
     }
@@ -53,8 +54,9 @@ export default function NotificationBell() {
   const handleMarkRead = async (id: string) => {
     try {
       await api.markNotificationRead(id);
+      const now = new Date().toISOString();
       setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, status: 'READ' } : n))
+        prev.map((n) => (n.id === id ? { ...n, readAt: n.readAt ?? now } : n))
       );
       setUnreadCount((prev) => Math.max(0, prev - 1));
     } catch (err) {
@@ -118,12 +120,18 @@ export default function NotificationBell() {
           <div className="max-h-80 overflow-y-auto">
             {notifications.length > 0 ? (
               notifications.map((notif) => {
-                const isUnread = notif.status !== 'READ';
+                const isUnread = !notif.readAt;
                 return (
                   <button
                     key={notif.id}
                     onClick={() => {
                       if (isUnread) handleMarkRead(notif.id);
+                      // If the notification has a click-through link, navigate.
+                      // Use full window.location so we get a clean reload + state.
+                      if (notif.link && typeof window !== 'undefined') {
+                        setIsOpen(false);
+                        window.location.href = notif.link;
+                      }
                     }}
                     className={`w-full px-4 py-3 text-left border-b border-border/50 transition hover:bg-background ${
                       isUnread ? 'bg-highlight/5' : ''

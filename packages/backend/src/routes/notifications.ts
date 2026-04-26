@@ -1,7 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../utils/prisma';
 import { authenticate } from '../middleware/auth';
-import { NotificationStatus } from '@prisma/client';
 
 const router = Router();
 
@@ -15,6 +14,10 @@ function param(req: Request, name: string): string {
 /**
  * GET /api/notifications
  * Fetch current user's notifications. Supports ?unread=true filter.
+ *
+ * In-app read state uses Notification.readAt (NULL = unread). The
+ * `status` enum tracks delivery state for outbound channels (PENDING /
+ * SENT / FAILED) and is independent — that's why the bell uses readAt.
  */
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -25,7 +28,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 
     const where: any = { userId };
     if (unreadOnly) {
-      where.status = { not: NotificationStatus.SENT };
+      where.readAt = null;
     }
 
     const [notifications, total, unreadCount] = await Promise.all([
@@ -34,11 +37,19 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
+        select: {
+          id: true,
+          type: true,
+          title: true,
+          body: true,
+          link: true,
+          metadata: true,
+          readAt: true,
+          createdAt: true,
+        },
       }),
       prisma.notification.count({ where }),
-      prisma.notification.count({
-        where: { userId, status: { not: NotificationStatus.SENT } },
-      }),
+      prisma.notification.count({ where: { userId, readAt: null } }),
     ]);
 
     res.json({
@@ -53,24 +64,24 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 });
 
 /**
- * PUT /api/notifications/:id/read
- * Mark a single notification as read.
+ * Mark a single notification as read. Both POST and PUT supported so
+ * the older clients still work — POST is the canonical form going forward.
  */
-router.put('/:id/read', async (req: Request, res: Response, next: NextFunction) => {
+const markOneRead = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const notifId = param(req, 'id');
     const userId = req.user!.userId;
-
     await prisma.notification.updateMany({
-      where: { id: notifId, userId },
-      data: { status: NotificationStatus.SENT },
+      where: { id: notifId, userId, readAt: null },
+      data: { readAt: new Date() },
     });
-
     res.json({ success: true });
   } catch (error) {
     next(error);
   }
-});
+};
+router.put('/:id/read', markOneRead);
+router.post('/:id/read', markOneRead);
 
 // ============================================================
 // PUSH TOKEN MANAGEMENT
@@ -139,22 +150,22 @@ router.delete('/push-token', async (req: Request, res: Response, next: NextFunct
 // ============================================================
 
 /**
- * PUT /api/notifications/read-all
- * Mark all notifications as read for current user.
+ * Mark all unread notifications as read for current user. Both POST
+ * and PUT supported.
  */
-router.put('/read-all', async (req: Request, res: Response, next: NextFunction) => {
+const markAllRead = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.userId;
-
-    await prisma.notification.updateMany({
-      where: { userId, status: { not: NotificationStatus.SENT } },
-      data: { status: NotificationStatus.SENT },
+    const result = await prisma.notification.updateMany({
+      where: { userId, readAt: null },
+      data: { readAt: new Date() },
     });
-
-    res.json({ success: true });
+    res.json({ success: true, data: { marked: result.count } });
   } catch (error) {
     next(error);
   }
-});
+};
+router.put('/read-all', markAllRead);
+router.post('/read-all', markAllRead);
 
 export default router;

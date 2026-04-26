@@ -1041,6 +1041,12 @@ model Notification {
   channel   NotificationChannel
   status    NotificationStatus  @default(PENDING)
   metadata  Json? // extra data (booking ID, payment amount, etc.)
+  // Optional click-through link for the in-app bell — when set, clicking
+  // a notification both marks it read and navigates here.
+  link      String?
+  // In-app read tracking — separate from delivery status above. Null
+  // means unread; setting drives the bell unread count.
+  readAt    DateTime?
   sentAt    DateTime?
   createdAt DateTime            @default(now())
 
@@ -1048,6 +1054,7 @@ model Notification {
   user User @relation(fields: [userId], references: [id])
 
   @@index([userId, createdAt])
+  @@index([userId, readAt])
   @@index([status])
   @@map("notifications")
 }
