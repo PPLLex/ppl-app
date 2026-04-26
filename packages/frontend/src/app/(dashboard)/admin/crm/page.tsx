@@ -12,7 +12,7 @@
  * Other roles can't hit /api/leads so navigating here returns empty.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
@@ -119,6 +119,118 @@ export default function AdminCrmPage() {
   const sel = useRowSelection(allLeadIds);
   const [bulkBusy, setBulkBusy] = useState(false);
 
+  // Keyboard navigation (#U11). j/k move focus DOWN/UP a stage column,
+  // h/l move BETWEEN stages, Enter opens, ⌘+Enter opens in a new tab,
+  // 'x' toggles selection, '?' shows the keymap. Listens at the document
+  // level so the user doesn't have to first click the kanban to "engage"
+  // it. Skips while typing in inputs.
+  const [focusedLeadId, setFocusedLeadId] = useState<string | null>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (loading) return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+      // Don't fight Cmd-K / Cmd-/.
+      if (e.metaKey && e.key !== 'Enter') return;
+      if (e.ctrlKey && e.key !== 'Enter') return;
+
+      // Build a flat per-stage list so j/k can walk down a column.
+      const columns = STAGES.map((s) => byStage.get(s.id) || []);
+      const findFocus = (): { col: number; idx: number } | null => {
+        if (!focusedLeadId) return null;
+        for (let c = 0; c < columns.length; c++) {
+          const idx = columns[c].findIndex((l) => l.id === focusedLeadId);
+          if (idx !== -1) return { col: c, idx };
+        }
+        return null;
+      };
+
+      switch (e.key) {
+        case 'j':
+        case 'ArrowDown': {
+          e.preventDefault();
+          const cur = findFocus();
+          if (!cur) {
+            for (let c = 0; c < columns.length; c++) {
+              if (columns[c][0]) {
+                setFocusedLeadId(columns[c][0].id);
+                return;
+              }
+            }
+            return;
+          }
+          const next = columns[cur.col][cur.idx + 1];
+          if (next) setFocusedLeadId(next.id);
+          break;
+        }
+        case 'k':
+        case 'ArrowUp': {
+          e.preventDefault();
+          const cur = findFocus();
+          if (!cur) return;
+          const prev = columns[cur.col][cur.idx - 1];
+          if (prev) setFocusedLeadId(prev.id);
+          break;
+        }
+        case 'h':
+        case 'ArrowLeft': {
+          e.preventDefault();
+          const cur = findFocus();
+          if (!cur) return;
+          for (let c = cur.col - 1; c >= 0; c--) {
+            const target = columns[c][Math.min(cur.idx, columns[c].length - 1)];
+            if (target) {
+              setFocusedLeadId(target.id);
+              return;
+            }
+          }
+          break;
+        }
+        case 'l':
+        case 'ArrowRight': {
+          e.preventDefault();
+          const cur = findFocus();
+          if (!cur) return;
+          for (let c = cur.col + 1; c < columns.length; c++) {
+            const target = columns[c][Math.min(cur.idx, columns[c].length - 1)];
+            if (target) {
+              setFocusedLeadId(target.id);
+              return;
+            }
+          }
+          break;
+        }
+        case 'Enter': {
+          if (!focusedLeadId) return;
+          e.preventDefault();
+          const url = `/admin/crm/${focusedLeadId}`;
+          if (e.metaKey || e.ctrlKey) {
+            window.open(url, '_blank', 'noopener,noreferrer');
+          } else {
+            window.location.href = url;
+          }
+          break;
+        }
+        case 'x': {
+          if (!focusedLeadId) return;
+          e.preventDefault();
+          sel.toggle(focusedLeadId);
+          break;
+        }
+        case 'Escape': {
+          if (sel.count > 0) {
+            sel.clear();
+          } else if (focusedLeadId) {
+            setFocusedLeadId(null);
+          }
+          break;
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [byStage, focusedLeadId, loading, sel]);
+
   const runBulkStageChange = useCallback(
     async (stage: string) => {
       if (sel.count === 0) return;
@@ -167,6 +279,17 @@ export default function AdminCrmPage() {
             >
               + New lead
             </button>
+            {/* Keymap hint (#U11). Hidden on mobile — keyboard nav is
+                desktop-only by design. */}
+            <span className="hidden md:inline-flex items-center gap-1 text-[10px] text-muted ml-1" title="Keyboard shortcuts">
+              <kbd className="font-mono px-1 py-0.5 rounded bg-surface border border-border">j</kbd>
+              <kbd className="font-mono px-1 py-0.5 rounded bg-surface border border-border">k</kbd>
+              <kbd className="font-mono px-1 py-0.5 rounded bg-surface border border-border">h</kbd>
+              <kbd className="font-mono px-1 py-0.5 rounded bg-surface border border-border">l</kbd>
+              <span>navigate · </span>
+              <kbd className="font-mono px-1 py-0.5 rounded bg-surface border border-border">↵</kbd>
+              <span>open</span>
+            </span>
           </div>
         </div>
 
@@ -206,6 +329,7 @@ export default function AdminCrmPage() {
                           onAdvance={advanceStage}
                           isSelected={sel.isSelected(lead.id)}
                           onToggleSelect={() => sel.toggle(lead.id)}
+                          isFocused={focusedLeadId === lead.id}
                         />
                       ))
                     )}
@@ -252,12 +376,21 @@ function LeadCard({
   onAdvance,
   isSelected,
   onToggleSelect,
+  isFocused = false,
 }: {
   lead: Lead;
   onAdvance: (lead: Lead, newStage: string) => void;
   isSelected: boolean;
   onToggleSelect: () => void;
+  isFocused?: boolean;
 }) {
+  // Auto-scroll the focused card into view when keyboard nav lands on it.
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (isFocused && ref.current) {
+      ref.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [isFocused]);
   const currentIdx = STAGES.findIndex((s) => s.id === lead.stage);
   const nextStage = currentIdx >= 0 && currentIdx < STAGES.length - 1 ? STAGES[currentIdx + 1] : null;
 
@@ -296,11 +429,12 @@ function LeadCard({
       ]}
     >
     <div
+      ref={ref}
       className={`border rounded-lg p-3 transition group ${
         isSelected
           ? 'bg-highlight/10 border-highlight'
           : 'bg-background border-border hover:border-highlight/40'
-      }`}
+      } ${isFocused ? 'ring-2 ring-highlight/70 ring-offset-2 ring-offset-background' : ''}`}
     >
       <div className="flex items-start gap-2 mb-1">
         <input
