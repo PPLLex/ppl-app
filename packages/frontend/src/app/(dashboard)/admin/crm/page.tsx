@@ -18,6 +18,7 @@ import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { BulkActionBar, useRowSelection } from '@/components/bulk/BulkActionBar';
+import { HoverPreview } from '@/components/HoverPreview';
 
 type Lead = Awaited<ReturnType<typeof api.listLeads>>['data'] extends Array<infer T> | null | undefined
   ? T
@@ -291,9 +292,11 @@ function LeadCard({
       </div>
       <Link href={`/admin/crm/${lead.id}`} className="block">
         <div className="flex items-start justify-between gap-2">
-          <p className="font-semibold text-foreground text-sm truncate flex-1 min-w-0">
-            {lead.firstName} {lead.lastName}
-          </p>
+          <HoverPreview entity={{ kind: 'lead', id: lead.id }} className="flex-1 min-w-0">
+            <p className="font-semibold text-foreground text-sm truncate">
+              {lead.firstName} {lead.lastName}
+            </p>
+          </HoverPreview>
           {score > 0 && (
             <span
               className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 ${scoreStyle}`}

@@ -310,6 +310,43 @@ class ApiClient {
     }>(`/streaks/me${q}`);
   }
 
+  // Hover-preview lookups (#P14). Returns small payloads for popovers.
+  async lookupLead(id: string) {
+    return this.request<{
+      kind: 'lead';
+      id: string;
+      name: string;
+      email: string | null;
+      phone: string | null;
+      stage: string;
+      source: string;
+      score: number;
+      nextFollowUpAt: string | null;
+      lastActivityAt: string | null;
+      ownerName: string | null;
+      activityCount: number;
+      tagCount: number;
+    }>(`/lookup/lead/${id}`);
+  }
+
+  async lookupUser(id: string) {
+    return this.request<{
+      kind: 'user';
+      id: string;
+      name: string;
+      email: string;
+      phone: string | null;
+      role: string;
+      isActive: boolean;
+      churnRiskScore: number;
+      avatarUrl: string | null;
+      homeLocationName: string | null;
+      ageGroup: string | null;
+      membership: { status: string; planName: string; priceCents: number } | null;
+      bookingCount: number;
+    }>(`/lookup/user/${id}`);
+  }
+
   // ============================================================
   // Promo codes (#138)
   // ============================================================

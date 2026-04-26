@@ -7,6 +7,7 @@ import { api, ClientListItem, Location } from '@/lib/api';
 import { EmptyState } from '@/components/EmptyState';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { BulkActionBar, useRowSelection } from '@/components/bulk/BulkActionBar';
+import { HoverPreview } from '@/components/HoverPreview';
 
 const AGE_GROUP_LABELS: Record<string, string> = {
   college: 'College',
@@ -239,7 +240,9 @@ export default function AdminMembersPage() {
                 {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Link href={`/admin/members/${client.id}`} className="font-semibold text-foreground hover:text-accent-text transition-colors truncate" onClick={(e) => e.stopPropagation()}>{client.fullName}</Link>
+                    <HoverPreview entity={{ kind: 'user', id: client.id }}>
+                      <Link href={`/admin/members/${client.id}`} className="font-semibold text-foreground hover:text-accent-text transition-colors truncate" onClick={(e) => e.stopPropagation()}>{client.fullName}</Link>
+                    </HoverPreview>
                     {client.membership ? (
                       <span
                         className={`ppl-badge ${
