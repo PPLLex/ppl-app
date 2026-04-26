@@ -253,6 +253,52 @@ class ApiClient {
   }
 
   // ============================================================
+  // Bulk actions (#U8)
+  // ============================================================
+
+  async bulkTagAdd(input: { tagId: string; userIds?: string[]; leadIds?: string[] }) {
+    return this.request<{ processed: number; skipped: number }>('/bulk/tag-add', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  async bulkTagRemove(input: { tagId: string; userIds?: string[]; leadIds?: string[] }) {
+    return this.request<{ processed: number }>('/bulk/tag-remove', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  async bulkLeadsStage(input: { leadIds: string[]; stage: string }) {
+    return this.request<{ processed: number; skipped: number }>('/bulk/leads/stage', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  async bulkLeadsOwner(input: { leadIds: string[]; ownerUserId: string | null }) {
+    return this.request<{ processed: number }>('/bulk/leads/owner', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  async bulkMembersArchive(input: { userIds: string[] }) {
+    return this.request<{ processed: number; skipped: number }>('/bulk/members/archive', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  async bulkMembersRestore(input: { userIds: string[] }) {
+    return this.request<{ processed: number }>('/bulk/members/restore', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  // ============================================================
   // Promo codes (#138)
   // ============================================================
 

@@ -17,6 +17,7 @@ import Link from 'next/link';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { usePersistedState } from '@/hooks/usePersistedState';
+import { BulkActionBar, useRowSelection } from '@/components/bulk/BulkActionBar';
 
 type Lead = Awaited<ReturnType<typeof api.listLeads>>['data'] extends Array<infer T> | null | undefined
   ? T
@@ -109,6 +110,35 @@ export default function AdminCrmPage() {
     }
   };
 
+  // Bulk selection (#U8). Each lead card surfaces a checkbox; selected
+  // lead IDs flow into a sticky action bar with "move to stage" and
+  // "clear" controls.
+  const allLeadIds = useMemo(() => leads.map((l) => l.id), [leads]);
+  const sel = useRowSelection(allLeadIds);
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  const runBulkStageChange = useCallback(
+    async (stage: string) => {
+      if (sel.count === 0) return;
+      setBulkBusy(true);
+      try {
+        const res = await api.bulkLeadsStage({ leadIds: sel.ids, stage });
+        toast.success(
+          `Moved ${res.data?.processed ?? 0} lead${res.data?.processed === 1 ? '' : 's'} → ${
+            STAGES.find((s) => s.id === stage)?.label ?? stage
+          }`
+        );
+        sel.clear();
+        await load();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Bulk stage move failed');
+      } finally {
+        setBulkBusy(false);
+      }
+    },
+    [sel, load]
+  );
+
   return (
     <main className="ppl-page-root">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
@@ -167,7 +197,15 @@ export default function AdminCrmPage() {
                     {items.length === 0 ? (
                       <p className="text-xs text-muted text-center py-6">No leads here yet.</p>
                     ) : (
-                      items.map((lead) => <LeadCard key={lead.id} lead={lead} onAdvance={advanceStage} />)
+                      items.map((lead) => (
+                        <LeadCard
+                          key={lead.id}
+                          lead={lead}
+                          onAdvance={advanceStage}
+                          isSelected={sel.isSelected(lead.id)}
+                          onToggleSelect={() => sel.toggle(lead.id)}
+                        />
+                      ))
                     )}
                   </div>
                 </div>
@@ -178,6 +216,31 @@ export default function AdminCrmPage() {
       </div>
 
       {showNewForm && <NewLeadModal onClose={() => setShowNewForm(false)} onCreated={load} />}
+
+      {/* Bulk action bar (#U8) — Move selected leads through stages without
+          dragging each card individually. Auto-hides at zero selected. */}
+      <BulkActionBar selectedCount={sel.count} onClear={sel.clear} noun="lead">
+        <select
+          disabled={bulkBusy}
+          defaultValue=""
+          onChange={(e) => {
+            const v = e.target.value;
+            e.target.value = '';
+            if (v) runBulkStageChange(v);
+          }}
+          className="bg-background border border-border rounded text-xs px-2 py-1.5 text-foreground focus:outline-none focus:border-highlight"
+          aria-label="Move selected leads to stage"
+        >
+          <option value="" disabled>
+            Move to…
+          </option>
+          {STAGES.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+      </BulkActionBar>
     </main>
   );
 }
@@ -185,9 +248,13 @@ export default function AdminCrmPage() {
 function LeadCard({
   lead,
   onAdvance,
+  isSelected,
+  onToggleSelect,
 }: {
   lead: Lead;
   onAdvance: (lead: Lead, newStage: string) => void;
+  isSelected: boolean;
+  onToggleSelect: () => void;
 }) {
   const currentIdx = STAGES.findIndex((s) => s.id === lead.stage);
   const nextStage = currentIdx >= 0 && currentIdx < STAGES.length - 1 ? STAGES[currentIdx + 1] : null;
@@ -205,7 +272,23 @@ function LeadCard({
       : 'bg-gray-500/10 text-gray-400 border-gray-500/30';
 
   return (
-    <div className="bg-background border border-border rounded-lg p-3 hover:border-highlight/40 transition group">
+    <div
+      className={`border rounded-lg p-3 transition group ${
+        isSelected
+          ? 'bg-highlight/10 border-highlight'
+          : 'bg-background border-border hover:border-highlight/40'
+      }`}
+    >
+      <div className="flex items-start gap-2 mb-1">
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={onToggleSelect}
+          onClick={(e) => e.stopPropagation()}
+          className="w-3.5 h-3.5 mt-0.5 accent-highlight cursor-pointer flex-shrink-0"
+          aria-label={`Select ${lead.firstName} ${lead.lastName}`}
+        />
+      </div>
       <Link href={`/admin/crm/${lead.id}`} className="block">
         <div className="flex items-start justify-between gap-2">
           <p className="font-semibold text-foreground text-sm truncate flex-1 min-w-0">

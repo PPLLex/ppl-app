@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { api, ClientListItem, Location } from '@/lib/api';
 import { EmptyState } from '@/components/EmptyState';
 import { usePersistedState } from '@/hooks/usePersistedState';
+import { BulkActionBar, useRowSelection } from '@/components/bulk/BulkActionBar';
 
 const AGE_GROUP_LABELS: Record<string, string> = {
   college: 'College',
@@ -24,6 +26,11 @@ export default function AdminMembersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedClient, setSelectedClient] = useState<ClientListItem | null>(null);
 
+  // Multi-row selection (#U8).
+  const allIds = useMemo(() => clients.map((c) => c.id), [clients]);
+  const sel = useRowSelection(allIds);
+  const [bulkBusy, setBulkBusy] = useState(false);
+
   const loadClients = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -40,6 +47,41 @@ export default function AdminMembersPage() {
       setIsLoading(false);
     }
   }, [search, filterLocation, filterAgeGroup, filterStatus]);
+
+  // Bulk handlers — defined AFTER loadClients so the closure captures the
+  // latest reference. Each clears selection + reloads on success.
+  const runBulkArchive = useCallback(async () => {
+    if (sel.count === 0) return;
+    if (!confirm(`Archive ${sel.count} member${sel.count === 1 ? '' : 's'}? This sets isActive=false. Memberships are NOT cancelled — handle billing separately.`)) {
+      return;
+    }
+    setBulkBusy(true);
+    try {
+      const res = await api.bulkMembersArchive({ userIds: sel.ids });
+      toast.success(`Archived ${res.data?.processed ?? 0} members`);
+      sel.clear();
+      await loadClients();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Bulk archive failed');
+    } finally {
+      setBulkBusy(false);
+    }
+  }, [sel, loadClients]);
+
+  const runBulkRestore = useCallback(async () => {
+    if (sel.count === 0) return;
+    setBulkBusy(true);
+    try {
+      const res = await api.bulkMembersRestore({ userIds: sel.ids });
+      toast.success(`Restored ${res.data?.processed ?? 0} members`);
+      sel.clear();
+      await loadClients();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Bulk restore failed');
+    } finally {
+      setBulkBusy(false);
+    }
+  }, [sel, loadClients]);
 
   useEffect(() => {
     api.getLocations().then((res) => {
@@ -149,13 +191,42 @@ export default function AdminMembersPage() {
         />
       ) : (
         <div className="space-y-2">
+          {/* Select-all header strip — shown only when there are rows. */}
+          <div className="px-3 py-2 flex items-center gap-3 text-xs text-muted">
+            <input
+              type="checkbox"
+              checked={sel.allSelected}
+              onChange={sel.toggleAll}
+              className="w-4 h-4 accent-highlight cursor-pointer"
+              aria-label="Select all members"
+            />
+            <span>
+              {sel.count > 0
+                ? `${sel.count} selected`
+                : 'Select members for bulk actions'}
+            </span>
+          </div>
           {clients.map((client) => (
             <div
               key={client.id}
-              className="ppl-card flex items-center justify-between cursor-pointer hover:border-highlight/50 transition-colors"
+              className={`ppl-card flex items-center justify-between cursor-pointer transition-colors ${
+                sel.isSelected(client.id)
+                  ? 'border-highlight bg-highlight/5'
+                  : 'hover:border-highlight/50'
+              }`}
               onClick={() => setSelectedClient(selectedClient?.id === client.id ? null : client)}
             >
               <div className="flex items-center gap-4 flex-1">
+                {/* Selection checkbox — clicking it should NOT also toggle the
+                    row's expand panel, so stop propagation explicitly. */}
+                <input
+                  type="checkbox"
+                  checked={sel.isSelected(client.id)}
+                  onChange={() => sel.toggle(client.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-4 h-4 accent-highlight cursor-pointer flex-shrink-0"
+                  aria-label={`Select ${client.fullName}`}
+                />
                 {/* Avatar */}
                 <div className="w-10 h-10 rounded-full bg-surface-hover flex items-center justify-center text-sm font-bold text-muted">
                   {client.fullName
@@ -217,6 +288,30 @@ export default function AdminMembersPage() {
       {selectedClient && (
         <ClientDetailPanel client={selectedClient} onClose={() => setSelectedClient(null)} />
       )}
+
+      {/* Bulk action bar (#U8) — auto-hides when nothing is selected. */}
+      <BulkActionBar
+        selectedCount={sel.count}
+        onClear={sel.clear}
+        noun="member"
+      >
+        <button
+          type="button"
+          onClick={runBulkArchive}
+          disabled={bulkBusy}
+          className="ppl-btn ppl-btn-secondary text-xs"
+        >
+          {bulkBusy ? 'Archiving...' : 'Archive'}
+        </button>
+        <button
+          type="button"
+          onClick={runBulkRestore}
+          disabled={bulkBusy}
+          className="ppl-btn text-xs"
+        >
+          {bulkBusy ? 'Restoring...' : 'Restore'}
+        </button>
+      </BulkActionBar>
     </div>
   );
 }

@@ -27,6 +27,7 @@ import twoFactorRoutes from './routes/twoFactor';
 import emailVerificationRoutes from './routes/emailVerification';
 import promoCodeRoutes from './routes/promoCodes';
 import refreshTokenRoutes from './routes/refreshToken';
+import bulkActionRoutes from './routes/bulkActions';
 import coachNoteRoutes from './routes/coachNotes';
 import goalRoutes from './routes/goals';
 import formRoutes from './routes/forms';
@@ -196,6 +197,9 @@ app.use('/api/auth', emailVerificationRoutes);
 app.use('/api/promo-codes', promoCodeRoutes);
 // Refresh tokens (#S9). /api/auth/refresh + logout + logout-all.
 app.use('/api/auth', refreshTokenRoutes);
+// Bulk actions (#U8). /api/bulk/{tag-add,tag-remove,leads/stage,
+// leads/owner,members/archive,members/restore}.
+app.use('/api/bulk', bulkActionRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/onboarding', onboardingRoutes);
