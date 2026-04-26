@@ -1763,6 +1763,10 @@ model OrgSettings {
   // directly so the recipient's tap → review takes one click.
   googleReviewUrl   String?
   facebookReviewUrl String?
+  // Google Place ID (used by the review-monitoring cron — Phase 2 #28).
+  // Get it from https://developers.google.com/maps/documentation/places/web-service/place-id
+  // (e.g. "ChIJyQEs1aH2Lr0BdDw7-iaXfa3O")
+  googlePlaceId     String?
 
   updatedAt DateTime @updatedAt
 
@@ -2076,6 +2080,47 @@ model WebhookEvent {
 
   @@index([provider, eventType])
   @@map("webhook_events")
+}
+
+// ============================================================================
+// REVIEW MONITORING — Phase 2 (#28)
+// ----------------------------------------------------------------------------
+// Cron polls Google Places API daily for new reviews on the org's Place ID
+// (set in OrgSettings.googlePlaceId). New reviews land here, alerting the
+// admin via email and opening up the AI-draft-reply workflow (#40).
+//
+// authorReviewId is Google's stable per-author identifier so we can dedupe
+// reruns of the cron — each (organizationId, authorReviewId) pair maps to
+// exactly one Review row.
+// ============================================================================
+
+model Review {
+  id              String   @id @default(uuid())
+  organizationId  String   @default("ppl")
+  // Provider — currently always "google" but future-proofs for Yelp / FB
+  provider        String   @default("google")
+  // Stable per-review identifier from the provider
+  externalId      String
+  authorName      String
+  authorPhotoUrl  String?
+  rating          Int      // 1-5
+  text            String?  @db.Text
+  // Original posting time as reported by the provider
+  publishedAt     DateTime
+  // Where the review can be read (deep link)
+  url             String?
+  // Owner's published reply (if any). We store both what we drafted and
+  // what was actually posted on Google; admin can edit before posting.
+  draftReply      String?  @db.Text
+  publishedReply  String?  @db.Text
+  publishedReplyAt DateTime?
+  // First-seen + last-modified locally
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, provider, externalId])
+  @@index([rating, publishedAt])
+  @@map("reviews")
 }
 
 // ============================================================================

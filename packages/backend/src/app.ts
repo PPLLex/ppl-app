@@ -50,6 +50,7 @@ import workflowRoutes from './routes/workflows';
 import outboundWebhookRoutes from './routes/webhooks.outbound';
 import consultationRoutes from './routes/consultations';
 import twilioRoutes from './routes/twilio';
+import reviewRoutes from './routes/reviews';
 import screeningRoutes from './routes/screenings';
 import campaignRoutes from './routes/campaigns';
 import emailPreviewRoutes from './routes/emailPreview';
@@ -183,6 +184,8 @@ app.use('/api/consultations', consultationRoutes);
 // Mounted unauthenticated; Twilio signs requests with X-Twilio-Signature
 // (TODO: verify signature in middleware once we get the auth token wired).
 app.use('/api/twilio', twilioRoutes);
+// Reputation management — Google reviews + AI draft replies (#28, #40)
+app.use('/api/reviews', reviewRoutes);
 
 // ============================================================
 // ERROR HANDLING

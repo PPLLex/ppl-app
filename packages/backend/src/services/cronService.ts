@@ -3,6 +3,7 @@ import { generateSessionsFromTemplates } from './scheduleGenerator';
 import { runDailyPaymentRetries } from './paymentRetryService';
 import { getEasternHour, getEasternDay } from './stripeService';
 import { recomputeAllLeadScores, recomputeAllChurnRisks } from './scoringService';
+import { pollGoogleReviews } from './reviewMonitor';
 
 interface CronJob {
   name: string;
@@ -74,6 +75,16 @@ const jobs: CronJob[] = [
         recomputeAllChurnRisks(),
       ]);
       return { leadsUpdated: leads.updated, churnUpdated: churn.updated };
+    },
+    enabled: true,
+  },
+  {
+    name: 'Google Reviews Poll',
+    intervalMs: 60 * 60 * 1000, // Hourly check; only fires at 8 AM ET
+    handler: async () => {
+      const hour = getEasternHour();
+      if (hour !== 8) return { skipped: true, reason: `Not 8 AM ET (currently ${hour})` };
+      return pollGoogleReviews();
     },
     enabled: true,
   },
