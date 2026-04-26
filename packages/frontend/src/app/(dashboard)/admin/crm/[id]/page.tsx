@@ -103,7 +103,7 @@ export default function LeadDetailPage() {
     try {
       await api.addLeadActivity(lead.id, {
         type: newActivityType,
-        body: newActivityBody.trim(),
+        content: newActivityBody.trim(),
       });
       setNewActivityBody('');
       toast.success('Activity logged');
@@ -363,8 +363,8 @@ export default function LeadDetailPage() {
                         <span className="text-[10px] text-muted">· {a.author.fullName}</span>
                       )}
                     </div>
-                    {a.body && (
-                      <p className="text-sm text-foreground/90 whitespace-pre-wrap mt-0.5">{a.body}</p>
+                    {a.content && (
+                      <p className="text-sm text-foreground/90 whitespace-pre-wrap mt-0.5">{a.content}</p>
                     )}
                   </div>
                 </li>

@@ -518,6 +518,17 @@ model User {
   createdCampaigns      EmailCampaign[]     @relation("CampaignCreator")
   receivedCampaignSends CampaignRecipient[] @relation("CampaignUserRecipient")
 
+  // Tagging system (Phase 1A)
+  createdTags    Tag[]           @relation("TagCreatedBy")
+  tagAssignments TagAssignment[] @relation("UserTags")
+  assignedTags   TagAssignment[] @relation("TagAssignedBy")
+
+  // Custom field values (Phase 1B)
+  customFieldValues CustomFieldValue[] @relation("UserCustomFields")
+
+  // Workflows authored by this user (Phase 1C)
+  createdWorkflows Workflow[] @relation("WorkflowCreatedBy")
+
   @@index([homeLocationId])
   @@index([role])
   @@index([email])
@@ -1356,6 +1367,10 @@ model AthleteProfile {
   // Medical screenings this athlete has been scheduled for / completed
   medicalScreenings MedicalScreening[]
 
+  // Tagging + custom fields (Phase 1A + 1B)
+  tagAssignments    TagAssignment[]    @relation("AthleteTags")
+  customFieldValues CustomFieldValue[] @relation("AthleteCustomFields")
+
   @@index([familyId])
   @@index([schoolTeamId])
   @@index([ageGroup])
@@ -1786,6 +1801,10 @@ model Lead {
   activities      LeadActivity[]
   campaignSends   CampaignRecipient[] @relation("CampaignLeadRecipient")
 
+  // Tagging + custom fields (Phase 1A + 1B)
+  tagAssignments    TagAssignment[]
+  customFieldValues CustomFieldValue[] @relation("LeadCustomFields")
+
   @@unique([organizationId, email])
   @@index([stage, ownerUserId])
   @@index([source])
@@ -2015,15 +2034,15 @@ model ScreeningResult {
 // work.
 // ----------------------------------------------------------------------------
 model WebhookEvent {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   // Stripe's evt_xxx ID, or any external provider's event identifier.
-  externalId  String   @unique
+  externalId  String    @unique
   // Provider name so we can mix Stripe + future providers in one table.
-  provider    String   @default("stripe")
+  provider    String    @default("stripe")
   // Event type ("invoice.payment_failed", etc.) for debugging + analytics.
   eventType   String
   // First-seen timestamp.
-  receivedAt  DateTime @default(now())
+  receivedAt  DateTime  @default(now())
   // Filled in when the handler completes successfully.
   processedAt DateTime?
   // If a handler failed, we record the error here so on next retry we can
@@ -2032,4 +2051,310 @@ model WebhookEvent {
 
   @@index([provider, eventType])
   @@map("webhook_events")
+}
+
+// ============================================================================
+// PHASE 1A — TAGGING SYSTEM
+// ----------------------------------------------------------------------------
+// Reusable tags that can be attached to Leads, Users, or AthleteProfiles.
+// Used for: audience segmentation in marketing campaigns, filtering on
+// dashboards, scoping workflow triggers, and quick visual context in lists.
+//
+// Built-in tags are seeded on bootstrap (one per location, one per playing
+// level, one per high-level lifecycle status) and marked `system: true` so
+// admins can recolor but can't delete them. Anything else is custom.
+//
+// Polymorphic assignment: a single TagAssignment row points at exactly ONE
+// of leadId/userId/athleteProfileId. We avoid a single Subject join table
+// because that would force every consumer to JOIN through it — direct FK
+// columns keep query plans readable and let Postgres enforce ON DELETE.
+// ============================================================================
+
+enum TagKind {
+  LOCATION // PPL Lexington, PPL Louisville
+  PLAYING_LEVEL // Youth, MS, HS, College, Pro
+  LIFECYCLE // Lead, Trial, Active Member, Churned
+  CUSTOM // Anything Chad creates
+}
+
+model Tag {
+  id             String   @id @default(uuid())
+  organizationId String   @default("ppl")
+  name           String
+  // Hex color for the chip. Defaults to PPL green so a fresh tag still
+  // looks on-brand.
+  color          String   @default("#95C83C")
+  kind           TagKind  @default(CUSTOM)
+  // System tags can't be deleted (admins get a 400 if they try).
+  system         Boolean  @default(false)
+  // Optional human-readable description for the tag-management page.
+  description    String?
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  createdBy   User?           @relation("TagCreatedBy", fields: [createdById], references: [id])
+  assignments TagAssignment[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, kind])
+  @@map("tags")
+}
+
+model TagAssignment {
+  id               String    @id @default(uuid())
+  tagId            String
+  // Exactly ONE of these three is non-null.
+  leadId           String?
+  userId           String?
+  athleteProfileId String?
+  // Who attached the tag (null for system / workflow-driven assignments).
+  assignedById     String?
+  // Optional auto-expire — used by lifecycle tags ("Trial" auto-expires
+  // when the trial period ends) and short-term campaign tags.
+  expiresAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  tag            Tag             @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  lead           Lead?           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user           User?           @relation("UserTags", fields: [userId], references: [id], onDelete: Cascade)
+  athleteProfile AthleteProfile? @relation("AthleteTags", fields: [athleteProfileId], references: [id], onDelete: Cascade)
+  assignedBy     User?           @relation("TagAssignedBy", fields: [assignedById], references: [id])
+
+  // Prevent duplicate (tag, subject) pairs.
+  @@unique([tagId, leadId])
+  @@unique([tagId, userId])
+  @@unique([tagId, athleteProfileId])
+  @@index([leadId])
+  @@index([userId])
+  @@index([athleteProfileId])
+  @@index([tagId])
+  @@map("tag_assignments")
+}
+
+// ============================================================================
+// PHASE 1B — CUSTOM FIELDS
+// ----------------------------------------------------------------------------
+// Per-organization custom fields that can be attached to Lead, User, or
+// AthleteProfile. Used for things like "throws hand", "dominant pitch",
+// "school", "current velo" — info the team wants to track but that doesn't
+// merit a dedicated schema column yet.
+//
+// Field values are stored as strings; the field type drives parsing and
+// validation. SELECT and MULTI_SELECT options live in the definition's
+// `options` JSON.
+// ============================================================================
+
+enum CustomFieldEntity {
+  LEAD
+  USER
+  ATHLETE_PROFILE
+}
+
+enum CustomFieldType {
+  TEXT
+  LONG_TEXT
+  NUMBER
+  DATE
+  BOOLEAN
+  SELECT
+  MULTI_SELECT
+  EMAIL
+  URL
+  PHONE
+}
+
+model CustomFieldDefinition {
+  id             String            @id @default(uuid())
+  organizationId String            @default("ppl")
+  entityType     CustomFieldEntity
+  name           String
+  // URL-safe identifier — auto-derived from `name` on create.
+  slug           String
+  fieldType      CustomFieldType
+  // For SELECT / MULTI_SELECT: { options: ["A","B","C"] }
+  // For NUMBER: { min, max, step, unit }
+  // For TEXT: { placeholder, maxLength }
+  config         Json?
+  required       Boolean           @default(false)
+  // Display order in forms. Smaller = earlier.
+  order          Int               @default(0)
+  // If false, the field is hidden in pickers + forms but its existing
+  // values are preserved. Lets admins retire a field without losing data.
+  active         Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  values CustomFieldValue[]
+
+  @@unique([organizationId, entityType, slug])
+  @@index([organizationId, entityType, order])
+  @@map("custom_field_definitions")
+}
+
+model CustomFieldValue {
+  id               String   @id @default(uuid())
+  fieldId          String
+  // Polymorphic — ONE of these is non-null. We could enforce via partial
+  // unique indexes; the route layer also enforces.
+  leadId           String?
+  userId           String?
+  athleteProfileId String?
+  // Stored as string; consumers parse based on the field's fieldType.
+  // For MULTI_SELECT this is JSON-encoded array.
+  value            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  field          CustomFieldDefinition @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  lead           Lead?                 @relation("LeadCustomFields", fields: [leadId], references: [id], onDelete: Cascade)
+  user           User?                 @relation("UserCustomFields", fields: [userId], references: [id], onDelete: Cascade)
+  athleteProfile AthleteProfile?       @relation("AthleteCustomFields", fields: [athleteProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([fieldId, leadId])
+  @@unique([fieldId, userId])
+  @@unique([fieldId, athleteProfileId])
+  @@index([leadId])
+  @@index([userId])
+  @@index([athleteProfileId])
+  @@map("custom_field_values")
+}
+
+// ============================================================================
+// PHASE 1C — WORKFLOW ENGINE
+// ----------------------------------------------------------------------------
+// Visual-builder-style automations. A Workflow has a Trigger that fires
+// when a system event happens (booking created, lead stage changed,
+// payment failed, member's birthday, etc.) and a chain of Steps that run
+// in order. Steps can: send email, send SMS, send in-app notification,
+// add/remove tags, update fields, wait, branch, or fire a webhook.
+//
+// When a trigger fires we create a WorkflowRun row, run synchronous steps
+// inline, and persist between WAIT steps so the worker can resume them.
+// Run state lets us debug, replay, and audit every automation execution.
+//
+// This commit ships the schema + sync executor only — the time-delayed
+// worker is the next commit.
+// ============================================================================
+
+enum WorkflowTrigger {
+  // Booking lifecycle
+  BOOKING_CREATED
+  BOOKING_CANCELLED
+  BOOKING_COMPLETED
+  BOOKING_NO_SHOW
+  // Lead lifecycle
+  LEAD_CREATED
+  LEAD_STAGE_CHANGED
+  LEAD_FORM_SUBMITTED
+  // Member lifecycle
+  MEMBER_PAYMENT_FAILED
+  MEMBER_PAYMENT_SUCCEEDED
+  MEMBER_BIRTHDAY
+  MEMBER_TRIAL_ENDING
+  MEMBER_CHURNED
+  // Manual trigger from UI ("Send to this lead now")
+  MANUAL
+  // Cron-style — fires on a schedule
+  SCHEDULED
+}
+
+enum WorkflowStepType {
+  WAIT // pauses for N hours/days
+  SEND_EMAIL // template + audience = subject row
+  SEND_SMS // body templated
+  SEND_NOTIFICATION // in-app push
+  ADD_TAG
+  REMOVE_TAG
+  UPDATE_LEAD_STAGE
+  UPDATE_LEAD_FIELD
+  ASSIGN_OWNER
+  SEND_WEBHOOK
+  BRANCH // condition → continue with one of two next steps
+  END // explicit termination
+}
+
+enum WorkflowRunStatus {
+  PENDING // queued, hasn't started
+  RUNNING // mid-flight
+  WAITING // paused at a WAIT step until resumeAt
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model Workflow {
+  id             String          @id @default(uuid())
+  organizationId String          @default("ppl")
+  name           String
+  description    String?
+  trigger        WorkflowTrigger
+  // Trigger-specific filter config. Examples:
+  //   BOOKING_CREATED: { sessionType?: 'PITCHING_ASSESSMENT', locationId?: '...' }
+  //   LEAD_STAGE_CHANGED: { fromStage?: 'NEW', toStage: 'TRIAL_SCHEDULED' }
+  //   SCHEDULED: { cron: '0 9 * * *', timezone: 'America/New_York' }
+  triggerConfig  Json?
+  isActive       Boolean         @default(true)
+  // Optional creator metadata.
+  createdById    String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  createdBy User?          @relation("WorkflowCreatedBy", fields: [createdById], references: [id])
+  steps     WorkflowStep[]
+  runs      WorkflowRun[]
+
+  @@index([organizationId, trigger, isActive])
+  @@map("workflows")
+}
+
+model WorkflowStep {
+  id           String           @id @default(uuid())
+  workflowId   String
+  // 1-indexed display order. Step execution actually follows the
+  // `nextStepId` graph below; order is just for the visual builder.
+  displayOrder Int              @default(0)
+  type         WorkflowStepType
+  // Step-specific config. Examples:
+  //   SEND_EMAIL: { templateId?: 'invite_v2', subject: '...', body: '...' }
+  //   WAIT:       { hours: 24 }  or  { days: 7 }
+  //   ADD_TAG:    { tagId: '...' }
+  //   BRANCH:     { conditionField: 'lead.stage', operator: 'eq', value: 'TRIAL_COMPLETED', trueNextStepId, falseNextStepId }
+  //   SEND_WEBHOOK: { url: 'https://...', method: 'POST', headers: {...} }
+  config       Json
+  // The step that runs after this one completes. NULL means "end run."
+  // For BRANCH, set to NULL and use config.trueNextStepId / falseNextStepId.
+  nextStepId   String?
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId, displayOrder])
+  @@map("workflow_steps")
+}
+
+model WorkflowRun {
+  id            String            @id @default(uuid())
+  workflowId    String
+  // What triggered this run — used to populate template variables and
+  // to filter "show me all runs for this lead".
+  contextType   String // 'lead' | 'user' | 'booking' | 'athlete'
+  contextId     String
+  status        WorkflowRunStatus @default(PENDING)
+  currentStepId String?
+  // For WAITING runs: when the worker should resume this run.
+  resumeAt      DateTime?
+  startedAt     DateTime          @default(now())
+  completedAt   DateTime?
+  // Step-by-step audit trail so we can replay + debug. Each entry:
+  //   { stepId, type, startedAt, completedAt, ok, output?, error? }
+  log           Json?
+  // If status=FAILED, the message that broke us.
+  error         String?
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId, status])
+  @@index([status, resumeAt])
+  @@index([contextType, contextId])
+  @@map("workflow_runs")
 }

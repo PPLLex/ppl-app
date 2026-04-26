@@ -44,6 +44,9 @@ import roleRoutes from './routes/roles';
 import partnerDashboardRoutes from './routes/partnerDashboard';
 import leadRoutes from './routes/leads';
 import publicLeadIntakeRoutes from './routes/publicLeadIntake';
+import tagRoutes from './routes/tags';
+import customFieldRoutes from './routes/customFields';
+import workflowRoutes from './routes/workflows';
 import screeningRoutes from './routes/screenings';
 import campaignRoutes from './routes/campaigns';
 import emailPreviewRoutes from './routes/emailPreview';
@@ -164,6 +167,11 @@ app.use('/api/screenings', screeningRoutes);
 app.use('/api/campaigns', campaignRoutes);
 // Admin-only email template preview + test-send
 app.use('/api/email-preview', emailPreviewRoutes);
+
+// Phase 1 foundations — Tagging, Custom Fields, Workflow engine
+app.use('/api/tags', tagRoutes);
+app.use('/api/custom-fields', customFieldRoutes);
+app.use('/api/workflows', workflowRoutes);
 
 // ============================================================
 // ERROR HANDLING

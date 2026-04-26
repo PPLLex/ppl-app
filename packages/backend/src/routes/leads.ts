@@ -34,7 +34,9 @@ import {
   PipelineStage,
   Prisma,
   Role,
+  WorkflowTrigger,
 } from '@prisma/client';
+import { emitTrigger } from '../services/workflowEngine';
 
 const router = Router();
 
@@ -325,6 +327,15 @@ router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => 
     }
     if (systemActivities.length > 0) {
       await prisma.leadActivity.createMany({ data: systemActivities });
+    }
+
+    // Fire workflow trigger on stage change so workflows bound to
+    // LEAD_STAGE_CHANGED { fromStage, toStage } can run.
+    if (stageChanged) {
+      emitTrigger(WorkflowTrigger.LEAD_STAGE_CHANGED, 'lead', id, {
+        fromStage: stageChanged.from,
+        toStage: stageChanged.to,
+      });
     }
 
     res.json({ success: true, data: lead });

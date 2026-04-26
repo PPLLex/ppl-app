@@ -33,7 +33,8 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../utils/prisma';
 import { ApiError } from '../utils/apiError';
-import { LeadActivityType, LeadSource, PipelineStage, Prisma } from '@prisma/client';
+import { LeadActivityType, LeadSource, PipelineStage, Prisma, WorkflowTrigger } from '@prisma/client';
+import { emitTrigger } from '../services/workflowEngine';
 
 const router = Router();
 
@@ -130,10 +131,17 @@ router.post('/lead-intake', async (req: Request, res: Response, next: NextFuncti
       data: {
         leadId,
         type: LeadActivityType.FORM_SUBMISSION,
-        body: notes || `Public form submission from ${source}`,
+        content: notes || `Public form submission from ${source}`,
         metadata: sourceMetadata,
       },
     });
+
+    // Fire workflow triggers — both the generic LEAD_CREATED for new leads
+    // and LEAD_FORM_SUBMITTED so workflows can react to repeat submissions.
+    if (!existing) {
+      emitTrigger(WorkflowTrigger.LEAD_CREATED, 'lead', leadId, { source });
+    }
+    emitTrigger(WorkflowTrigger.LEAD_FORM_SUBMITTED, 'lead', leadId, { source });
 
     res.json({ success: true });
   } catch (err) {

@@ -582,7 +582,7 @@ class ApiClient {
       activities: Array<{
         id: string;
         type: string;
-        body: string | null;
+        content: string | null;
         createdAt: string;
         author: { id: string; fullName: string } | null;
         metadata: unknown;
@@ -595,7 +595,7 @@ class ApiClient {
    */
   async addLeadActivity(
     id: string,
-    data: { type: string; body?: string; metadata?: Record<string, unknown> }
+    data: { type: string; content?: string; metadata?: Record<string, unknown> }
   ) {
     return this.request(`/leads/${encodeURIComponent(id)}/activities`, {
       method: 'POST',

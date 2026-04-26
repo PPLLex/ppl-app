@@ -8,7 +8,8 @@ import {
   buildBookingConfirmationEmail,
   buildBookingCancellationEmail,
 } from '../services/emailService';
-import { Role, BookingStatus, NotificationType, NotificationChannel, Prisma } from '@prisma/client';
+import { Role, BookingStatus, NotificationType, NotificationChannel, Prisma, WorkflowTrigger } from '@prisma/client';
+import { emitTrigger } from '../services/workflowEngine';
 
 const router = Router();
 
@@ -324,6 +325,13 @@ router.post('/', authenticate, async (req: Request, res: Response, next: NextFun
       resourceType: 'booking',
       resourceId: booking.id,
       changes: { sessionTitle: session.title, creditsUsed },
+    });
+
+    // Fire workflow trigger — non-blocking. Workflows bound to
+    // BOOKING_CREATED with optional sessionType filter run in the background.
+    emitTrigger(WorkflowTrigger.BOOKING_CREATED, 'booking', booking.id, {
+      sessionType: session.sessionType,
+      locationId: session.locationId,
     });
 
     res.status(201).json({

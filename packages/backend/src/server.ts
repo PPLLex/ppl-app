@@ -24,6 +24,7 @@ import { startCronJobs, stopCronJobs } from './services/cronService';
 import { bootstrapOrganizations } from './bootstrapOrgs';
 import { bootstrapMembershipPlans } from './bootstrapMembershipPlans';
 import { bootstrapUserRoles } from './bootstrapUserRoles';
+import { bootstrapTags } from './bootstrapTags';
 import { prisma } from './utils/prisma';
 
 console.log('[Server] Modules imported successfully');
@@ -47,6 +48,9 @@ const start = async () => {
     // legacy user already has at least one UserRole row. Removes the need
     // for a manual `railway run -- npx tsx scripts/migrate-user-roles.ts`.
     await bootstrapUserRoles(prisma);
+    // Seed system tags (locations, playing levels, lifecycle stages).
+    // Idempotent. Swallows errors so a tag-seed glitch can't block boot.
+    await bootstrapTags(prisma);
 
     console.log('[Server] Starting listener on port', config.port);
     const server = app.listen(config.port, () => {
