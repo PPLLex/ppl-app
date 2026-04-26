@@ -4,6 +4,7 @@ import { ApiError } from '../utils/apiError';
 import { authenticate } from '../middleware/auth';
 import { createAuditLog } from '../services/auditService';
 import { assertPasswordPolicy } from '../services/passwordPolicyService';
+import { revokeAllRefreshTokensForUser } from '../services/refreshTokenService';
 import { BookingStatus, Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
@@ -183,6 +184,12 @@ router.put('/password', async (req: Request, res: Response, next: NextFunction) 
       where: { id: userId },
       data: { passwordHash: newHash },
     });
+
+    // Password change is a security event — revoke every refresh token
+    // for this user. Other devices will need to log in again. The
+    // current session keeps its access JWT until expiry but loses its
+    // refresh capability, which is the right blast-radius cut.
+    void revokeAllRefreshTokensForUser(userId);
 
     await createAuditLog({
       action: 'PASSWORD_CHANGED',

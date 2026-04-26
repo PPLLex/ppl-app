@@ -589,6 +589,11 @@ model User {
   promoRedemptions PromoCodeRedemption[] @relation("PromoRedeemer")
   authoredPromoCodes PromoCode[]         @relation("PromoCodeAuthor")
 
+  // Refresh tokens (#S9). One row per active session/device. Rotated on
+  // every use — a refresh token is single-use, exchanging for a new
+  // access JWT + a new refresh token.
+  refreshTokens RefreshToken[]
+
   @@index([homeLocationId])
   @@index([role])
   @@index([email])
@@ -2850,4 +2855,49 @@ model PromoCodeRedemption {
   @@index([userId])
   @@index([membershipId])
   @@map("promo_code_redemptions")
+}
+
+// ============================================================
+// REFRESH TOKENS (#S9 / PREMIUM_AUDIT)
+// ============================================================
+//
+// Two-tier session model:
+//   - Access JWT: short-lived (15 min), stateless, signed with config.jwt.secret.
+//     Carried in Authorization: Bearer header. Re-issued via /auth/refresh.
+//   - Refresh token: long-lived (14 days), opaque, stored hashed at rest.
+//     Stored in localStorage on the client. Single-use — every refresh
+//     rotates it for a fresh row, and the old row is hard-deleted.
+//
+// Why hash the refresh token? Same logic as password reset tokens —
+// a leaked DB dump shouldn't yield usable credentials. We compare with
+// crypto.timingSafeEqual against the hash.
+//
+// Anti-replay: each row has `used` flag. On refresh we mark old=used and
+// create new in a $transaction. If we ever see a token presented that's
+// already been used, we revoke ALL of that user's refresh tokens (a sign
+// of a stolen token being replayed).
+//
+// userAgent + ip captured for "active sessions" UI later.
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  // SHA-256 hex of the actual token. The plaintext is only ever in the
+  // response body during issuance, then forgotten server-side.
+  tokenHash String   @unique
+  // null while active; timestamp set when consumed/rotated.
+  usedAt    DateTime?
+  // Hard expiry — refresh tokens older than this are invalid even if
+  // unused.
+  expiresAt DateTime
+  // Diagnostics for the future "your active sessions" UI.
+  userAgent String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, usedAt])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
 }

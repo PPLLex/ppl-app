@@ -6,6 +6,7 @@ import { generateToken, JwtPayload } from '../middleware/auth';
 import { sensitiveLimiter } from '../middleware/rateLimit';
 import { config } from '../config';
 import { Role } from '@prisma/client';
+import { issueRefreshToken } from '../services/refreshTokenService';
 
 const router = Router();
 
@@ -17,17 +18,20 @@ const router = Router();
  * Build JWT payload and generate token for a user.
  * Shared by all OAuth flows.
  */
-function buildAuthResponse(user: {
-  id: string;
-  email: string;
-  fullName: string;
-  phone: string | null;
-  role: Role;
-  homeLocationId: string | null;
-  homeLocation?: { id: string; name: string } | null;
-  clientProfile?: { ageGroup: string | null } | null;
-  avatarUrl?: string | null;
-}) {
+async function buildAuthResponse(
+  user: {
+    id: string;
+    email: string;
+    fullName: string;
+    phone: string | null;
+    role: Role;
+    homeLocationId: string | null;
+    homeLocation?: { id: string; name: string } | null;
+    clientProfile?: { ageGroup: string | null } | null;
+    avatarUrl?: string | null;
+  },
+  ctx?: { userAgent?: string | null; ipAddress?: string | null }
+) {
   const payload: JwtPayload = {
     userId: user.id,
     email: user.email,
@@ -35,9 +39,18 @@ function buildAuthResponse(user: {
     homeLocationId: user.homeLocationId,
   };
   const token = generateToken(payload);
+  // Refresh token (#S9) — issued on every successful auth so the
+  // frontend can silently re-mint short-lived access JWTs.
+  const refresh = await issueRefreshToken({
+    userId: user.id,
+    userAgent: ctx?.userAgent ?? null,
+    ipAddress: ctx?.ipAddress ?? null,
+  });
 
   return {
     token,
+    refreshToken: refresh.token,
+    refreshExpiresAt: refresh.expiresAt,
     user: {
       id: user.id,
       email: user.email,
@@ -142,7 +155,7 @@ router.post('/google', async (req: Request, res: Response, next: NextFunction) =
       });
     }
 
-    const authResponse = buildAuthResponse(user);
+    const authResponse = await buildAuthResponse(user, { userAgent: req.get('user-agent') ?? null, ipAddress: req.ip });
     authResponse.isNewUser = isNewUser;
 
     res.json({
@@ -243,7 +256,7 @@ router.post('/apple', async (req: Request, res: Response, next: NextFunction) =>
       });
     }
 
-    const authResponse = buildAuthResponse(user);
+    const authResponse = await buildAuthResponse(user, { userAgent: req.get('user-agent') ?? null, ipAddress: req.ip });
     authResponse.isNewUser = isNewUser;
 
     res.json({
@@ -403,7 +416,7 @@ router.post('/magic-link/verify', async (req: Request, res: Response, next: Next
       },
     });
 
-    const authResponse = buildAuthResponse(user);
+    const authResponse = await buildAuthResponse(user, { userAgent: req.get('user-agent') ?? null, ipAddress: req.ip });
 
     res.json({
       success: true,

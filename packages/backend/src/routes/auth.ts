@@ -12,6 +12,7 @@ import { generatePendingChallenge } from '../services/twoFactorService';
 import { createAuditLog } from '../services/auditService';
 import { sendVerificationEmail } from '../services/emailVerificationService';
 import { assertPasswordPolicy } from '../services/passwordPolicyService';
+import { issueRefreshToken } from '../services/refreshTokenService';
 
 // ============================================================
 // LOGIN HARDENING (#141 / S2 / S6)
@@ -355,11 +356,18 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
       homeLocationId: user.homeLocationId,
     };
     const token = generateToken(tokenPayload);
+    const refresh = await issueRefreshToken({
+      userId: user.id,
+      userAgent: req.get('user-agent') ?? null,
+      ipAddress: req.ip,
+    });
 
     res.status(201).json({
       success: true,
       data: {
         token,
+        refreshToken: refresh.token,
+        refreshExpiresAt: refresh.expiresAt,
         user: {
           id: user.id,
           email: user.email,
@@ -513,11 +521,18 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
       homeLocationId: user.homeLocationId,
     };
     const token = generateToken(tokenPayload);
+    const refresh = await issueRefreshToken({
+      userId: user.id,
+      userAgent: req.get('user-agent') ?? null,
+      ipAddress: req.ip,
+    });
 
     res.json({
       success: true,
       data: {
         token,
+        refreshToken: refresh.token,
+        refreshExpiresAt: refresh.expiresAt,
         user: {
           id: user.id,
           email: user.email,

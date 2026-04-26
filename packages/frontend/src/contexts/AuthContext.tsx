@@ -80,13 +80,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   /**
    * Handle the response from any auth flow (email/password, OAuth, magic link).
-   * Stores the token, sets the user, and routes.
+   * Stores the access token + (optional) refresh token, sets the user,
+   * and routes by role.
+   *
+   * The refresh token is what powers the silent /auth/refresh exchange
+   * inside ApiClient.tryRefresh. When it isn't present (legacy server
+   * responses), the user gets the old behavior — kicked out at first
+   * 401 — but new logins always include one.
    */
-  const handleAuthSuccess = useCallback((token: string, authUser: User) => {
-    localStorage.setItem('ppl_token', token);
-    setUser(authUser);
-    routeByRole(authUser.role);
-  }, [routeByRole]);
+  const handleAuthSuccess = useCallback(
+    (token: string, authUser: User, refreshToken?: string | null) => {
+      localStorage.setItem('ppl_token', token);
+      if (refreshToken) {
+        localStorage.setItem('ppl_refresh', refreshToken);
+      }
+      setUser(authUser);
+      routeByRole(authUser.role);
+    },
+    [routeByRole]
+  );
 
   const login = async (email: string, password: string): Promise<LoginResult> => {
     const res = await api.login(email, password);
@@ -97,9 +109,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // 2FA gate — caller must collect a TOTP code and call verifyTwoFactorLogin.
       return { twoFactorRequired: true, challenge: res.data.challenge, method: res.data.method };
     }
-    // Type narrowed: regular login response with token + user.
-    const data = res.data as { token: string; user: User };
-    handleAuthSuccess(data.token, data.user);
+    // Type narrowed: regular login response with token + user (+ optional refreshToken).
+    const data = res.data as { token: string; user: User; refreshToken?: string };
+    handleAuthSuccess(data.token, data.user, data.refreshToken);
     return { twoFactorRequired: false };
   };
 
@@ -109,7 +121,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   ): Promise<{ recoveryCodesLow: boolean }> => {
     const res = await api.verifyTwoFactorLogin(challenge, code);
     if (!res.data) throw new Error('2FA verification failed');
-    handleAuthSuccess(res.data.token, res.data.user);
+    handleAuthSuccess(
+      res.data.token,
+      res.data.user,
+      (res.data as { refreshToken?: string }).refreshToken
+    );
     return { recoveryCodesLow: !!res.data.recoveryCodesLow };
   };
 
@@ -119,6 +135,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // If new user, don't auto-route — let the caller decide (they may need onboarding)
     localStorage.setItem('ppl_token', res.data.token);
+    const oauthRefresh = (res.data as { refreshToken?: string }).refreshToken;
+    if (oauthRefresh) localStorage.setItem('ppl_refresh', oauthRefresh);
     setUser(res.data.user);
 
     if (!res.data.isNewUser) {
@@ -136,6 +154,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!res.data) throw new Error('Apple authentication failed');
 
     localStorage.setItem('ppl_token', res.data.token);
+    const appleRefresh = (res.data as { refreshToken?: string }).refreshToken;
+    if (appleRefresh) localStorage.setItem('ppl_refresh', appleRefresh);
     setUser(res.data.user);
 
     if (!res.data.isNewUser) {
@@ -152,12 +172,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const verifyMagicLink = async (token: string) => {
     const res = await api.verifyMagicLink(token);
     if (res.data) {
-      handleAuthSuccess(res.data.token, res.data.user);
+      handleAuthSuccess(
+        res.data.token,
+        res.data.user,
+        (res.data as { refreshToken?: string }).refreshToken
+      );
     }
   };
 
   const logout = () => {
+    // Best-effort revocation server-side; never block the UI on it.
+    const refreshToken =
+      typeof window !== 'undefined'
+        ? window.localStorage.getItem('ppl_refresh')
+        : null;
+    if (refreshToken) {
+      void api.logout(refreshToken).catch(() => {
+        /* ignore — local clear is what matters */
+      });
+    }
     localStorage.removeItem('ppl_token');
+    localStorage.removeItem('ppl_refresh');
     setUser(null);
     router.push('/login');
   };

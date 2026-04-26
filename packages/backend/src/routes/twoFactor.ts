@@ -36,6 +36,10 @@ import {
   generateRecoveryCodes,
   verifyRecoveryCode,
 } from '../services/twoFactorService';
+import {
+  issueRefreshToken,
+  revokeAllRefreshTokensForUser,
+} from '../services/refreshTokenService';
 
 const router = Router();
 
@@ -234,6 +238,12 @@ router.post('/2fa/disable', authenticate, async (req: Request, res: Response, ne
       },
     });
 
+    // Disabling 2FA is a security event — revoke every other active
+    // session so a hijacker holding a refresh token can't keep using
+    // the account. The current session loses its refresh token too;
+    // user just has to log in again to get a new one.
+    void revokeAllRefreshTokensForUser(user.id);
+
     void createAuditLog({
       userId: user.id,
       action: 'auth.2fa.disabled',
@@ -395,11 +405,18 @@ router.post(
         homeLocationId: user.homeLocationId,
       };
       const token = generateToken(tokenPayload);
+      const refresh = await issueRefreshToken({
+        userId: user.id,
+        userAgent: req.get('user-agent') ?? null,
+        ipAddress: req.ip,
+      });
 
       res.json({
         success: true,
         data: {
           token,
+          refreshToken: refresh.token,
+          refreshExpiresAt: refresh.expiresAt,
           user: {
             id: user.id,
             email: user.email,

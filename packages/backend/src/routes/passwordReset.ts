@@ -4,6 +4,7 @@ import { ApiError } from '../utils/apiError';
 import { sendEmail, buildPPLEmail } from '../services/emailService';
 import { sensitiveLimiter } from '../middleware/rateLimit';
 import { assertPasswordPolicy } from '../services/passwordPolicyService';
+import { revokeAllRefreshTokensForUser } from '../services/refreshTokenService';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
@@ -139,6 +140,11 @@ router.post('/reset-password', async (req: Request, res: Response, next: NextFun
         data: { usedAt: new Date() },
       }),
     ]);
+
+    // Password reset is a "I think my account was compromised" event.
+    // Revoke every existing refresh token so the user has to re-auth
+    // on every device — the whole point of the reset.
+    void revokeAllRefreshTokensForUser(resetRow.userId);
 
     res.json({ success: true, message: 'Password has been reset. You can now log in.' });
   } catch (error) {

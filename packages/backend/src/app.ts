@@ -26,6 +26,7 @@ import oauthRoutes from './routes/oauth';
 import twoFactorRoutes from './routes/twoFactor';
 import emailVerificationRoutes from './routes/emailVerification';
 import promoCodeRoutes from './routes/promoCodes';
+import refreshTokenRoutes from './routes/refreshToken';
 import coachNoteRoutes from './routes/coachNotes';
 import goalRoutes from './routes/goals';
 import formRoutes from './routes/forms';
@@ -193,6 +194,8 @@ app.use('/api/auth', emailVerificationRoutes);
 // Promo codes (#138). Public lookup (/lookup) + admin CRUD all under one
 // router; the route file applies requireAdmin per-handler.
 app.use('/api/promo-codes', promoCodeRoutes);
+// Refresh tokens (#S9). /api/auth/refresh + logout + logout-all.
+app.use('/api/auth', refreshTokenRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/onboarding', onboardingRoutes);

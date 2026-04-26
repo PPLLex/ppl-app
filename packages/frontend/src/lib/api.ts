@@ -11,6 +11,10 @@ interface ApiResponse<T = unknown> {
 class ApiClient {
   private baseUrl: string;
 
+  // In-flight refresh promise — multiple concurrent requests that all hit
+  // a 401 should share the same /auth/refresh round trip, not stampede.
+  private refreshInFlight: Promise<string | null> | null = null;
+
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
   }
@@ -20,9 +24,60 @@ class ApiClient {
     return localStorage.getItem('ppl_token');
   }
 
+  private getRefreshToken(): string | null {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem('ppl_refresh');
+  }
+
+  /**
+   * Try to silently exchange the stored refresh token for a fresh access
+   * JWT. Returns the new access token on success, null on failure.
+   * Multiple concurrent callers share the same in-flight request.
+   */
+  private async tryRefresh(): Promise<string | null> {
+    if (this.refreshInFlight) return this.refreshInFlight;
+    const refreshToken = this.getRefreshToken();
+    if (!refreshToken) return null;
+
+    this.refreshInFlight = (async () => {
+      try {
+        const res = await fetch(`${this.baseUrl}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        });
+        if (!res.ok) return null;
+        const body = await res.json();
+        const token = body?.data?.token as string | undefined;
+        const newRefresh = body?.data?.refreshToken as string | undefined;
+        if (!token || !newRefresh) return null;
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('ppl_token', token);
+          localStorage.setItem('ppl_refresh', newRefresh);
+        }
+        return token;
+      } catch {
+        return null;
+      } finally {
+        // Clear after the fetch settles so the NEXT 401 wave starts a
+        // fresh refresh round trip rather than reusing a stale promise.
+        this.refreshInFlight = null;
+      }
+    })();
+    return this.refreshInFlight;
+  }
+
   async request<T>(
     endpoint: string,
     options: RequestInit = {}
+  ): Promise<ApiResponse<T>> {
+    return this.requestInner<T>(endpoint, options, /* allowRetry */ true);
+  }
+
+  private async requestInner<T>(
+    endpoint: string,
+    options: RequestInit,
+    allowRetry: boolean
   ): Promise<ApiResponse<T>> {
     const token = this.getToken();
     // Declare which org the frontend is currently acting as. The backend's
@@ -54,6 +109,24 @@ class ApiClient {
     const data = await response.json();
 
     if (!response.ok) {
+      // Refresh-token retry (#S9). On 401 with a token in hand, try to
+      // silently re-mint via /auth/refresh. If it works, replay the
+      // original request once with the fresh access JWT. If it doesn't,
+      // fall through to the existing redirect-to-login path.
+      if (
+        response.status === 401 &&
+        typeof window !== 'undefined' &&
+        token &&
+        allowRetry &&
+        // Don't try to refresh refresh — would loop forever on a bad token.
+        endpoint !== '/auth/refresh'
+      ) {
+        const fresh = await this.tryRefresh();
+        if (fresh) {
+          return this.requestInner<T>(endpoint, options, /* allowRetry */ false);
+        }
+      }
+
       // Token expired or invalid — clear it and redirect to login.
       // IMPORTANT: only force a redirect if we actually SENT a token. A 401 on
       // an unauthenticated public call (e.g., branding before it's cached, or
@@ -61,6 +134,7 @@ class ApiClient {
       // infinite /register → /login → /register pulsate loop on mobile.
       if (response.status === 401 && typeof window !== 'undefined' && token) {
         localStorage.removeItem('ppl_token');
+        localStorage.removeItem('ppl_refresh');
         window.location.href = '/login?expired=true';
         throw new ApiError(401, 'Session expired. Please log in again.');
       }
@@ -158,6 +232,24 @@ class ApiClient {
       verifiedAt: string | null;
       email: string;
     }>('/auth/email/verification-status');
+  }
+
+  // ============================================================
+  // Refresh tokens (#S9). Refresh itself is called silently from
+  // requestInner; these are the explicit logout endpoints.
+  // ============================================================
+
+  async logout(refreshToken: string) {
+    return this.request<{ ok: boolean }>('/auth/logout', {
+      method: 'POST',
+      body: JSON.stringify({ refreshToken }),
+    });
+  }
+
+  async logoutAll() {
+    return this.request<{ revokedCount: number }>('/auth/logout-all', {
+      method: 'POST',
+    });
   }
 
   // ============================================================

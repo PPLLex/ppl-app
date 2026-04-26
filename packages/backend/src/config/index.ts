@@ -9,7 +9,11 @@ export const config = {
 
   jwt: {
     secret: process.env.JWT_SECRET || 'dev-secret',
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+    // Short-lived access JWT (#S9). The 14-day refresh token issued
+    // alongside login lets the frontend silently re-mint these without
+    // the user noticing. JWT_EXPIRES_IN env var can override (e.g. for
+    // load-testing or local debugging).
+    expiresIn: process.env.JWT_EXPIRES_IN || '15m',
   },
 
   stripe: {
