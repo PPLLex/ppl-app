@@ -118,6 +118,7 @@ const adminNav: NavItem[] = [
   { label: 'Consultations', href: '/admin/consultations', icon: <Icons.Calendar /> },
   { label: 'Reviews', href: '/admin/reviews', icon: <Icons.Target /> },
   { label: 'Integrations', href: '/admin/integrations', icon: <Icons.Shield /> },
+  { label: 'Workflows', href: '/admin/workflows', icon: <Icons.Settings /> },
   { label: 'Tags', href: '/admin/tags', icon: <Icons.Target /> },
   { label: 'Custom Fields', href: '/admin/custom-fields', icon: <Icons.Pencil /> },
   { label: 'Outbound Webhooks', href: '/admin/webhooks', icon: <Icons.Settings /> },

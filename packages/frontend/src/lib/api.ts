@@ -806,6 +806,103 @@ class ApiClient {
     );
   }
 
+  // ============================================================
+  // WORKFLOWS — Phase 1C surface
+  // ============================================================
+  async listWorkflows() {
+    return this.request<Array<{
+      id: string;
+      name: string;
+      description: string | null;
+      trigger: string;
+      isActive: boolean;
+      createdAt: string;
+      updatedAt: string;
+      _count?: { steps: number; runs: number };
+      createdBy: { id: string; fullName: string } | null;
+    }>>(`/workflows`);
+  }
+
+  async getWorkflow(id: string) {
+    return this.request<{
+      id: string;
+      name: string;
+      description: string | null;
+      trigger: string;
+      triggerConfig: Record<string, unknown> | null;
+      isActive: boolean;
+      steps: Array<{
+        id: string;
+        type: string;
+        config: Record<string, unknown>;
+        displayOrder: number;
+        nextStepId: string | null;
+      }>;
+      runs: Array<{
+        id: string;
+        status: string;
+        contextType: string;
+        contextId: string;
+        startedAt: string;
+        completedAt: string | null;
+        error: string | null;
+      }>;
+    }>(`/workflows/${encodeURIComponent(id)}`);
+  }
+
+  async createWorkflow(data: { name: string; description?: string; trigger: string; triggerConfig?: Record<string, unknown> }) {
+    return this.request<{ id: string }>(`/workflows`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateWorkflow(id: string, patch: Record<string, unknown>) {
+    return this.request(`/workflows/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  }
+
+  async deleteWorkflow(id: string) {
+    return this.request(`/workflows/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  async addWorkflowStep(workflowId: string, data: { type: string; config: Record<string, unknown>; displayOrder?: number; nextStepId?: string | null }) {
+    return this.request<{ id: string }>(`/workflows/${encodeURIComponent(workflowId)}/steps`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateWorkflowStep(stepId: string, patch: Record<string, unknown>) {
+    return this.request(`/workflows/steps/${encodeURIComponent(stepId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  }
+
+  async deleteWorkflowStep(stepId: string) {
+    return this.request(`/workflows/steps/${encodeURIComponent(stepId)}`, { method: 'DELETE' });
+  }
+
+  async getWorkflowRun(runId: string) {
+    return this.request<{
+      id: string;
+      workflowId: string;
+      status: string;
+      contextType: string;
+      contextId: string;
+      currentStepId: string | null;
+      resumeAt: string | null;
+      startedAt: string;
+      completedAt: string | null;
+      log: unknown;
+      error: string | null;
+      workflow: { id: string; name: string; trigger: string };
+    }>(`/workflows/runs/${encodeURIComponent(runId)}`);
+  }
+
   async listTags(kind?: string) {
     const query = kind ? `?kind=${encodeURIComponent(kind)}` : '';
     return this.request<Array<{
