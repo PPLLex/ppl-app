@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { api, DashboardStats, DashboardTodaySession } from '@/lib/api';
+import { AnimatedNumber } from '@/components/AnimatedNumber';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -133,7 +134,9 @@ export default function AdminDashboard() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           </div>
-          <p className="font-stat text-5xl leading-none tracking-wide mt-2 text-accent-text">{membership.active}</p>
+          <p className="font-stat text-5xl leading-none tracking-wide mt-2 text-accent-text">
+            <AnimatedNumber value={membership.active} />
+          </p>
           {membership.newSignups7d > 0 && (
             <p className="text-xs text-accent-text mt-1">+{membership.newSignups7d} this week</p>
           )}
@@ -147,7 +150,9 @@ export default function AdminDashboard() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <p className="font-stat text-5xl leading-none tracking-wide mt-2 text-accent-text">{formatPrice(revenue.mrr)}</p>
+          <p className="font-stat text-5xl leading-none tracking-wide mt-2 text-accent-text">
+            <AnimatedNumber value={revenue.mrr / 100} prefix="$" decimals={2} />
+          </p>
           {revenue.revenueChange !== 0 && (
             <p className={`text-xs mt-1 ${revenue.revenueChange > 0 ? 'text-accent-text' : 'text-red-400'}`}>
               {revenue.revenueChange > 0 ? '↑' : '↓'} {Math.abs(revenue.revenueChange)}% vs prev 30d
@@ -163,7 +168,9 @@ export default function AdminDashboard() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           </div>
-          <p className="font-stat text-5xl leading-none tracking-wide mt-2 text-foreground">{today.totalSessions}</p>
+          <p className="font-stat text-5xl leading-none tracking-wide mt-2 text-foreground">
+            <AnimatedNumber value={today.totalSessions} />
+          </p>
           <p className="text-xs text-muted mt-1">
             {today.totalBookings} booked · {today.totalCheckedIn} checked in
           </p>
@@ -178,7 +185,7 @@ export default function AdminDashboard() {
             </svg>
           </div>
           <p className={`font-stat text-5xl leading-none tracking-wide mt-2 ${utilizationRate >= 70 ? 'text-accent-text' : utilizationRate >= 40 ? 'text-amber-400' : 'text-red-400'}`}>
-            {utilizationRate}%
+            <AnimatedNumber value={utilizationRate} suffix="%" />
           </p>
           <div className="h-2 bg-surface rounded-full overflow-hidden mt-2">
             <div
