@@ -805,6 +805,114 @@ class ApiClient {
     }>>(`/tags${query}`);
   }
 
+  async createTag(data: { name: string; color?: string; description?: string; kind?: string }) {
+    return this.request(`/tags`, { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async updateTag(id: string, patch: { name?: string; color?: string; description?: string }) {
+    return this.request(`/tags/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  }
+
+  async deleteTag(id: string) {
+    return this.request(`/tags/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  // ============================================================
+  // CUSTOM FIELDS
+  // ============================================================
+  async listCustomFields(entityType?: string, includeInactive?: boolean) {
+    const qs = new URLSearchParams();
+    if (entityType) qs.set('entityType', entityType);
+    if (includeInactive) qs.set('includeInactive', 'true');
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+    return this.request<Array<{
+      id: string;
+      name: string;
+      slug: string;
+      entityType: string;
+      fieldType: string;
+      config: Record<string, unknown> | null;
+      required: boolean;
+      order: number;
+      active: boolean;
+    }>>(`/custom-fields${query}`);
+  }
+
+  async createCustomField(data: {
+    name: string;
+    entityType: string;
+    fieldType: string;
+    config?: Record<string, unknown>;
+    required?: boolean;
+    order?: number;
+  }) {
+    return this.request(`/custom-fields`, { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async updateCustomField(id: string, patch: Record<string, unknown>) {
+    return this.request(`/custom-fields/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  }
+
+  async deleteCustomField(id: string) {
+    return this.request(`/custom-fields/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  // ============================================================
+  // OUTBOUND WEBHOOKS
+  // ============================================================
+  async listOutboundWebhooks() {
+    return this.request<Array<{
+      id: string;
+      name: string;
+      url: string;
+      secret: string;
+      events: string[];
+      isActive: boolean;
+      lastSuccessAt: string | null;
+      consecutiveFailures: number;
+      createdAt: string;
+      _count?: { deliveries: number };
+    }>>(`/outbound-webhooks`);
+  }
+
+  async createOutboundWebhook(data: { name: string; url: string; events: string[] }) {
+    return this.request<{ id: string; secret: string }>(`/outbound-webhooks`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateOutboundWebhook(id: string, patch: Record<string, unknown>) {
+    return this.request(`/outbound-webhooks/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  }
+
+  async deleteOutboundWebhook(id: string) {
+    return this.request(`/outbound-webhooks/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  async testOutboundWebhook(id: string) {
+    return this.request<{ statusCode: number | null; error: string | null }>(
+      `/outbound-webhooks/${encodeURIComponent(id)}/test`,
+      { method: 'POST' }
+    );
+  }
+
+  async rotateOutboundWebhookSecret(id: string) {
+    return this.request<{ secret: string }>(
+      `/outbound-webhooks/${encodeURIComponent(id)}/rotate`,
+      { method: 'POST' }
+    );
+  }
+
   /**
    * Lead-source ROI: per-source funnel breakdown — total leads in
    * period, conversions, lost, in-progress, conversion rate, avg days
