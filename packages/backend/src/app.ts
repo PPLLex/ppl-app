@@ -48,6 +48,7 @@ import tagRoutes from './routes/tags';
 import customFieldRoutes from './routes/customFields';
 import workflowRoutes from './routes/workflows';
 import outboundWebhookRoutes from './routes/webhooks.outbound';
+import consultationRoutes from './routes/consultations';
 import screeningRoutes from './routes/screenings';
 import campaignRoutes from './routes/campaigns';
 import emailPreviewRoutes from './routes/emailPreview';
@@ -175,6 +176,8 @@ app.use('/api/custom-fields', customFieldRoutes);
 app.use('/api/workflows', workflowRoutes);
 // Outbound webhooks — admin-configured fire-on-event subscribers (Zapier-style)
 app.use('/api/outbound-webhooks', outboundWebhookRoutes);
+// Consultation calendar — public booking + admin slot management
+app.use('/api/consultations', consultationRoutes);
 
 // ============================================================
 // ERROR HANDLING

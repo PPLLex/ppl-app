@@ -410,6 +410,8 @@ model Location {
   // Medical screenings held at this location — drives the weekly revenue
   // report grouped by location for the Medical Admin.
   medicalScreenings    MedicalScreening[]
+  // Consultation slots that physically take place at this location (vs phone)
+  consultationSlots    ConsultationSlot[]
 
   @@index([organizationId])
   @@map("locations")
@@ -535,6 +537,7 @@ model User {
   // Workflows authored by this user (Phase 1C)
   createdWorkflows Workflow[] @relation("WorkflowCreatedBy")
   createdWebhooks  Webhook[]  @relation("WebhookCreatedBy")
+  hostedConsultations ConsultationSlot[] @relation("ConsultationHost")
 
   @@index([homeLocationId])
   @@index([role])
@@ -1824,6 +1827,9 @@ model Lead {
   tagAssignments    TagAssignment[]
   customFieldValues CustomFieldValue[] @relation("LeadCustomFields")
 
+  // Consultation calls this lead has booked
+  consultationBookings ConsultationBooking[]
+
   @@unique([organizationId, email])
   @@index([stage, ownerUserId])
   @@index([source])
@@ -2070,6 +2076,71 @@ model WebhookEvent {
 
   @@index([provider, eventType])
   @@map("webhook_events")
+}
+
+// ============================================================================
+// CONSULTATION CALENDAR — Phase 2 (#20)
+// ----------------------------------------------------------------------------
+// Free 15-minute discovery calls that prospects can self-book on a public
+// page. Admins create available slots in bulk; the public page lists
+// AVAILABLE ones; booking transitions the slot to BOOKED and creates both
+// a Lead (or upserts onto an existing one) and a ConsultationBooking.
+//
+// Why a dedicated model instead of reusing Session: prospects aren't
+// members yet, sessions require an active membership + capacity tracking,
+// and these are 1-on-1 by design. Cleaner to keep the funnel-side
+// scheduling separate from the training-side scheduling.
+// ============================================================================
+
+enum ConsultationSlotStatus {
+  AVAILABLE
+  BOOKED
+  CANCELLED
+}
+
+model ConsultationSlot {
+  id              String                 @id @default(uuid())
+  organizationId  String                 @default("ppl")
+  startTime       DateTime
+  durationMinutes Int                    @default(15)
+  // Who'll be on the call. Optional so admin can bulk-create slots and
+  // assign hosts later.
+  hostUserId      String?
+  // Optional location — phone calls are most common for consults but a
+  // walkthrough at PPL Lex is also a thing.
+  locationId      String?
+  status          ConsultationSlotStatus @default(AVAILABLE)
+  // Free-form admin note shown alongside the slot in admin UI only.
+  internalNote    String?
+  createdAt       DateTime               @default(now())
+
+  host     User?                  @relation("ConsultationHost", fields: [hostUserId], references: [id])
+  location Location?              @relation(fields: [locationId], references: [id])
+  booking  ConsultationBooking?
+
+  @@unique([startTime, hostUserId])
+  @@index([status, startTime])
+  @@index([organizationId])
+  @@map("consultation_slots")
+}
+
+model ConsultationBooking {
+  id        String   @id @default(uuid())
+  slotId    String   @unique
+  leadId    String?
+  // Snapshotted prospect info — survives even if lead is later deleted.
+  name      String
+  email     String
+  phone     String?
+  notes     String?
+  createdAt DateTime @default(now())
+  cancelledAt DateTime?
+
+  slot ConsultationSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  lead Lead?            @relation(fields: [leadId], references: [id])
+
+  @@index([leadId])
+  @@map("consultation_bookings")
 }
 
 // ============================================================================
