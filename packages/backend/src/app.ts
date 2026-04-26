@@ -23,6 +23,7 @@ import passwordResetRoutes from './routes/passwordReset';
 import auditLogRoutes from './routes/auditLogs';
 import webhookRoutes from './routes/webhooks';
 import oauthRoutes from './routes/oauth';
+import twoFactorRoutes from './routes/twoFactor';
 import coachNoteRoutes from './routes/coachNotes';
 import goalRoutes from './routes/goals';
 import formRoutes from './routes/forms';
@@ -148,6 +149,10 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/account', accountRoutes);
 app.use('/api/auth', passwordResetRoutes);
 app.use('/api/auth', oauthRoutes);
+// 2FA enrollment + login bridge (#141 / PREMIUM_AUDIT S6).
+// Routes inside the file declare their own /2fa/* prefix so this single
+// mount serves both /api/auth/2fa/* and /api/auth/login/2fa-verify.
+app.use('/api/auth', twoFactorRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/onboarding', onboardingRoutes);

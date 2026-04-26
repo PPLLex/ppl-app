@@ -8,6 +8,18 @@ import { Role, WorkflowTrigger } from '@prisma/client';
 import { sendEmail, buildWelcomeEmail } from '../services/emailService';
 import { emitTrigger } from '../services/workflowEngine';
 import { recordReferral } from '../services/referralService';
+import { generatePendingChallenge } from '../services/twoFactorService';
+import { createAuditLog } from '../services/auditService';
+
+// ============================================================
+// LOGIN HARDENING (#141 / S2 / S6)
+// ============================================================
+// Account lockout: 5 failed login attempts within 15 min → lock for 15 min.
+// Counters live on the User row (failedLoginCount, failedLoginResetAt,
+// lockedUntil) so they survive process restarts.
+const LOCKOUT_WINDOW_MS = 15 * 60 * 1000;
+const LOCKOUT_THRESHOLD = 5;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
 
 const router = Router();
 
@@ -352,7 +364,14 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
 
 /**
  * POST /api/auth/login
- * Login with email and password
+ * Login with email and password.
+ *
+ * Security layers (in order):
+ *   1. Account lockout: 5 fails in 15 min triggers a 15 min freeze (S2).
+ *   2. Generic "invalid email or password" on every failure mode.
+ *   3. If 2FA is enabled (#141), return a one-time challenge instead of
+ *      a JWT — the client posts that to /auth/login/2fa-verify with a
+ *      TOTP code (or recovery code) to actually log in.
  */
 router.post('/login', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -372,6 +391,9 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
     });
 
     if (!user) {
+      // Constant-ish-time stub so a network observer can't fingerprint
+      // "no such user" vs. "wrong password" by latency alone.
+      await bcrypt.compare(password, '$2a$12$invalidinvalidinvalidinvalidinvalidinvalidinvalidinvalid');
       throw ApiError.unauthorized('Invalid email or password');
     }
 
@@ -379,7 +401,19 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
       throw ApiError.unauthorized('Account is deactivated. Please contact PPL.');
     }
 
-    // Verify password â OAuth-only accounts don't have a passwordHash
+    // Lockout check (PREMIUM_AUDIT S2). Friendly minutes-left message so
+    // the user knows it's not a permanent ban.
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      const minutesLeft = Math.max(
+        1,
+        Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60000)
+      );
+      throw ApiError.unauthorized(
+        `Too many failed login attempts. Try again in ${minutesLeft} minute${minutesLeft === 1 ? '' : 's'}.`
+      );
+    }
+
+    // Verify password — OAuth-only accounts don't have a passwordHash
     if (!user.passwordHash) {
       throw ApiError.unauthorized(
         'This account uses Google or Apple sign-in. Please use that method to log in.'
@@ -387,7 +421,74 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
     }
     const isValidPassword = await bcrypt.compare(password, user.passwordHash);
     if (!isValidPassword) {
+      // Bump the failed-login counter; cross the threshold and we lock.
+      // Window is rolling — a stale failure (>15 min ago) resets to 1.
+      const now = new Date();
+      const withinWindow =
+        user.failedLoginResetAt && user.failedLoginResetAt > now;
+      const newCount = withinWindow ? user.failedLoginCount + 1 : 1;
+      const shouldLock = newCount >= LOCKOUT_THRESHOLD;
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginCount: shouldLock ? 0 : newCount,
+          failedLoginResetAt: shouldLock
+            ? null
+            : new Date(now.getTime() + LOCKOUT_WINDOW_MS),
+          lockedUntil: shouldLock
+            ? new Date(now.getTime() + LOCKOUT_DURATION_MS)
+            : null,
+        },
+      });
+
+      if (shouldLock) {
+        void createAuditLog({
+          userId: user.id,
+          action: 'auth.login.locked',
+          resourceType: 'User',
+          resourceId: user.id,
+          ipAddress: req.ip,
+          changes: { reason: 'failed_attempts_threshold' },
+        });
+      }
+
       throw ApiError.unauthorized('Invalid email or password');
+    }
+
+    // Successful password verification — clear lockout state.
+    if (user.failedLoginCount > 0 || user.lockedUntil) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginCount: 0,
+          failedLoginResetAt: null,
+          lockedUntil: null,
+        },
+      });
+    }
+
+    // 2FA gate (#141). If enabled, do NOT mint a JWT — issue a one-time
+    // challenge that has to be redeemed at /auth/login/2fa-verify with a
+    // valid TOTP code (or recovery code). Single-use, 15-minute scope.
+    if (user.twoFactorEnabledAt && user.twoFactorSecret) {
+      const { token: challenge, expiresAt } = generatePendingChallenge();
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          twoFactorPendingChallenge: challenge,
+          twoFactorChallengeExpiresAt: expiresAt,
+        },
+      });
+      res.json({
+        success: true,
+        data: {
+          twoFactorRequired: true,
+          challenge,
+          method: 'totp',
+        },
+      });
+      return;
     }
 
     // Generate token

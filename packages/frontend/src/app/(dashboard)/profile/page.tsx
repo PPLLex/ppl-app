@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { api, UserProfile } from '@/lib/api';
+import { TwoFactorPanel } from '@/components/security/TwoFactorPanel';
 
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
@@ -21,7 +22,7 @@ export default function ProfilePage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'password'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'security'>('profile');
 
   useEffect(() => {
     const load = async () => {
@@ -171,6 +172,16 @@ export default function ProfilePage() {
         >
           Change Password
         </button>
+        <button
+          onClick={() => { setActiveTab('security'); setMessage(null); }}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+            activeTab === 'security'
+              ? 'bg-highlight/20 text-accent-text'
+              : 'text-muted hover:text-foreground'
+          }`}
+        >
+          Security
+        </button>
       </div>
 
       {/* Profile Edit Form */}
@@ -285,6 +296,14 @@ export default function ProfilePage() {
               {changingPassword ? 'Changing...' : 'Change Password'}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Security tab — currently hosts 2FA enrollment + recovery codes
+          (#141). Future: device sessions, login history, etc. */}
+      {activeTab === 'security' && (
+        <div className="space-y-4">
+          <TwoFactorPanel />
         </div>
       )}
     </div>

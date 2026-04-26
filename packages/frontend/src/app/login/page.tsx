@@ -20,7 +20,7 @@ export default function LoginPage() {
 type AuthMode = 'credentials' | 'magic-link';
 
 function LoginForm() {
-  const { login, loginWithGoogle, sendMagicLink } = useAuth();
+  const { login, verifyTwoFactorLogin, loginWithGoogle, sendMagicLink } = useAuth();
   const { branding, isLoaded: brandingLoaded } = useTheme();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
@@ -31,6 +31,10 @@ function LoginForm() {
   const [authMode, setAuthMode] = useState<AuthMode>('credentials');
   const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [googleLoaded, setGoogleLoaded] = useState(false);
+  // 2FA challenge state — set when /auth/login returns twoFactorRequired.
+  // While set, the form swaps from "email + password" to "6-digit code".
+  const [twoFactorChallenge, setTwoFactorChallenge] = useState<string | null>(null);
+  const [twoFactorCode, setTwoFactorCode] = useState('');
 
   useEffect(() => {
     if (searchParams.get('expired') === 'true') {
@@ -96,7 +100,15 @@ function LoginForm() {
     setIsLoading(true);
 
     try {
-      await login(email, password);
+      const result = await login(email, password);
+      if (result.twoFactorRequired) {
+        // Stash the challenge token and swap the form into 2FA mode. Toast
+        // is informational rather than success — they're not in yet.
+        setTwoFactorChallenge(result.challenge);
+        setTwoFactorCode('');
+        toast.info('Enter the 6-digit code from your authenticator app');
+        return;
+      }
       toast.success('Welcome back to PPL');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Login failed. Please try again.';
@@ -105,6 +117,37 @@ function LoginForm() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleTwoFactorVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!twoFactorChallenge) return;
+    setError('');
+    setIsLoading(true);
+    try {
+      const { recoveryCodesLow } = await verifyTwoFactorLogin(twoFactorChallenge, twoFactorCode);
+      toast.success('Welcome back to PPL');
+      if (recoveryCodesLow) {
+        // Soft nudge — don't block them, but tell them to print fresh codes.
+        toast.warning(
+          'You have 3 or fewer recovery codes left. Generate new codes from your security settings soon.'
+        );
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Verification failed';
+      toast.error(message);
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const cancelTwoFactor = () => {
+    setTwoFactorChallenge(null);
+    setTwoFactorCode('');
+    setError('');
+    // We intentionally KEEP the email so the user doesn't have to retype it.
+    setPassword('');
   };
 
   const handleMagicLink = async (e: React.FormEvent) => {
@@ -199,8 +242,65 @@ function LoginForm() {
             </div>
           </div>
 
-          {/* —— Magic Link / Password Toggle —— */}
-          {authMode === 'credentials' ? (
+          {/* —— 2FA Challenge — only when login succeeded but the account
+                has TOTP enabled. We hide the social + magic-link surface
+                while we're collecting the code so the user can't get confused. —— */}
+          {twoFactorChallenge ? (
+            <form onSubmit={handleTwoFactorVerify} className="space-y-4">
+              <div className="text-center mb-2">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-highlight/15 mb-3">
+                  <svg className="w-6 h-6 text-accent-text" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 11c0-1.1.9-2 2-2s2 .9 2 2-2 2-2 2v1m-4 4h8a2 2 0 002-2v-7a2 2 0 00-2-2h-1V6a3 3 0 00-6 0v1H8a2 2 0 00-2 2v7a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <h3 className="text-base font-semibold text-foreground">Two-factor required</h3>
+                <p className="text-xs text-muted mt-1">
+                  Enter the 6-digit code from your authenticator app — or paste a recovery code.
+                </p>
+              </div>
+              <div>
+                <label htmlFor="totp-code" className="block text-sm font-medium text-foreground mb-1.5">
+                  Verification code
+                </label>
+                <input
+                  id="totp-code"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  autoFocus
+                  value={twoFactorCode}
+                  onChange={(e) => setTwoFactorCode(e.target.value)}
+                  placeholder="123 456"
+                  className="ppl-input text-center tracking-[0.4em] text-lg font-mono"
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isLoading || twoFactorCode.length < 6}
+                className="ppl-btn ppl-btn-primary w-full py-3 text-base"
+              >
+                {isLoading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Verifying...
+                  </span>
+                ) : (
+                  'Verify and sign in'
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={cancelTwoFactor}
+                className="w-full text-sm text-muted hover:text-accent-text transition-colors text-center"
+              >
+                Use a different account
+              </button>
+            </form>
+          ) : authMode === 'credentials' ? (
             <>
               <form onSubmit={handleCredentialLogin} className="space-y-4">
                 <div>

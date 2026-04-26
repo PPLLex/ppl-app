@@ -457,6 +457,39 @@ model User {
   // Referral program (#134) — generated lazily on first need
   referralCode    String? @unique
 
+  // ============================================================
+  // SECURITY (#141, #142, account lockout)
+  // ============================================================
+  // Two-factor auth (TOTP via otplib). Secret is base32, stored at-rest.
+  // enabledAt set the moment the user verifies their first TOTP code; until
+  // then `secret` is a "pending" enrollment value that login does NOT enforce.
+  // recoveryCodes is an array of bcrypt-hashed one-time codes (10 issued
+  // at enrollment, regenerable from the security page). pendingChallenge
+  // holds a short-lived random token issued by /auth/login when 2FA is
+  // required — the client trades it + the TOTP code for a real JWT.
+  twoFactorSecret             String?
+  twoFactorEnabledAt          DateTime?
+  twoFactorRecoveryCodes      String[]  @default([])
+  twoFactorPendingChallenge   String?   @unique
+  twoFactorChallengeExpiresAt DateTime?
+
+  // Email verification (#142). emailVerifiedAt is the moment the user
+  // clicked the link from /auth/verify-email; null = unverified. New
+  // self-registered accounts start unverified; admin-invited and OAuth
+  // accounts are pre-verified. emailVerificationToken is a one-time
+  // random token; expires 24h after issue.
+  emailVerifiedAt              DateTime?
+  emailVerificationToken       String?   @unique
+  emailVerificationTokenExpiry DateTime?
+
+  // Account lockout (PREMIUM_AUDIT S2). 5 fails in 15 min → lock 15 min.
+  // failedLoginCount resets on successful login or after the 15-min
+  // window elapses. lockedUntil is checked at the top of the login
+  // handler — if non-null and in the future, login is rejected.
+  failedLoginCount   Int       @default(0)
+  failedLoginResetAt DateTime?
+  lockedUntil        DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

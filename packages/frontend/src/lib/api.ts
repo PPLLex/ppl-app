@@ -71,11 +71,71 @@ class ApiClient {
   }
 
   // Auth
+  // POST /auth/login returns one of two shapes:
+  //   - Normal: { token, user }
+  //   - 2FA gated: { twoFactorRequired: true, challenge, method: 'totp' }
+  // The login page checks `twoFactorRequired` and routes the user to the
+  // TOTP step before completing the session.
   async login(email: string, password: string) {
-    return this.request<{ token: string; user: User }>('/auth/login', {
+    return this.request<
+      | { token: string; user: User; twoFactorRequired?: false }
+      | { twoFactorRequired: true; challenge: string; method: 'totp' }
+    >('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
+  }
+
+  // Step 2 of two-factor login. Trades the challenge token + a TOTP code
+  // (or a XXXXX-XXXXX recovery code) for a real session JWT. Sets
+  // recoveryCodesLow=true when the user just spent a recovery code and
+  // has 3 or fewer left, so the UI can nudge them to print a fresh batch.
+  async verifyTwoFactorLogin(challenge: string, code: string) {
+    return this.request<{
+      token: string;
+      user: User;
+      recoveryCodesLow?: boolean;
+    }>('/auth/login/2fa-verify', {
+      method: 'POST',
+      body: JSON.stringify({ challenge, code }),
+    });
+  }
+
+  async getTwoFactorStatus() {
+    return this.request<{
+      enabled: boolean;
+      enabledAt: string | null;
+      recoveryCodesRemaining: number;
+    }>('/auth/2fa/status');
+  }
+
+  async setupTwoFactor() {
+    return this.request<{
+      secret: string;
+      otpauthUrl: string;
+      qrDataUrl: string;
+    }>('/auth/2fa/setup', { method: 'POST' });
+  }
+
+  async enableTwoFactor(code: string) {
+    return this.request<{ enabled: true; recoveryCodes: string[] }>(
+      '/auth/2fa/enable',
+      { method: 'POST', body: JSON.stringify({ code }) }
+    );
+  }
+
+  async disableTwoFactor(password: string, code: string) {
+    return this.request<{ enabled: false }>('/auth/2fa/disable', {
+      method: 'POST',
+      body: JSON.stringify({ password, code }),
+    });
+  }
+
+  async regenerateRecoveryCodes(code: string) {
+    return this.request<{ recoveryCodes: string[] }>(
+      '/auth/2fa/recovery-codes/regenerate',
+      { method: 'POST', body: JSON.stringify({ code }) }
+    );
   }
 
   async register(data: RegisterData) {

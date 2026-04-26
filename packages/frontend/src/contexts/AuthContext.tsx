@@ -4,11 +4,26 @@ import { createContext, useContext, useState, useEffect, useCallback, ReactNode 
 import { api, User, OAuthResult, ApiError } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 
+/**
+ * `login()` resolves to either:
+ *   - { twoFactorRequired: true, challenge } — caller must collect a TOTP
+ *     code and call verifyTwoFactorLogin to finish the session.
+ *   - { twoFactorRequired: false } — session is established, user is set,
+ *     routing has happened.
+ */
+export type LoginResult =
+  | { twoFactorRequired: true; challenge: string; method: 'totp' }
+  | { twoFactorRequired: false };
+
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<LoginResult>;
+  verifyTwoFactorLogin: (
+    challenge: string,
+    code: string
+  ) => Promise<{ recoveryCodesLow: boolean }>;
   loginWithGoogle: (idToken: string) => Promise<OAuthResult>;
   loginWithApple: (identityToken: string, fullName?: { givenName: string; familyName: string }) => Promise<OAuthResult>;
   sendMagicLink: (email: string) => Promise<void>;
@@ -73,11 +88,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     routeByRole(authUser.role);
   }, [routeByRole]);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<LoginResult> => {
     const res = await api.login(email, password);
-    if (res.data) {
-      handleAuthSuccess(res.data.token, res.data.user);
+    if (!res.data) {
+      throw new Error('Login failed');
     }
+    if ('twoFactorRequired' in res.data && res.data.twoFactorRequired) {
+      // 2FA gate — caller must collect a TOTP code and call verifyTwoFactorLogin.
+      return { twoFactorRequired: true, challenge: res.data.challenge, method: res.data.method };
+    }
+    // Type narrowed: regular login response with token + user.
+    const data = res.data as { token: string; user: User };
+    handleAuthSuccess(data.token, data.user);
+    return { twoFactorRequired: false };
+  };
+
+  const verifyTwoFactorLogin = async (
+    challenge: string,
+    code: string
+  ): Promise<{ recoveryCodesLow: boolean }> => {
+    const res = await api.verifyTwoFactorLogin(challenge, code);
+    if (!res.data) throw new Error('2FA verification failed');
+    handleAuthSuccess(res.data.token, res.data.user);
+    return { recoveryCodesLow: !!res.data.recoveryCodesLow };
   };
 
   const loginWithGoogle = async (idToken: string): Promise<OAuthResult> => {
@@ -136,6 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         isAuthenticated: !!user,
         login,
+        verifyTwoFactorLogin,
         loginWithGoogle,
         loginWithApple,
         sendMagicLink,
