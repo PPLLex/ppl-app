@@ -25,6 +25,7 @@ import { bootstrapOrganizations } from './bootstrapOrgs';
 import { bootstrapMembershipPlans } from './bootstrapMembershipPlans';
 import { bootstrapUserRoles } from './bootstrapUserRoles';
 import { bootstrapTags } from './bootstrapTags';
+import { bootstrapWorkflows } from './bootstrapWorkflows';
 import { prisma } from './utils/prisma';
 
 console.log('[Server] Modules imported successfully');
@@ -51,6 +52,9 @@ const start = async () => {
     // Seed system tags (locations, playing levels, lifecycle stages).
     // Idempotent. Swallows errors so a tag-seed glitch can't block boot.
     await bootstrapTags(prisma);
+    // Seed default automations — currently just the new-member onboarding
+    // sequence. Idempotent — never overwrites edits.
+    await bootstrapWorkflows(prisma);
 
     console.log('[Server] Starting listener on port', config.port);
     const server = app.listen(config.port, () => {

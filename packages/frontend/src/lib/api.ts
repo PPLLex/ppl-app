@@ -820,6 +820,26 @@ class ApiClient {
     return this.request(`/tags/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }
 
+  async getTagsBySubject(type: 'lead' | 'user' | 'athlete', id: string) {
+    return this.request<Array<{ id: string; name: string; color: string; kind: string }>>(
+      `/tags/by-subject/${type}/${encodeURIComponent(id)}`
+    );
+  }
+
+  async assignTag(tagId: string, subject: { leadId?: string; userId?: string; athleteProfileId?: string }) {
+    return this.request(`/tags/${encodeURIComponent(tagId)}/assign`, {
+      method: 'POST',
+      body: JSON.stringify(subject),
+    });
+  }
+
+  async unassignTag(tagId: string, subject: { leadId?: string; userId?: string; athleteProfileId?: string }) {
+    return this.request(`/tags/${encodeURIComponent(tagId)}/assign`, {
+      method: 'DELETE',
+      body: JSON.stringify(subject),
+    });
+  }
+
   // ============================================================
   // CUSTOM FIELDS
   // ============================================================

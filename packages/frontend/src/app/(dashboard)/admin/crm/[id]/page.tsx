@@ -17,6 +17,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { TagPicker } from '@/components/TagPicker';
 
 type Lead = NonNullable<Awaited<ReturnType<typeof api.getLead>>['data']>;
 type Activity = Lead['activities'][number];
@@ -213,6 +214,12 @@ export default function LeadDetailPage() {
             Delete
           </button>
         </div>
+      </div>
+
+      {/* Tags */}
+      <div className="mt-6">
+        <p className="text-[10px] uppercase tracking-[0.12em] text-muted mb-2">Tags</p>
+        <TagPicker subjectType="lead" subjectId={lead.id} />
       </div>
 
       {/* Stage + meta grid */}

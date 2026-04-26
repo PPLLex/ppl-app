@@ -4,8 +4,9 @@ import { randomBytes } from 'crypto';
 import { prisma } from '../utils/prisma';
 import { ApiError } from '../utils/apiError';
 import { authenticate, generateToken, JwtPayload } from '../middleware/auth';
-import { Role } from '@prisma/client';
+import { Role, WorkflowTrigger } from '@prisma/client';
 import { sendEmail, buildWelcomeEmail } from '../services/emailService';
+import { emitTrigger } from '../services/workflowEngine';
 
 const router = Router();
 
@@ -298,6 +299,14 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
       text: `Hey ${user.fullName.split(' ')[0]}, welcome to PPL! Log in to your dashboard to choose a membership plan and book your first session.`,
       html: buildWelcomeEmail(user.fullName, user.homeLocation?.name || 'PPL'),
     }).catch((err) => console.error('Failed to send welcome email:', err));
+
+    // Fire USER_REGISTERED workflow trigger so any onboarding-sequence
+    // workflows (welcome → tips → first-session reminder) start running.
+    emitTrigger(WorkflowTrigger.USER_REGISTERED, 'user', user.id, {
+      role: user.role,
+      ageGroup: user.clientProfile?.ageGroup ?? null,
+      isParent: user.isParent ?? false,
+    });
 
     // Generate token
     const tokenPayload: JwtPayload = {
