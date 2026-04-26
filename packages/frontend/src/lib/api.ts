@@ -513,12 +513,26 @@ class ApiClient {
         ownerUserId: string | null;
         nextFollowUpAt: string | null;
         notes: string | null;
+        score: number;
+        scoreUpdatedAt: string | null;
         createdAt: string;
         updatedAt: string;
         owner: { id: string; fullName: string; email: string } | null;
         location: { id: string; name: string } | null;
       }>
     >(`/leads${query}`);
+  }
+
+  async getAtRiskMembers(threshold = 50, limit = 50) {
+    return this.request<Array<{
+      id: string;
+      fullName: string;
+      email: string;
+      phone: string | null;
+      churnRiskScore: number;
+      churnScoreUpdatedAt: string | null;
+      homeLocation: { id: string; name: string } | null;
+    }>>(`/reports/at-risk-members?threshold=${threshold}&limit=${limit}`);
   }
 
   async createLead(data: {

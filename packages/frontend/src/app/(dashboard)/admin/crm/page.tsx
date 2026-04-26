@@ -82,6 +82,17 @@ export default function AdminCrmPage() {
       if (!map.has(lead.stage)) map.set(lead.stage, []);
       map.get(lead.stage)!.push(lead);
     }
+    // Sort each stage's column by lead score desc — hottest at the top.
+    // Falls back to most-recently-updated when scores are equal.
+    for (const [k, list] of map) {
+      list.sort((a, b) => {
+        const sa = (a as Lead & { score?: number }).score ?? 0;
+        const sb = (b as Lead & { score?: number }).score ?? 0;
+        if (sb !== sa) return sb - sa;
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      });
+      map.set(k, list);
+    }
     return map;
   }, [leads]);
 
@@ -174,12 +185,31 @@ function LeadCard({
   const isOverdue =
     lead.nextFollowUpAt && new Date(lead.nextFollowUpAt).getTime() < Date.now();
 
+  // Score (0-100) — color-coded badge so admins can spot hot leads at a glance
+  const score = (lead as Lead & { score?: number }).score ?? 0;
+  const scoreStyle =
+    score >= 70
+      ? 'bg-green-500/20 text-green-400 border-green-500/40'
+      : score >= 40
+      ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+      : 'bg-gray-500/10 text-gray-400 border-gray-500/30';
+
   return (
     <div className="bg-background border border-border rounded-lg p-3 hover:border-highlight/40 transition group">
       <Link href={`/admin/crm/${lead.id}`} className="block">
-        <p className="font-semibold text-foreground text-sm truncate">
-          {lead.firstName} {lead.lastName}
-        </p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="font-semibold text-foreground text-sm truncate flex-1 min-w-0">
+            {lead.firstName} {lead.lastName}
+          </p>
+          {score > 0 && (
+            <span
+              className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 ${scoreStyle}`}
+              title={`Lead score: ${score}/100`}
+            >
+              {score}
+            </span>
+          )}
+        </div>
         <p className="text-xs text-muted truncate">{lead.email}</p>
       </Link>
 
