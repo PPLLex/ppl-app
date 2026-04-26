@@ -85,6 +85,9 @@ router.put('/branding', authenticate, requireAdmin, async (req: Request, res: Re
       financeWeekResetHour,
       liabilityWaiverText,
       liabilityWaiverVersion,
+      googleReviewUrl,
+      facebookReviewUrl,
+      googlePlaceId,
     } = req.body;
 
     await getOrCreateSettings(); // ensure row exists
@@ -124,6 +127,31 @@ router.put('/branding', authenticate, requireAdmin, async (req: Request, res: Re
       // existing signatures and forces everyone to re-sign.
       const v = liabilityWaiverVersion.trim();
       if (v.length > 0) data.liabilityWaiverVersion = v;
+    }
+
+    // Reputation management URLs — accept https URL strings or null/empty
+    // to clear. Validate just enough to reject obvious garbage.
+    const isHttpsUrl = (v: unknown): v is string =>
+      typeof v === 'string' && /^https?:\/\/.+/i.test(v.trim());
+    if (googleReviewUrl !== undefined) {
+      data.googleReviewUrl =
+        googleReviewUrl === '' || googleReviewUrl === null
+          ? null
+          : isHttpsUrl(googleReviewUrl)
+          ? googleReviewUrl.trim()
+          : undefined; // ignore garbage instead of crashing
+    }
+    if (facebookReviewUrl !== undefined) {
+      data.facebookReviewUrl =
+        facebookReviewUrl === '' || facebookReviewUrl === null
+          ? null
+          : isHttpsUrl(facebookReviewUrl)
+          ? facebookReviewUrl.trim()
+          : undefined;
+    }
+    if (googlePlaceId !== undefined && typeof googlePlaceId === 'string') {
+      const v = googlePlaceId.trim();
+      data.googlePlaceId = v.length > 0 ? v : null;
     }
 
     const settings = await prisma.orgSettings.update({

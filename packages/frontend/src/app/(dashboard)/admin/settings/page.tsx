@@ -73,6 +73,17 @@ function GeneralSettings() {
   const [logoUploading, setLogoUploading] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
+  // Reputation management — Google review URL, Facebook review URL, and
+  // Google Place ID power the review-request button (#27) + the daily
+  // review monitoring poll (#28).
+  const [reputation, setReputation] = useState({
+    googleReviewUrl: '',
+    facebookReviewUrl: '',
+    googlePlaceId: '',
+  });
+  const [repSaving, setRepSaving] = useState(false);
+  const [repMsg, setRepMsg] = useState('');
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -96,6 +107,11 @@ function GeneralSettings() {
             registrationCutoffHours: s.registrationCutoffHours,
             cancellationCutoffHours: s.cancellationCutoffHours,
           });
+          setReputation({
+            googleReviewUrl: s.googleReviewUrl ?? '',
+            facebookReviewUrl: s.facebookReviewUrl ?? '',
+            googlePlaceId: s.googlePlaceId ?? '',
+          });
         }
       } catch (err) {
         console.error(err);
@@ -105,6 +121,24 @@ function GeneralSettings() {
     };
     load();
   }, []);
+
+  const handleReputationSave = async () => {
+    setRepSaving(true);
+    setRepMsg('');
+    try {
+      await api.updateBranding({
+        googleReviewUrl: reputation.googleReviewUrl.trim() || null,
+        facebookReviewUrl: reputation.facebookReviewUrl.trim() || null,
+        googlePlaceId: reputation.googlePlaceId.trim() || null,
+      });
+      setRepMsg('Saved!');
+      setTimeout(() => setRepMsg(''), 2000);
+    } catch (err) {
+      setRepMsg('Error saving');
+    } finally {
+      setRepSaving(false);
+    }
+  };
 
   const handleBrandSave = async () => {
     setBrandSaving(true);
@@ -338,6 +372,77 @@ function GeneralSettings() {
           {brandMsg && !brandSaving && (
             <span className={`text-xs ${brandMsg.includes('Error') || brandMsg.includes('failed') ? 'text-red-400' : 'text-accent-text'}`}>
               {brandMsg}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Reputation Management */}
+      <div className="ppl-card">
+        <h2 className="text-lg font-bold text-foreground mb-1">Reputation</h2>
+        <p className="text-sm text-muted mb-4">
+          Powers the "Send Review Request" button on each member profile and the
+          daily Google review-monitoring poll.
+        </p>
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-medium text-muted block mb-1">Google Review URL</label>
+            <input
+              type="url"
+              value={reputation.googleReviewUrl}
+              onChange={(e) => setReputation({ ...reputation, googleReviewUrl: e.target.value })}
+              className="ppl-input"
+              placeholder="https://g.page/r/xxxxxxxxxx/review"
+            />
+            <p className="text-[11px] text-muted mt-1">
+              Get this from Google Business Profile → "Get more reviews" → copy short link.
+            </p>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-muted block mb-1">Facebook Review URL</label>
+            <input
+              type="url"
+              value={reputation.facebookReviewUrl}
+              onChange={(e) => setReputation({ ...reputation, facebookReviewUrl: e.target.value })}
+              className="ppl-input"
+              placeholder="https://www.facebook.com/yourpage/reviews"
+            />
+            <p className="text-[11px] text-muted mt-1">Optional. Leave blank if you don't track Facebook reviews.</p>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-muted block mb-1">Google Place ID</label>
+            <input
+              type="text"
+              value={reputation.googlePlaceId}
+              onChange={(e) => setReputation({ ...reputation, googlePlaceId: e.target.value })}
+              className="ppl-input font-mono text-xs"
+              placeholder="ChIJxxxxxxxxxxxxxxxxxxxxxx"
+            />
+            <p className="text-[11px] text-muted mt-1">
+              Look up at{' '}
+              <a
+                href="https://developers.google.com/maps/documentation/places/web-service/place-id"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-accent-text hover:underline"
+              >
+                developers.google.com → Place ID Finder
+              </a>
+              . Required for the daily review-monitoring poll.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center gap-3 flex-wrap">
+          <button onClick={handleReputationSave} disabled={repSaving} className="ppl-btn ppl-btn-primary">
+            {repSaving ? 'Saving…' : 'Save Reputation Settings'}
+          </button>
+          {repMsg && (
+            <span className={`text-xs ${repMsg.includes('Error') ? 'text-danger' : 'text-success'}`}>
+              {repMsg}
             </span>
           )}
         </div>

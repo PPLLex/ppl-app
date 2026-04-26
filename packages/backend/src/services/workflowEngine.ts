@@ -122,6 +122,47 @@ function triggerConfigMatches(
 }
 
 /**
+ * Workflow worker — finds runs in WAITING status whose resumeAt has
+ * elapsed and resumes execution. Called by the cron every minute.
+ *
+ * Without this, WAIT steps in workflows suspend permanently — the engine
+ * is half-broken. This is the missing other half.
+ *
+ * Concurrency: claims runs by atomically updating WAITING → RUNNING with
+ * a where-status guard, so two parallel workers can't pick up the same
+ * run. Failed claims (e.g. another worker beat us to it) silently skip.
+ */
+export async function resumeDueWorkflowRuns(): Promise<{ resumed: number }> {
+  const now = new Date();
+  const due = await prisma.workflowRun.findMany({
+    where: {
+      status: WorkflowRunStatus.WAITING,
+      resumeAt: { lte: now },
+    },
+    select: { id: true },
+    take: 100, // bound per-tick work
+  });
+
+  let resumed = 0;
+  for (const r of due) {
+    // Atomic claim — if another worker grabbed it, updateMany returns 0
+    // and we skip. This avoids double-execution without holding a lock.
+    const claim = await prisma.workflowRun.updateMany({
+      where: { id: r.id, status: WorkflowRunStatus.WAITING },
+      data: { status: WorkflowRunStatus.RUNNING },
+    });
+    if (claim.count === 0) continue;
+    try {
+      await executeRun(r.id);
+      resumed++;
+    } catch (err) {
+      console.error(`[workflowEngine] resume of run ${r.id} crashed:`, err);
+    }
+  }
+  return { resumed };
+}
+
+/**
  * Run a workflow until completion, suspension, or failure.
  */
 export async function executeRun(runId: string): Promise<void> {

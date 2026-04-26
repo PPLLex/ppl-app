@@ -4,6 +4,7 @@ import { runDailyPaymentRetries } from './paymentRetryService';
 import { getEasternHour, getEasternDay } from './stripeService';
 import { recomputeAllLeadScores, recomputeAllChurnRisks } from './scoringService';
 import { pollGoogleReviews } from './reviewMonitor';
+import { resumeDueWorkflowRuns } from './workflowEngine';
 
 interface CronJob {
   name: string;
@@ -76,6 +77,12 @@ const jobs: CronJob[] = [
       ]);
       return { leadsUpdated: leads.updated, churnUpdated: churn.updated };
     },
+    enabled: true,
+  },
+  {
+    name: 'Workflow Worker (resume WAITING runs)',
+    intervalMs: 60 * 1000, // every minute — WAIT step granularity
+    handler: resumeDueWorkflowRuns,
     enabled: true,
   },
   {

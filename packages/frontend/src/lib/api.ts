@@ -3023,6 +3023,10 @@ export interface OrgSettings {
   cancellationCutoffHours: number;
   liabilityWaiverText?: string;
   liabilityWaiverVersion?: string;
+  // Reputation management (Phase 2 #28, #40)
+  googleReviewUrl?: string | null;
+  facebookReviewUrl?: string | null;
+  googlePlaceId?: string | null;
   updatedAt: string;
 }
 
