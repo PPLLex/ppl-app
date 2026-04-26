@@ -629,6 +629,89 @@ class ApiClient {
     );
   }
 
+  // ============================================================
+  // CAMPAIGNS (email blasts) + TAGS — Phase 2 (#22, #23)
+  // ============================================================
+
+  async listCampaigns(params: { status?: string; type?: string } = {}) {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set('status', params.status);
+    if (params.type) qs.set('type', params.type);
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+    return this.request<Array<{
+      id: string;
+      name: string;
+      subject: string;
+      status: string;
+      type: string;
+      audience: string;
+      audienceFilter: unknown;
+      sentCount: number | null;
+      failedCount: number | null;
+      sentAt: string | null;
+      scheduledFor: string | null;
+      createdAt: string;
+      createdBy: { id: string; fullName: string } | null;
+    }>>(`/campaigns${query}`);
+  }
+
+  async createCampaign(data: {
+    name: string;
+    subject: string;
+    bodyHtml: string;
+    bodyText?: string;
+    fromName?: string;
+    fromAddress?: string;
+    replyToAddress?: string;
+    type?: string;
+    audience: string;
+    audienceFilter?: Record<string, unknown>;
+    scheduledFor?: string | null;
+  }) {
+    return this.request<{ id: string }>(`/campaigns`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateCampaign(id: string, patch: Record<string, unknown>) {
+    return this.request(`/campaigns/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  }
+
+  async deleteCampaign(id: string) {
+    return this.request(`/campaigns/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  async previewCampaignAudience(id: string) {
+    return this.request<{
+      totalRecipients: number;
+      sample: Array<{ email: string; fullName: string | null }>;
+    }>(`/campaigns/${encodeURIComponent(id)}/audience-preview`);
+  }
+
+  async sendCampaign(id: string) {
+    return this.request<{ sent: number; failed: number; total: number; status: string }>(
+      `/campaigns/${encodeURIComponent(id)}/send`,
+      { method: 'POST' }
+    );
+  }
+
+  async listTags(kind?: string) {
+    const query = kind ? `?kind=${encodeURIComponent(kind)}` : '';
+    return this.request<Array<{
+      id: string;
+      name: string;
+      color: string;
+      kind: string;
+      system: boolean;
+      description: string | null;
+      _count?: { assignments: number };
+    }>>(`/tags${query}`);
+  }
+
   /**
    * Lead-source ROI: per-source funnel breakdown — total leads in
    * period, conversions, lost, in-progress, conversion rate, avg days

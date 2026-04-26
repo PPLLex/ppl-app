@@ -370,9 +370,108 @@ async function resolveAudience(
         .filter((e): e is string => typeof e === 'string')
         .map((email) => ({ email: email.toLowerCase(), fullName: null }));
     }
-    case CampaignAudience.CUSTOM_SEGMENT:
-      // Reserved for the future segment builder. For now, returns empty.
-      return [];
+    case CampaignAudience.CUSTOM_SEGMENT: {
+      // Tag-based segment. Filter shape:
+      //   { tagIds: string[], op?: 'any' | 'all', subjectType?: 'user' | 'lead' | 'all' }
+      // op defaults to 'any' — recipient included if they have at least one
+      // of the tags. 'all' requires every tag. subjectType defaults to 'all'
+      // (Users + Leads). Athletes fold into Users via user.email.
+      const tagIds = Array.isArray(filter.tagIds)
+        ? (filter.tagIds as unknown[]).filter((t): t is string => typeof t === 'string')
+        : [];
+      if (tagIds.length === 0) return [];
+      const op = filter.op === 'all' ? 'all' : 'any';
+      const subjectType = (filter.subjectType as string) || 'all';
+
+      // Pull tag assignments for the chosen tags, expanded with subject info.
+      const assignments = await prisma.tagAssignment.findMany({
+        where: { tagId: { in: tagIds } },
+        select: {
+          tagId: true,
+          leadId: true,
+          userId: true,
+          athleteProfileId: true,
+        },
+      });
+
+      // Group by subject (lead or user); athlete tags fold into their User.
+      type Bucket = { kind: 'lead' | 'user'; id: string; tags: Set<string> };
+      const buckets = new Map<string, Bucket>();
+      const athleteIdsToResolve = new Set<string>();
+      for (const a of assignments) {
+        if (a.userId) {
+          const k = `user:${a.userId}`;
+          if (!buckets.has(k)) buckets.set(k, { kind: 'user', id: a.userId, tags: new Set() });
+          buckets.get(k)!.tags.add(a.tagId);
+        } else if (a.leadId) {
+          const k = `lead:${a.leadId}`;
+          if (!buckets.has(k)) buckets.set(k, { kind: 'lead', id: a.leadId, tags: new Set() });
+          buckets.get(k)!.tags.add(a.tagId);
+        } else if (a.athleteProfileId) {
+          athleteIdsToResolve.add(a.athleteProfileId);
+        }
+      }
+
+      // Resolve athlete-tagged → user via AthleteProfile.userId
+      if (athleteIdsToResolve.size > 0) {
+        const athletes = await prisma.athleteProfile.findMany({
+          where: { id: { in: Array.from(athleteIdsToResolve) } },
+          select: { id: true, userId: true },
+        });
+        const athleteIdToUserId = new Map(athletes.map((a) => [a.id, a.userId]));
+        for (const a of assignments) {
+          if (!a.athleteProfileId) continue;
+          const uid = athleteIdToUserId.get(a.athleteProfileId);
+          if (!uid) continue;
+          const k = `user:${uid}`;
+          if (!buckets.has(k)) buckets.set(k, { kind: 'user', id: uid, tags: new Set() });
+          buckets.get(k)!.tags.add(a.tagId);
+        }
+      }
+
+      // Apply op filter (any = ≥1 tag, all = every requested tag)
+      const matched = Array.from(buckets.values()).filter((b) =>
+        op === 'all' ? tagIds.every((t) => b.tags.has(t)) : true
+      );
+
+      // Subject-type filter
+      const filteredBySubject = matched.filter((b) =>
+        subjectType === 'user'
+          ? b.kind === 'user'
+          : subjectType === 'lead'
+          ? b.kind === 'lead'
+          : true
+      );
+
+      const userIds = filteredBySubject.filter((b) => b.kind === 'user').map((b) => b.id);
+      const leadIds = filteredBySubject.filter((b) => b.kind === 'lead').map((b) => b.id);
+
+      const [users, leads] = await Promise.all([
+        userIds.length
+          ? prisma.user.findMany({
+              where: { id: { in: userIds } },
+              select: { id: true, email: true, fullName: true },
+              take: 10000,
+            })
+          : Promise.resolve([] as { id: string; email: string; fullName: string | null }[]),
+        leadIds.length
+          ? prisma.lead.findMany({
+              where: { id: { in: leadIds } },
+              select: { id: true, email: true, firstName: true, lastName: true },
+              take: 10000,
+            })
+          : Promise.resolve([] as { id: string; email: string; firstName: string; lastName: string }[]),
+      ]);
+
+      return dedupeByEmail([
+        ...users.map((u) => ({ userId: u.id, email: u.email, fullName: u.fullName ?? null })),
+        ...leads.map((l) => ({
+          leadId: l.id,
+          email: l.email,
+          fullName: `${l.firstName} ${l.lastName}`.trim(),
+        })),
+      ]);
+    }
     default:
       return [];
   }
@@ -389,5 +488,107 @@ function dedupeByEmail<T extends { email: string }>(rows: T[]): T[] {
   }
   return out;
 }
+
+/**
+ * POST /api/campaigns/:id/send
+ *
+ * Resolves the campaign's audience NOW, creates CampaignRecipient rows,
+ * sends each via Resend (sequentially to keep things simple + observable),
+ * and updates campaign status to SENT or FAILED. Returns send counts.
+ *
+ * For batches > a few hundred recipients we'll want to move this into a
+ * background worker queue, but for current PPL scale (300 active members)
+ * sequential is fine and lets errors surface immediately.
+ *
+ * Idempotent at the campaign level — only DRAFT or SCHEDULED campaigns
+ * can be sent. After a SEND attempt the status is locked to SENT/FAILED.
+ */
+router.post('/:id/send', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = param(req, 'id');
+    const campaign = await prisma.emailCampaign.findUnique({ where: { id } });
+    if (!campaign) throw ApiError.notFound('Campaign not found');
+    const sendable: CampaignStatus[] = [CampaignStatus.DRAFT, CampaignStatus.SCHEDULED];
+    if (!sendable.includes(campaign.status)) {
+      throw ApiError.badRequest(`Cannot send a campaign in status ${campaign.status}`);
+    }
+
+    // Lock the campaign so a parallel send can't double-fire.
+    await prisma.emailCampaign.update({
+      where: { id },
+      data: { status: CampaignStatus.SENDING, sentAt: new Date() },
+    });
+
+    const filter = (campaign.audienceFilter as Record<string, unknown> | null) || {};
+    const recipients = await resolveAudience(campaign.audience, filter);
+    if (recipients.length === 0) {
+      await prisma.emailCampaign.update({
+        where: { id },
+        data: { status: CampaignStatus.FAILED, errorMessage: 'Audience resolved to 0 recipients' },
+      });
+      throw ApiError.badRequest('Audience resolved to 0 recipients — fix the filter and try again.');
+    }
+
+    // Lazy-import sendEmail to avoid a circular module dep.
+    const { sendEmail } = await import('../services/emailService');
+
+    let sent = 0;
+    let failed = 0;
+    for (const r of recipients) {
+      // Per-recipient template substitution. Tokens we expand in the body:
+      //   {{firstName}} {{fullName}} {{email}}
+      const firstName = (r.fullName ?? '').split(' ')[0] || 'there';
+      const personalize = (s: string) =>
+        s
+          .replace(/\{\{\s*firstName\s*\}\}/g, firstName)
+          .replace(/\{\{\s*fullName\s*\}\}/g, r.fullName ?? '')
+          .replace(/\{\{\s*email\s*\}\}/g, r.email);
+
+      const html = personalize(campaign.bodyHtml);
+      const text: string = campaign.bodyText ? personalize(campaign.bodyText) : '';
+
+      let ok = false;
+      let err: string | null = null;
+      try {
+        ok = await sendEmail({
+          to: r.email,
+          subject: personalize(campaign.subject),
+          html,
+          text,
+        });
+      } catch (e) {
+        err = e instanceof Error ? e.message : String(e);
+      }
+
+      // Persist a CampaignRecipient row for analytics + audit.
+      await prisma.campaignRecipient.create({
+        data: {
+          campaignId: id,
+          userId: r.userId ?? null,
+          leadId: r.leadId ?? null,
+          email: r.email,
+          status: ok ? 'SENT' : 'FAILED',
+          sentAt: ok ? new Date() : null,
+          errorMessage: err ?? (ok ? null : 'Send returned false'),
+        },
+      });
+      if (ok) sent++;
+      else failed++;
+    }
+
+    const finalStatus = failed > 0 && sent === 0 ? CampaignStatus.FAILED : CampaignStatus.SENT;
+    await prisma.emailCampaign.update({
+      where: { id },
+      data: { status: finalStatus, sentCount: sent, failedCount: failed },
+    });
+
+    res.json({
+      success: true,
+      data: { campaignId: id, sent, failed, total: recipients.length, status: finalStatus },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 export default router;
