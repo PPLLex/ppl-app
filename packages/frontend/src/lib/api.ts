@@ -258,10 +258,31 @@ class ApiClient {
     });
   }
 
-  async getUpcomingBookings(params?: { upcoming?: boolean; status?: string }) {
+  /**
+   * Atomically move a booking to a different session. Backend handles
+   * credit transfer between weeks + capacity recheck on the new slot.
+   */
+  async rescheduleBooking(id: string, newSessionId: string) {
+    return this.request<{ newSessionId: string; newStartTime: string }>(
+      `/bookings/${id}/reschedule`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ newSessionId }),
+      }
+    );
+  }
+
+  async getUpcomingBookings(params?: {
+    upcoming?: boolean;
+    status?: string;
+    start?: string;
+    end?: string;
+  }) {
     const query = new URLSearchParams();
     if (params?.upcoming) query.set('upcoming', 'true');
     if (params?.status) query.set('status', params.status);
+    if (params?.start) query.set('start', params.start);
+    if (params?.end) query.set('end', params.end);
     const qs = query.toString() ? `?${query.toString()}` : '';
     return this.request<Booking[]>(`/bookings/my${qs}`);
   }
@@ -533,6 +554,67 @@ class ApiClient {
       method: 'PATCH',
       body: JSON.stringify(patch),
     });
+  }
+
+  /**
+   * Lead detail with activity timeline.
+   */
+  async getLead(id: string) {
+    return this.request<{
+      id: string;
+      firstName: string;
+      lastName: string;
+      email: string;
+      phone: string | null;
+      ageGroup: string | null;
+      source: string;
+      stage: string;
+      locationId: string | null;
+      ownerUserId: string | null;
+      nextFollowUpAt: string | null;
+      lastContactedAt: string | null;
+      notes: string | null;
+      lostReason: string | null;
+      createdAt: string;
+      updatedAt: string;
+      owner: { id: string; fullName: string; email: string } | null;
+      location: { id: string; name: string } | null;
+      activities: Array<{
+        id: string;
+        type: string;
+        body: string | null;
+        createdAt: string;
+        author: { id: string; fullName: string } | null;
+        metadata: unknown;
+      }>;
+    }>(`/leads/${encodeURIComponent(id)}`);
+  }
+
+  /**
+   * Append an activity to a lead's timeline (NOTE / CALL / EMAIL_SENT / etc.).
+   */
+  async addLeadActivity(
+    id: string,
+    data: { type: string; body?: string; metadata?: Record<string, unknown> }
+  ) {
+    return this.request(`/leads/${encodeURIComponent(id)}/activities`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Convert a lead → mark CLOSED_WON and link to a User if provided.
+   */
+  async convertLead(id: string, data: { userId?: string; notes?: string } = {}) {
+    return this.request(`/leads/${encodeURIComponent(id)}/convert`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteLead(id: string) {
+    return this.request(`/leads/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }
 
   /**
