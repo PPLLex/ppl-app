@@ -919,6 +919,11 @@ staffPublicRouter.post('/invite/:token/accept', async (req: Request, res: Respon
           phone: phone || invite.phone || null,
           profileImageUrl: profileImageUrl || null,
           role: invite.role,
+          // Admin-issued invites are pre-verified (#142). The admin already
+          // confirmed the recipient's email when they typed it into the
+          // invite form, and the recipient proved control by clicking the
+          // unique invite link to land on this acceptance flow.
+          emailVerifiedAt: new Date(),
         },
       });
 

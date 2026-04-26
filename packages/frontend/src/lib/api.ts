@@ -138,6 +138,28 @@ class ApiClient {
     );
   }
 
+  // Email verification (#142). Public endpoint — no auth header needed.
+  async verifyEmailToken(token: string) {
+    return this.request<{ verified: boolean; email: string }>(
+      '/auth/email/verify',
+      { method: 'POST', body: JSON.stringify({ token }) }
+    );
+  }
+
+  async resendVerificationEmail() {
+    return this.request<{ message: string }>('/auth/email/resend', {
+      method: 'POST',
+    });
+  }
+
+  async getEmailVerificationStatus() {
+    return this.request<{
+      verified: boolean;
+      verifiedAt: string | null;
+      email: string;
+    }>('/auth/email/verification-status');
+  }
+
   async register(data: RegisterData) {
     return this.request<{ token: string; user: User }>('/auth/register', {
       method: 'POST',

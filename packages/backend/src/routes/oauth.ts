@@ -129,6 +129,9 @@ router.post('/google', async (req: Request, res: Response, next: NextFunction) =
           googleId,
           avatarUrl: picture || null,
           homeLocationId: locationId || null,
+          // Google has already verified the email address — skip our own
+          // verification round trip (#142 / S4).
+          emailVerifiedAt: new Date(),
           clientProfile: {
             create: {
               ageGroup: ageGroup || null,
@@ -227,6 +230,9 @@ router.post('/apple', async (req: Request, res: Response, next: NextFunction) =>
           authProvider: 'apple',
           appleId,
           homeLocationId: locationId || null,
+          // Apple verified the email (or, for relay addresses, controls it
+          // outright) — skip our own verification step (#142).
+          emailVerifiedAt: new Date(),
           clientProfile: {
             create: {
               ageGroup: ageGroup || null,
@@ -384,13 +390,16 @@ router.post('/magic-link/verify', async (req: Request, res: Response, next: Next
       throw ApiError.unauthorized('Account is deactivated. Please contact PPL.');
     }
 
-    // Clear the magic link token (single use)
+    // Clear the magic link token (single use). Use this as proof of
+    // inbox control (#142) — magic-link verification implicitly confirms
+    // the email, so flip emailVerifiedAt if it isn't already set.
     await prisma.user.update({
       where: { id: user.id },
       data: {
         magicLinkToken: null,
         magicLinkExpiry: null,
         authProvider: user.authProvider || 'email',
+        ...(user.emailVerifiedAt ? {} : { emailVerifiedAt: new Date() }),
       },
     });
 

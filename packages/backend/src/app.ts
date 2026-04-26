@@ -24,6 +24,7 @@ import auditLogRoutes from './routes/auditLogs';
 import webhookRoutes from './routes/webhooks';
 import oauthRoutes from './routes/oauth';
 import twoFactorRoutes from './routes/twoFactor';
+import emailVerificationRoutes from './routes/emailVerification';
 import coachNoteRoutes from './routes/coachNotes';
 import goalRoutes from './routes/goals';
 import formRoutes from './routes/forms';
@@ -153,6 +154,8 @@ app.use('/api/auth', oauthRoutes);
 // Routes inside the file declare their own /2fa/* prefix so this single
 // mount serves both /api/auth/2fa/* and /api/auth/login/2fa-verify.
 app.use('/api/auth', twoFactorRoutes);
+// Email verification (#142 / PREMIUM_AUDIT S4) — /api/auth/email/*.
+app.use('/api/auth', emailVerificationRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/onboarding', onboardingRoutes);

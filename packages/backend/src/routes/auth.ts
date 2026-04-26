@@ -10,6 +10,7 @@ import { emitTrigger } from '../services/workflowEngine';
 import { recordReferral } from '../services/referralService';
 import { generatePendingChallenge } from '../services/twoFactorService';
 import { createAuditLog } from '../services/auditService';
+import { sendVerificationEmail } from '../services/emailVerificationService';
 
 // ============================================================
 // LOGIN HARDENING (#141 / S2 / S6)
@@ -315,6 +316,14 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
       text: `Hey ${user.fullName.split(' ')[0]}, welcome to PPL! Log in to your dashboard to choose a membership plan and book your first session.`,
       html: buildWelcomeEmail(user.fullName, user.homeLocation?.name || 'PPL'),
     }).catch((err) => console.error('Failed to send welcome email:', err));
+
+    // Email verification (#142). Self-register accounts start UNVERIFIED;
+    // they get a confirmation link out of band. Admin-invited staff and
+    // OAuth-linked accounts are pre-verified at the corresponding code
+    // paths. Fire-and-forget — don't fail the registration if email is down.
+    void sendVerificationEmail(user.id).catch((err) =>
+      console.error('Failed to send verification email:', err)
+    );
 
     // Fire USER_REGISTERED workflow trigger so any onboarding-sequence
     // workflows (welcome → tips → first-session reminder) start running.

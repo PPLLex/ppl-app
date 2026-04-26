@@ -8,6 +8,7 @@ import Sidebar from '@/components/layout/Sidebar';
 import NotificationBell from '@/components/layout/NotificationBell';
 import PushNotificationPrompt from '@/components/notifications/PushNotificationPrompt';
 import { CommandPalette } from '@/components/CommandPalette';
+import { EmailVerificationBanner } from '@/components/security/EmailVerificationBanner';
 
 export default function DashboardLayout({
   children,
@@ -146,6 +147,9 @@ export default function DashboardLayout({
           className="flex-1 p-4 sm:p-6 max-w-7xl mx-auto w-full ppl-page-root"
           key={pathname}
         >
+          {/* Email verification nudge — renders only for unverified users.
+              Hides itself for verified accounts so they never see a flash. */}
+          <EmailVerificationBanner />
           {children}
         </div>
       </main>
