@@ -8,7 +8,17 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Script from 'next/script';
 import { toast } from 'sonner';
-import StripeCheckout from '@/components/payments/StripeCheckout';
+import dynamic from 'next/dynamic';
+// Lazy-load Stripe Elements — only needed when the user reaches the
+// payment step. Saves ~50KB on the registration page's initial bundle.
+const StripeCheckout = dynamic(() => import('@/components/payments/StripeCheckout'), {
+  ssr: false,
+  loading: () => (
+    <div className="ppl-card p-6">
+      <div className="ppl-skeleton h-12 w-full rounded-md" />
+    </div>
+  ),
+});
 import { PasswordInput } from '@/components/auth/PasswordInput';
 import { isCommonPassword } from '@/lib/common-passwords';
 import { haptic } from '@/lib/haptic';

@@ -7,7 +7,16 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Script from 'next/script';
-import StripeCheckout from '@/components/payments/StripeCheckout';
+import dynamic from 'next/dynamic';
+// Lazy-load Stripe Elements — only needed at the payment step.
+const StripeCheckout = dynamic(() => import('@/components/payments/StripeCheckout'), {
+  ssr: false,
+  loading: () => (
+    <div className="ppl-card p-6">
+      <div className="ppl-skeleton h-12 w-full rounded-md" />
+    </div>
+  ),
+});
 import { PasswordInput } from '@/components/auth/PasswordInput';
 import { isCommonPassword } from '@/lib/common-passwords';
 

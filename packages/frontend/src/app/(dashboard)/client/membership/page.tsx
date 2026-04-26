@@ -4,7 +4,17 @@ import { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { api, MembershipPlan, MembershipDetail, PaymentRecord, SubscribeResult } from '@/lib/api';
-import StripeCheckout from '@/components/payments/StripeCheckout';
+// Lazy-load Stripe Elements bundle — saves ~50KB on initial page load
+// because users only need it when they actually click "Subscribe."
+import dynamic from 'next/dynamic';
+const StripeCheckout = dynamic(() => import('@/components/payments/StripeCheckout'), {
+  ssr: false,
+  loading: () => (
+    <div className="ppl-card p-6">
+      <div className="ppl-skeleton h-12 w-full rounded-md" />
+    </div>
+  ),
+});
 
 const AGE_GROUP_LABELS: Record<string, string> = {
   college: 'College',
