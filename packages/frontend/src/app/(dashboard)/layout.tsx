@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import NotificationBell from '@/components/layout/NotificationBell';
 import PushNotificationPrompt from '@/components/notifications/PushNotificationPrompt';
+import { CommandPalette } from '@/components/CommandPalette';
 
 export default function DashboardLayout({
   children,
@@ -82,6 +83,8 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen flex">
+      {/* Cmd-K command palette — global, listens for ⌘K everywhere. (#139) */}
+      <CommandPalette />
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main ref={mainRef} className="flex-1 overflow-auto flex flex-col min-w-0">
         {/* Top Bar — sticky so scroll-shadow is visible on top of content.
@@ -112,8 +115,25 @@ export default function DashboardLayout({
             <span className="text-sm font-bold text-foreground">PPL</span>
           </div>
 
-          {/* Desktop spacer */}
-          <div className="hidden lg:block" />
+          {/* Desktop spacer + ⌘K hint button (clicks open the palette
+              the same way the keyboard shortcut does). */}
+          <div className="hidden lg:block flex-1" />
+          <button
+            type="button"
+            onClick={() => {
+              // Synthesize a Cmd+K so the global palette listener picks it up
+              const evt = new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true });
+              document.dispatchEvent(evt);
+            }}
+            className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-md border border-border bg-bg-secondary text-xs text-muted hover:text-foreground hover:border-border-light transition"
+            aria-label="Open command palette"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <span>Search</span>
+            <kbd className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-[#0A0A0A] border border-border ml-2">⌘K</kbd>
+          </button>
 
           <NotificationBell />
         </div>

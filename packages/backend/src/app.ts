@@ -51,6 +51,7 @@ import workflowRoutes from './routes/workflows';
 import outboundWebhookRoutes from './routes/webhooks.outbound';
 import marketingFormRoutes from './routes/marketingForms';
 import referralRoutes from './routes/referrals';
+import searchRoutes from './routes/search';
 import consultationRoutes from './routes/consultations';
 import twilioRoutes from './routes/twilio';
 import reviewRoutes from './routes/reviews';
@@ -196,6 +197,8 @@ app.use('/api/outbound-webhooks', outboundWebhookRoutes);
 app.use('/api/marketing-forms', marketingFormRoutes);
 // Referral program — refer-a-friend free-week reward (#134)
 app.use('/api/referrals', referralRoutes);
+// Global search — powers the Cmd-K command palette (#139)
+app.use('/api/search', searchRoutes);
 // Consultation calendar — public booking + admin slot management
 app.use('/api/consultations', consultationRoutes);
 // Twilio webhooks — inbound voice + SMS + missed-call text-back (#8, #9, #42)
