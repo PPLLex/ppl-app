@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, RevenueStats, BookingStats, MemberStats } from '@/lib/api';
 
-type ReportTab = 'revenue' | 'bookings' | 'members';
+type ReportTab = 'revenue' | 'bookings' | 'members' | 'staff';
 type Period = '7d' | '30d' | '90d' | '1y';
 
 export default function AdminReportsPage() {
@@ -14,6 +14,7 @@ export default function AdminReportsPage() {
     { key: 'revenue', label: 'Revenue' },
     { key: 'bookings', label: 'Bookings' },
     { key: 'members', label: 'Members' },
+    { key: 'staff', label: 'Staff Performance' },
   ];
 
   const periods: { key: Period; label: string }[] = [
@@ -68,6 +69,110 @@ export default function AdminReportsPage() {
       {activeTab === 'revenue' && <RevenueReport period={period} />}
       {activeTab === 'bookings' && <BookingsReport period={period} />}
       {activeTab === 'members' && <MembersReport />}
+      {activeTab === 'staff' && <StaffPerformanceReport period={period} />}
+    </div>
+  );
+}
+
+/* ─── Staff Performance Report ─── */
+function StaffPerformanceReport({ period }: { period: Period }) {
+  const [data, setData] = useState<{
+    coaches: Array<{
+      coachId: string;
+      coachName: string;
+      coachEmail: string;
+      sessionsLed: number;
+      sessionsLast30: number;
+      athletesCoached: number;
+      confirmed: number;
+      completed: number;
+      noShow: number;
+      cancelled: number;
+      completionRate: number | null;
+      noShowRate: number | null;
+    }>;
+    totals: { coaches: number; sessionsLed: number; athletesCoached: number };
+  } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await api.getStaffPerformance({ period });
+      setData(res.data ?? null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [period]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (isLoading) {
+    return <div className="ppl-card animate-pulse h-48" />;
+  }
+  if (!data || data.coaches.length === 0) {
+    return (
+      <div className="ppl-card text-center py-12">
+        <p className="text-muted">No coach activity in this period.</p>
+      </div>
+    );
+  }
+
+  const fmtPct = (v: number | null) => (v == null ? '—' : `${(v * 100).toFixed(0)}%`);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <StatCard label="Active Coaches" value={String(data.totals.coaches)} />
+        <StatCard label="Sessions Led" value={String(data.totals.sessionsLed)} />
+        <StatCard label="Athletes Coached" value={String(data.totals.athletesCoached)} accent />
+      </div>
+
+      <div className="ppl-card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left border-b border-border">
+                <th className="px-3 py-2 font-semibold text-foreground">Coach</th>
+                <th className="px-3 py-2 font-semibold text-foreground text-right">Sessions</th>
+                <th className="px-3 py-2 font-semibold text-foreground text-right">Last 30d</th>
+                <th className="px-3 py-2 font-semibold text-foreground text-right">Athletes</th>
+                <th className="px-3 py-2 font-semibold text-foreground text-right">Completion</th>
+                <th className="px-3 py-2 font-semibold text-foreground text-right">No-Show</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.coaches.map((c) => (
+                <tr key={c.coachId} className="border-b border-border last:border-0">
+                  <td className="px-3 py-2.5">
+                    <div className="font-medium text-foreground">{c.coachName}</div>
+                    <div className="text-xs text-muted truncate">{c.coachEmail}</div>
+                  </td>
+                  <td className="px-3 py-2.5 text-right text-foreground">{c.sessionsLed}</td>
+                  <td className="px-3 py-2.5 text-right text-muted">{c.sessionsLast30}</td>
+                  <td className="px-3 py-2.5 text-right text-foreground">{c.athletesCoached}</td>
+                  <td className="px-3 py-2.5 text-right">
+                    <span className={c.completionRate != null && c.completionRate >= 0.9 ? 'text-accent-text' : 'text-foreground'}>
+                      {fmtPct(c.completionRate)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-right">
+                    <span className={c.noShowRate != null && c.noShowRate > 0.15 ? 'text-red-400' : 'text-muted'}>
+                      {fmtPct(c.noShowRate)}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p className="text-[11px] text-muted">
+        Completion + no-show rates are calculated from sessions where attendance was marked
+        (completed + no-show), excluding cancelled and still-pending bookings.
+      </p>
     </div>
   );
 }

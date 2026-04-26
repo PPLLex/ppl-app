@@ -630,6 +630,38 @@ class ApiClient {
   }
 
   /**
+   * Coach/staff performance dashboard data. Returns one row per coach
+   * with sessions led, athletes coached, completion + no-show rates over
+   * the period.
+   */
+  async getStaffPerformance(params: { period?: '7d' | '30d' | '90d' | '1y'; locationId?: string } = {}) {
+    const qs = new URLSearchParams();
+    if (params.period) qs.set('period', params.period);
+    if (params.locationId) qs.set('locationId', params.locationId);
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+    return this.request<{
+      period: string;
+      periodDays: number;
+      startDate: string;
+      coaches: Array<{
+        coachId: string;
+        coachName: string;
+        coachEmail: string;
+        sessionsLed: number;
+        sessionsLast30: number;
+        athletesCoached: number;
+        confirmed: number;
+        completed: number;
+        noShow: number;
+        cancelled: number;
+        completionRate: number | null;
+        noShowRate: number | null;
+      }>;
+      totals: { coaches: number; sessionsLed: number; athletesCoached: number };
+    }>(`/reports/staff-performance${query}`);
+  }
+
+  /**
    * Role-first invite (April 2026). Supports all 11 roles — pass the target
    * Role enum value + optional scope (locationId for location-scoped roles,
    * schoolTeamId for PARTNERSHIP_COACH). Used by the /admin/invite v2 page.

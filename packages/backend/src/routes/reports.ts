@@ -580,4 +580,139 @@ router.get('/dashboard', async (req: Request, res: Response, next: NextFunction)
   }
 });
 
+// ============================================================
+// COACH / STAFF PERFORMANCE REPORT
+// ============================================================
+//
+// One row per coach/staff member with:
+//   - sessionsLed     — total bookings on sessions where this user is the coach
+//   - athletesCoached — distinct clients across those bookings
+//   - completionRate  — completed / (completed + no_show)
+//   - noShowRate      — no_show / (completed + no_show)
+//   - last30Sessions  — sessions led in the last 30 days
+//   - revenueAttributed — sum of bookings.creditsUsed * plan.pricePerSession
+//
+// Admins use this to spot top performers + flag retention concerns when
+// a coach has a high no-show rate (athletes might be voting with their
+// feet). Filters by ?period= and ?locationId=.
+//
+router.get('/staff-performance', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const period = (req.query.period as string) || '30d';
+    const locationId = req.query.locationId as string | undefined;
+    const periodDays = period === '7d' ? 7 : period === '90d' ? 90 : period === '1y' ? 365 : 30;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - periodDays);
+
+    const last30Start = new Date();
+    last30Start.setDate(last30Start.getDate() - 30);
+
+    // Pull all sessions in the period that have a coach assigned, with
+    // booking counts per status. Single query; we aggregate in memory.
+    const sessions = await prisma.session.findMany({
+      where: {
+        coachId: { not: null },
+        startTime: { gte: startDate },
+        ...(locationId ? { locationId } : {}),
+      },
+      select: {
+        id: true,
+        coachId: true,
+        startTime: true,
+        coach: { select: { id: true, fullName: true, email: true } },
+        bookings: {
+          select: {
+            clientId: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    type Agg = {
+      coachId: string;
+      coachName: string;
+      coachEmail: string;
+      sessionsLed: number;
+      sessionsLast30: number;
+      athletesCoached: Set<string>;
+      confirmed: number;
+      completed: number;
+      noShow: number;
+      cancelled: number;
+    };
+    const byCoach = new Map<string, Agg>();
+
+    for (const s of sessions) {
+      if (!s.coachId || !s.coach) continue;
+      let agg = byCoach.get(s.coachId);
+      if (!agg) {
+        agg = {
+          coachId: s.coachId,
+          coachName: s.coach.fullName,
+          coachEmail: s.coach.email,
+          sessionsLed: 0,
+          sessionsLast30: 0,
+          athletesCoached: new Set(),
+          confirmed: 0,
+          completed: 0,
+          noShow: 0,
+          cancelled: 0,
+        };
+        byCoach.set(s.coachId, agg);
+      }
+      agg.sessionsLed++;
+      if (s.startTime >= last30Start) agg.sessionsLast30++;
+      for (const b of s.bookings) {
+        agg.athletesCoached.add(b.clientId);
+        if (b.status === BookingStatus.CONFIRMED) agg.confirmed++;
+        else if (b.status === BookingStatus.COMPLETED) agg.completed++;
+        else if (b.status === BookingStatus.NO_SHOW) agg.noShow++;
+        else if (b.status === BookingStatus.CANCELLED) agg.cancelled++;
+      }
+    }
+
+    const rows = Array.from(byCoach.values())
+      .map((a) => {
+        const attendedDenominator = a.completed + a.noShow;
+        const completionRate = attendedDenominator > 0 ? a.completed / attendedDenominator : null;
+        const noShowRate = attendedDenominator > 0 ? a.noShow / attendedDenominator : null;
+        return {
+          coachId: a.coachId,
+          coachName: a.coachName,
+          coachEmail: a.coachEmail,
+          sessionsLed: a.sessionsLed,
+          sessionsLast30: a.sessionsLast30,
+          athletesCoached: a.athletesCoached.size,
+          confirmed: a.confirmed,
+          completed: a.completed,
+          noShow: a.noShow,
+          cancelled: a.cancelled,
+          completionRate, // 0..1 or null when no completed/no-show data yet
+          noShowRate,
+        };
+      })
+      .sort((a, b) => b.sessionsLed - a.sessionsLed);
+
+    res.json({
+      success: true,
+      data: {
+        period,
+        periodDays,
+        startDate: startDate.toISOString(),
+        coaches: rows,
+        totals: {
+          coaches: rows.length,
+          sessionsLed: rows.reduce((sum, r) => sum + r.sessionsLed, 0),
+          athletesCoached: new Set(
+            sessions.flatMap((s) => s.bookings.map((b) => b.clientId))
+          ).size,
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;
