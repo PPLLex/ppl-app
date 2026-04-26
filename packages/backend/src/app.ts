@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import compression from 'compression';
 import { config } from './config';
 import { errorHandler } from './middleware/errorHandler';
 import { authLimiter, apiLimiter } from './middleware/rateLimit';
@@ -65,7 +66,17 @@ const app = express();
 // MIDDLEWARE
 // ============================================================
 
-app.use(helmet());
+app.use(helmet({
+  // Allow Stripe.js + our own CDN-hosted fonts. CSP is permissive on
+  // purpose because we run our React frontend on a different origin
+  // (Vercel) and the API only serves JSON. The frontend has its own
+  // CSP set via next.config.ts headers.
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+}));
+// Gzip/Brotli — saves 50-70% on JSON payload size on every API response.
+// `threshold: 1024` skips tiny bodies where compression overhead > savings.
+app.use(compression({ threshold: 1024 }));
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (proxied through Next.js, mobile apps)

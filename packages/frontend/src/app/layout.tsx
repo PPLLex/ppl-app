@@ -6,6 +6,8 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { OrgProvider } from "@/contexts/OrgContext";
 import { Toaster } from "sonner";
+import { Suspense } from "react";
+import { RouteProgress } from "@/components/RouteProgress";
 
 // Body / UI font — Manrope. Geometric bones to echo Bank Gothic, rounded
 // terminals for warmth and mobile readability. Used for every non-display
@@ -91,6 +93,12 @@ export default function RootLayout({
         <link rel="icon" type="image/png" sizes="512x512" href="/ppl-icon-512.png" />
       </head>
       <body className="min-h-full flex flex-col font-sans">
+        {/* Top page-load progress bar — renders only during route changes.
+            Suspense wrapper required because RouteProgress reads
+            useSearchParams. */}
+        <Suspense fallback={null}>
+          <RouteProgress />
+        </Suspense>
         <OrgProvider>
           <ThemeProvider>
             <AuthProvider>{children}</AuthProvider>
