@@ -4,11 +4,20 @@ import { useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import Sidebar from '@/components/layout/Sidebar';
 import NotificationBell from '@/components/layout/NotificationBell';
-import PushNotificationPrompt from '@/components/notifications/PushNotificationPrompt';
 import { CommandPalette } from '@/components/CommandPalette';
 import { EmailVerificationBanner } from '@/components/security/EmailVerificationBanner';
+
+// Dynamic-import the push prompt (#E15). It transitively pulls in the
+// entire `firebase` SDK (~250KB) which we don't want in the initial
+// dashboard bundle. ssr:false because Firebase's messaging surface is
+// browser-only anyway.
+const PushNotificationPrompt = dynamic(
+  () => import('@/components/notifications/PushNotificationPrompt'),
+  { ssr: false }
+);
 
 export default function DashboardLayout({
   children,
