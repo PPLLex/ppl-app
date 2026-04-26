@@ -740,6 +740,15 @@ class ApiClient {
   }
 
   // ============================================================
+  // INTEGRATION HEALTH
+  // ============================================================
+  async getIntegrationHealth() {
+    return this.request<Record<string, { status: string; message?: string; missing?: string[] }>>(
+      `/integrations/health`
+    );
+  }
+
+  // ============================================================
   // REVIEWS — Phase 2 (#28, #40)
   // ============================================================
   async listReviews(params: { rating?: number; status?: string } = {}) {
