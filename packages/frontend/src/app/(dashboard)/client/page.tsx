@@ -23,6 +23,7 @@ import { DashboardGrid } from '@/modules/dashboard/DashboardGrid';
 import { parentDashboardConfig } from '@/modules/dashboard/configs/parent';
 import { athleteDashboardConfig } from '@/modules/dashboard/configs/athlete';
 import { WaiverBanner } from '@/components/WaiverBanner';
+import { BirthdayCelebration } from '@/components/BirthdayCelebration';
 
 /**
  * Decide which dashboard a CLIENT user should see.
@@ -74,6 +75,10 @@ export default function ClientDashboard() {
 
   return (
     <div>
+      {/* Birthday confetti — only renders when today is the athlete's
+          birthday and they haven't dismissed it today. Drops out otherwise. */}
+      <BirthdayCelebration />
+
       {/* Greeting header — personalized copy, not a widget (stays constant
           regardless of which role config is rendered below). */}
       <div className="mb-8">

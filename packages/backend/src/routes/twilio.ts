@@ -22,6 +22,7 @@
  *     unknown). Future: route into the unified inbox (#6).
  */
 
+import crypto from 'node:crypto';
 import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../utils/prisma';
 import { config } from '../config';
@@ -29,6 +30,52 @@ import { sendSms } from '../services/smsService';
 import { LeadActivityType, LeadSource } from '@prisma/client';
 
 const router = Router();
+
+/**
+ * Twilio request signature verification.
+ *
+ * Per https://www.twilio.com/docs/usage/security#validating-requests Twilio
+ * signs every webhook with HMAC-SHA1(URL + sorted-form-params, AuthToken)
+ * and sends the result in X-Twilio-Signature. We verify both inbound voice
+ * and inbound SMS so an attacker can't fake a missed-call text-back or
+ * inject SMS into the Lead pipeline.
+ *
+ * If TWILIO_AUTH_TOKEN isn't configured, verification is skipped — useful
+ * during initial setup but logged loudly so it's not silent.
+ */
+function verifyTwilioSignature(req: Request, res: Response, next: NextFunction): void {
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  if (!authToken) {
+    console.warn('[twilio] TWILIO_AUTH_TOKEN unset — skipping signature verification (UNSAFE)');
+    return next();
+  }
+  const signature = req.headers['x-twilio-signature'] as string | undefined;
+  if (!signature) {
+    res.status(403).type('text/xml').send('<?xml version="1.0" encoding="UTF-8"?><Response/>');
+    return;
+  }
+
+  // Twilio computes the URL as the configured webhook URL — must match
+  // exactly. Build it from the request: PUBLIC_API_URL + req.originalUrl.
+  const baseUrl = process.env.PUBLIC_API_URL || `${req.protocol}://${req.get('host')}`;
+  const fullUrl = baseUrl.replace(/\/$/, '') + req.originalUrl;
+
+  // Sort form params alphabetically and concatenate key+value pairs.
+  const params = req.body as Record<string, string>;
+  const sortedKeys = Object.keys(params).sort();
+  let data = fullUrl;
+  for (const k of sortedKeys) data += k + String(params[k] ?? '');
+
+  const expected = crypto.createHmac('sha1', authToken).update(data).digest('base64');
+  if (expected !== signature) {
+    console.warn(`[twilio] signature mismatch for ${req.originalUrl}`);
+    res.status(403).type('text/xml').send('<?xml version="1.0" encoding="UTF-8"?><Response/>');
+    return;
+  }
+  next();
+}
+
+router.use(verifyTwilioSignature);
 
 /**
  * POST /api/twilio/voice
