@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { api, UserProfile } from '@/lib/api';
 import { TwoFactorPanel } from '@/components/security/TwoFactorPanel';
+import { AvatarUploader } from '@/components/AvatarUploader';
 
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
@@ -124,10 +125,19 @@ export default function ProfilePage() {
       {/* Profile Card */}
       <div className="ppl-card p-5 mb-6">
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full ppl-gradient flex items-center justify-center flex-shrink-0">
-            <span className="text-white text-2xl font-bold">
-              {(profile?.fullName || 'U').charAt(0).toUpperCase()}
-            </span>
+          <div className="w-16 h-16 rounded-full overflow-hidden ppl-gradient flex items-center justify-center flex-shrink-0">
+            {profile?.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={profile.avatarUrl}
+                alt={profile.fullName}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span className="text-white text-2xl font-bold">
+                {(profile?.fullName || 'U').charAt(0).toUpperCase()}
+              </span>
+            )}
           </div>
           <div>
             <h2 className="text-lg font-bold text-foreground">{profile?.fullName}</h2>
@@ -299,10 +309,18 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Security tab — currently hosts 2FA enrollment + recovery codes
-          (#141). Future: device sessions, login history, etc. */}
+      {/* Security tab — 2FA enrollment + recovery codes (#141) plus
+          profile photo (#P11). Future: device sessions, login history. */}
       {activeTab === 'security' && (
         <div className="space-y-4">
+          <AvatarUploader
+            avatarUrl={profile?.avatarUrl ?? null}
+            fullName={profile?.fullName ?? ''}
+            onChange={(next) => {
+              setProfile((p) => (p ? { ...p, avatarUrl: next } : p));
+              if (refreshUser) refreshUser();
+            }}
+          />
           <TwoFactorPanel />
         </div>
       )}

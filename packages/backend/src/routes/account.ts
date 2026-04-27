@@ -26,6 +26,7 @@ router.get('/profile', async (req: Request, res: Response, next: NextFunction) =
         fullName: true,
         phone: true,
         role: true,
+        avatarUrl: true,
         createdAt: true,
         clientProfile: {
           select: {

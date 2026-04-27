@@ -257,19 +257,41 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
           <Link
             href={user.role === 'CLIENT' ? '/client/account' : '/profile'}
             onClick={handleNavClick}
-            className="block px-3 py-2 mb-2 rounded-lg hover:bg-surface-hover transition-colors cursor-pointer"
+            className="flex items-start gap-2.5 px-3 py-2 mb-2 rounded-lg hover:bg-surface-hover transition-colors cursor-pointer"
           >
-            <p className="text-sm font-medium text-foreground truncate">{user.fullName}</p>
-            <p className="text-xs text-muted truncate">{user.email}</p>
-            {user.locations && user.locations.length > 0 ? (
-              <div className="mt-0.5 space-y-0.5">
-                {user.locations.map((loc) => (
-                  <p key={loc.id} className="text-xs text-primary-text truncate">{loc.name}</p>
-                ))}
-              </div>
-            ) : user.homeLocation ? (
-              <p className="text-xs text-primary-text mt-0.5 truncate">{user.homeLocation.name}</p>
-            ) : null}
+            {/* Avatar (#P11) — falls back to initials when no upload yet. */}
+            <div className="w-8 h-8 rounded-full overflow-hidden bg-surface-hover ring-1 ring-border flex items-center justify-center text-[11px] font-bold text-muted flex-shrink-0">
+              {user.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={user.avatarUrl}
+                  alt={user.fullName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span>
+                  {(user.fullName || 'U')
+                    .split(/\s+/)
+                    .map((n) => n[0])
+                    .join('')
+                    .slice(0, 2)
+                    .toUpperCase()}
+                </span>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">{user.fullName}</p>
+              <p className="text-xs text-muted truncate">{user.email}</p>
+              {user.locations && user.locations.length > 0 ? (
+                <div className="mt-0.5 space-y-0.5">
+                  {user.locations.map((loc) => (
+                    <p key={loc.id} className="text-xs text-primary-text truncate">{loc.name}</p>
+                  ))}
+                </div>
+              ) : user.homeLocation ? (
+                <p className="text-xs text-primary-text mt-0.5 truncate">{user.homeLocation.name}</p>
+              ) : null}
+            </div>
           </Link>
           <button
             onClick={logout}

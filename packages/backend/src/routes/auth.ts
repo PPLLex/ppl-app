@@ -585,6 +585,7 @@ router.get('/me', authenticate, async (req: Request, res: Response, next: NextFu
         fullName: user.fullName,
         phone: user.phone,
         role: user.role,
+        avatarUrl: user.avatarUrl,
         homeLocation: user.homeLocation,
         locations: user.staffLocations.map((sl: any) => ({
           id: sl.location.id,

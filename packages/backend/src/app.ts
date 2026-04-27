@@ -30,6 +30,7 @@ import refreshTokenRoutes from './routes/refreshToken';
 import bulkActionRoutes from './routes/bulkActions';
 import streakRoutes from './routes/streaks';
 import lookupRoutes from './routes/lookup';
+import avatarRoutes from './routes/avatars';
 import coachNoteRoutes from './routes/coachNotes';
 import goalRoutes from './routes/goals';
 import formRoutes from './routes/forms';
@@ -207,6 +208,9 @@ app.use('/api/streaks', streakRoutes);
 // Hover-preview lookups (#P14). Tiny per-entity payloads with a 30s
 // Cache-Control hint to absorb rapid repeated hovers.
 app.use('/api/lookup', lookupRoutes);
+// Avatar uploads (#P11). Signed direct-to-Cloudinary upload — secret
+// never touches the browser.
+app.use('/api/avatars', avatarRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/onboarding', onboardingRoutes);

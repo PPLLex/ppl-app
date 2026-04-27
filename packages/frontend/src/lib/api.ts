@@ -298,6 +298,44 @@ class ApiClient {
     });
   }
 
+  // ============================================================
+  // Avatar uploads (#P11). Two-step direct-to-Cloudinary flow:
+  //   1. POST /avatars/sign — backend signs upload params with the secret
+  //   2. Frontend POSTs the file directly to Cloudinary's upload URL
+  //   3. POST /avatars/confirm — backend validates the returned URL
+  //      matches what we authorized, then persists avatarUrl on User.
+  // The Cloudinary secret never touches the browser.
+  // ============================================================
+
+  async getAvatarHealth() {
+    return this.request<{ ready: boolean }>('/avatars/health');
+  }
+
+  async signAvatarUpload() {
+    return this.request<{
+      ready: true;
+      cloudName: string;
+      apiKey: string;
+      timestamp: number;
+      signature: string;
+      publicId: string;
+      folder: string;
+      eager: string;
+      uploadUrl: string;
+    }>('/avatars/sign', { method: 'POST' });
+  }
+
+  async confirmAvatarUpload(secureUrl: string) {
+    return this.request<{ avatarUrl: string }>('/avatars/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ secureUrl }),
+    });
+  }
+
+  async deleteAvatar() {
+    return this.request<{ avatarUrl: null }>('/avatars', { method: 'DELETE' });
+  }
+
   // Training streak (#U22). Optional athleteId narrows to a specific
   // family kid; otherwise defaults to the caller's own profile.
   async getMyStreak(athleteId?: string) {
@@ -2570,6 +2608,7 @@ export interface User {
   fullName: string;
   phone?: string;
   role: 'ADMIN' | 'STAFF' | 'CLIENT';
+  avatarUrl?: string | null;
   homeLocation?: { id: string; name: string };
   locations?: { id: string; name: string; roles: string[] }[];
   ageGroup?: string;
@@ -2993,6 +3032,7 @@ export interface UserProfile {
   fullName: string;
   phone: string | null;
   role: string;
+  avatarUrl: string | null;
   createdAt: string;
   clientProfile?: {
     dateOfBirth: string | null;
