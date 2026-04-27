@@ -8,7 +8,7 @@ import {
   buildBookingConfirmationEmail,
   buildBookingCancellationEmail,
 } from '../services/emailService';
-import { Role, BookingStatus, NotificationType, NotificationChannel, Prisma, WorkflowTrigger } from '@prisma/client';
+import { Role, BookingStatus, MembershipStatus, NotificationType, NotificationChannel, Prisma, WorkflowTrigger } from '@prisma/client';
 import { emitTrigger } from '../services/workflowEngine';
 
 const router = Router();
@@ -406,9 +406,19 @@ router.delete('/:id', authenticate, async (req: Request, res: Response, next: Ne
     // Restore credit if it was a limited plan
     let creditRestored = false;
     if (booking.creditsUsed > 0) {
-      // Find the weekly credit record and restore
+      // Find the weekly credit record and restore.
+      //
+      // Status filter is intentionally lenient: anything that isn't
+      // CANCELLED still owns the credit pool. If we required ACTIVE
+      // here, a member whose card failed between booking and cancel
+      // (status → PAST_DUE) would silently lose the credit forever once
+      // their card was fixed. Same logic for PAUSED and SUSPENDED.
+      // (Was: { status: 'ACTIVE' }. Audit caught the silent-fail.)
       const membership = await prisma.clientMembership.findFirst({
-        where: { clientId: booking.clientId, status: 'ACTIVE' },
+        where: {
+          clientId: booking.clientId,
+          status: { in: [MembershipStatus.ACTIVE, MembershipStatus.PAST_DUE, MembershipStatus.SUSPENDED, MembershipStatus.PAUSED] },
+        },
         include: { plan: true },
       });
 
@@ -443,8 +453,12 @@ router.delete('/:id', authenticate, async (req: Request, res: Response, next: Ne
     // Get updated credit balance for the notification
     let creditBalanceMsg = '';
     if (creditRestored) {
+      // Same lenient status filter as above — see comment.
       const membership = await prisma.clientMembership.findFirst({
-        where: { clientId: booking.clientId, status: 'ACTIVE' },
+        where: {
+          clientId: booking.clientId,
+          status: { in: [MembershipStatus.ACTIVE, MembershipStatus.PAST_DUE, MembershipStatus.SUSPENDED, MembershipStatus.PAUSED] },
+        },
       });
       if (membership) {
         // Report on the session's week so the message is accurate for

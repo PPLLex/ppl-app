@@ -2,6 +2,7 @@ import Stripe from 'stripe';
 import { config } from '../config';
 import { prisma } from '../utils/prisma';
 import { BillingDay, MembershipStatus } from '@prisma/client';
+import { createAuditLog } from './auditService';
 
 const stripe = new Stripe(config.stripe.secretKey);
 
@@ -373,6 +374,21 @@ export async function pauseMembership(
       pauseReason: reason ?? null,
     },
   });
+
+  // Audit-log the pause — money-touching action that previously left no
+  // trail. Caller's userId comes from the route layer; service-level we
+  // attribute to the client themselves.
+  void createAuditLog({
+    userId: membership.clientId,
+    action: 'membership.paused',
+    resourceType: 'ClientMembership',
+    resourceId: membershipId,
+    changes: {
+      pauseUntil: pauseUntil.toISOString(),
+      reason: reason ?? null,
+      stripeSubscriptionId: membership.stripeSubscriptionId,
+    },
+  });
 }
 
 /**
@@ -406,6 +422,18 @@ export async function resumeMembership(membershipId: string): Promise<void> {
       pauseReason: null,
     },
   });
+
+  // Audit-log the resume — money-touching action.
+  void createAuditLog({
+    userId: membership.clientId,
+    action: 'membership.resumed',
+    resourceType: 'ClientMembership',
+    resourceId: membershipId,
+    changes: {
+      previousPauseUntil: membership.pauseUntil?.toISOString() ?? null,
+      stripeSubscriptionId: membership.stripeSubscriptionId,
+    },
+  });
 }
 
 /**
@@ -421,14 +449,29 @@ export async function autoResumePausedMemberships(): Promise<{ resumed: number; 
   });
   let resumed = 0;
   let failed = 0;
+  const failures: Array<{ membershipId: string; error: string }> = [];
   for (const m of paused) {
     try {
       await resumeMembership(m.id);
       resumed++;
     } catch (e) {
       console.error(`[stripe] auto-resume failed for ${m.id}:`, e);
+      failures.push({
+        membershipId: m.id,
+        error: e instanceof Error ? e.message.slice(0, 200) : 'unknown',
+      });
       failed++;
     }
+  }
+  // Audit-log the cron run summary (resumeMembership already logs each
+  // successful resume individually). Empty resume runs are no-ops — only
+  // log when something happened or something failed.
+  if (resumed > 0 || failed > 0) {
+    void createAuditLog({
+      action: 'cron.auto_resume_paused_memberships',
+      resourceType: 'ClientMembership',
+      changes: { resumed, failed, failures: failures.slice(0, 20) },
+    });
   }
   return { resumed, failed };
 }
@@ -470,11 +513,36 @@ export async function retryPayment(membershipId: string): Promise<boolean> {
     });
 
     if (invoices.data.length > 0) {
-      await stripe.invoices.pay(invoices.data[0].id);
+      const invoice = invoices.data[0];
+      await stripe.invoices.pay(invoice.id);
+      // Audit-log successful retry — was previously fire-and-forget with
+      // no trail.
+      void createAuditLog({
+        userId: membership.clientId,
+        action: 'membership.payment_retried',
+        resourceType: 'ClientMembership',
+        resourceId: membershipId,
+        changes: {
+          stripeInvoiceId: invoice.id,
+          amountCents: invoice.amount_due,
+          stripeSubscriptionId: membership.stripeSubscriptionId,
+          outcome: 'paid',
+        },
+      });
       return true;
     }
     return false;
-  } catch {
+  } catch (e) {
+    void createAuditLog({
+      userId: membership.clientId,
+      action: 'membership.payment_retry_failed',
+      resourceType: 'ClientMembership',
+      resourceId: membershipId,
+      changes: {
+        stripeSubscriptionId: membership.stripeSubscriptionId,
+        error: e instanceof Error ? e.message.slice(0, 500) : 'unknown',
+      },
+    });
     return false;
   }
 }
